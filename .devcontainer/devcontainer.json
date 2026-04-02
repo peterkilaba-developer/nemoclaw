@@ -1,0 +1,25 @@
+{
+  "name": "NemoC LAW AI - Agentic OS",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "forwardPorts": [5173, 8080],
+  "portsAttributes": {
+    "8080": {
+      "label": "NeMo Guardrails Proxy",
+      "onAutoForward": "notify"
+    },
+    "5173": {
+      "label": "Frontend (Vite)",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm install && cd python-proxy && pip install -r requirements.txt",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "ms-python.python"
+      ]
+    }
+  }
+}

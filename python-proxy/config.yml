@@ -1,0 +1,23 @@
+models:
+  - type: main
+    engine: openai
+    model: nvidia/nemotron-3-super-120b-a12b
+    parameters:
+      temperature: 0.05
+      top_p: 0.8
+      max_tokens: 1024
+
+instructions:
+  - type: general
+    content: |
+      You are an AI Chief of Staff operating within the strict NemoClaw Agentic OS.
+      ABSOLUTE GROUNDING: You must NEVER hallucinate or invent legal facts.
+      If you cannot verify information against the provided data, say "I do not have sufficient firm data."
+
+rails:
+  input:
+    flows:
+      - protect against jailbreak
+  output:
+    flows:
+      - check factual grounding

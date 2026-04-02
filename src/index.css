@@ -1,0 +1,308 @@
+/* ========================================
+   NemoC Law AI — Design System
+   Lawyer-grade: authority through restraint.
+   Adaptive light/dark theme system.
+   ======================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import './styles/dashboard.css';
+@import './styles/onboarding.css';
+
+/* ── CSS Variables ── */
+:root {
+  /* Core Brand Colors */
+  --nvidia-green: #76b900;
+  --nvidia-green-light: #8ed100;
+  --nvidia-green-dark: #5a8f00;
+  --nvidia-green-glow: rgba(118, 185, 0, 0.12);
+  --nvidia-red: #cc2222;
+  --nvidia-red-subtle: rgba(204, 34, 34, 0.08);
+  
+  /* DEFAULT THEME (Dark) — Subtle, institutional authority */
+  --bg-primary: #0a0a0f;
+  --bg-secondary: #111118;
+  --bg-tertiary: #16161f;
+  --bg-card: rgba(255, 255, 255, 0.02);
+  --bg-card-hover: rgba(255, 255, 255, 0.04);
+  --bg-glass: rgba(10, 10, 15, 0.85);
+  
+  /* Text */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(255, 255, 255, 0.55);
+  --text-muted: rgba(255, 255, 255, 0.35);
+  --text-on-dark: #ffffff;
+  --text-on-brand: #000000;
+  
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.03);
+  --border-medium: rgba(255, 255, 255, 0.06);
+  --border-accent: rgba(118, 185, 0, 0.1);
+  --border-active: var(--nvidia-green);
+  
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.5);
+  
+  /* Constants */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 400ms ease;
+  
+  --container-width: 1200px;
+  --container-padding: 0 24px;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Modals / Overlays */
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+  --modal-bg: #111118;
+  --modal-text: #ffffff;
+  --modal-text-muted: rgba(255, 255, 255, 0.5);
+  --modal-border: rgba(255, 255, 255, 0.08);
+
+  /* Spacing */
+  --section-padding: 120px 0;
+
+  color-scheme: dark light;
+}
+
+/* ── Reset ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.6;
+  overflow-x: hidden;
+  transition: background var(--transition-base), color var(--transition-base);
+}
+
+a {
+  color: var(--nvidia-green);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--nvidia-green-light);
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+/* ── Utility Classes ── */
+.container {
+  max-width: var(--container-width);
+  margin: 0 auto;
+  padding: var(--container-padding);
+}
+
+.section {
+  padding: var(--section-padding);
+}
+
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--nvidia-green);
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.1;
+  margin-bottom: 24px;
+  letter-spacing: -0.02em;
+}
+
+.section-subtitle {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin-bottom: 48px;
+}
+
+.text-gradient {
+  background: linear-gradient(135deg, var(--nvidia-green) 0%, var(--nvidia-green-light) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-nvidia {
+  color: var(--nvidia-green) !important;
+}
+
+.strikethrough-red {
+  text-decoration: line-through;
+  text-decoration-color: var(--nvidia-red);
+  text-decoration-thickness: 2px;
+  color: var(--nvidia-red);
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: 0.875rem;
+  transition: all var(--transition-base);
+  cursor: pointer;
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+}
+
+.btn-sm {
+  padding: 8px 16px;
+  font-size: 0.8125rem;
+}
+
+.btn-lg {
+  padding: 16px 32px;
+  font-size: 1rem;
+}
+
+.btn-primary {
+  background: var(--nvidia-green);
+  color: #000;
+}
+
+.btn-primary:hover {
+  background: var(--nvidia-green-light);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(118, 185, 0, 0.25);
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--nvidia-green);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.btn-ghost:hover {
+  color: var(--text-primary);
+  background: var(--bg-card);
+}
+
+/* ── Badge ── */
+.badge {
+  padding: 4px 0;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: transparent;
+  border: none;
+}
+
+.badge-green {
+  background: transparent;
+  color: var(--nvidia-green);
+  border: none;
+}
+
+/* ── Global Animations ── */
+.animate-fade-in { animation: fadeIn 0.8s ease-out forwards; }
+.animate-fade-in-up { opacity: 0; animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+.delay-1 { animation-delay: 0.1s; }
+.delay-2 { animation-delay: 0.2s; }
+.delay-3 { animation-delay: 0.3s; }
+.delay-4 { animation-delay: 0.4s; }
+.delay-5 { animation-delay: 0.5s; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { 
+    opacity: 0; 
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0); }
+}
+
+/* ── Light Theme Overrides ── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg-primary: #fcfcfd;
+    --bg-secondary: #f4f4f5;
+    --bg-tertiary: #e9e9ec;
+    --bg-card: #ffffff;
+    --bg-card-hover: #f1f1f4;
+    --bg-glass: rgba(252, 252, 253, 0.9);
+
+    --text-primary: #09090b;
+    --text-secondary: #52525b;
+    --text-muted: #71717a;
+    --text-on-dark: #ffffff;
+
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-medium: rgba(0, 0, 0, 0.1);
+    --border-accent: rgba(118, 185, 0, 0.15);
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+    --overlay-bg: rgba(0, 0, 0, 0.2);
+    --modal-bg: #ffffff;
+    --modal-text: #09090b;
+    --modal-text-muted: #71717a;
+    --modal-border: rgba(0, 0, 0, 0.1);
+  }
+}

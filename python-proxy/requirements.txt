@@ -1,0 +1,6 @@
+nemoguardrails
+fastapi
+uvicorn
+python-dotenv
+openai
+pydantic

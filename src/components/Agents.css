@@ -1,0 +1,569 @@
+/* ── Agents / Workforce Section ── */
+.agents-section {
+  background: var(--bg-secondary);
+}
+
+.agents-header {
+  text-align: center;
+  margin-bottom: 48px;
+}
+
+.agents-header .section-label {
+  justify-content: center;
+}
+
+.agents-header .section-subtitle {
+  margin: 0 auto;
+}
+
+.agents-header .section-subtitle strong {
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════
+   HIERARCHY VISUAL — 3-Tier Accordion
+   ═══════════════════════════════════════════ */
+
+.hierarchy-visual {
+  max-width: 960px;
+  margin: 0 auto 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Tier Block ── */
+.hierarchy-tier {
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  transition: all 0.3s ease;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.hierarchy-tier:hover {
+  border-color: var(--border-medium);
+  background: var(--bg-card-hover);
+}
+
+.hierarchy-tier.expanded {
+  cursor: default;
+}
+
+.hierarchy-tier-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 32px;
+}
+
+.hierarchy-tier-badge {
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.tier-super {
+  background: transparent;
+  color: #3b82f6;
+  border: none;
+}
+
+.tier-agents {
+  background: transparent;
+  color: var(--nvidia-green);
+  border: none;
+}
+
+.tier-sub {
+  background: transparent;
+  color: #a855f7;
+  border: none;
+}
+
+.hierarchy-tier-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.tier-super-icon {
+  background: rgba(37, 99, 235, 0.1);
+  color: #3b82f6;
+}
+
+.tier-agents-icon {
+  background: var(--nvidia-green-glow);
+  color: var(--nvidia-green);
+}
+
+.tier-sub-icon {
+  background: rgba(168, 85, 247, 0.1);
+  color: #a855f7;
+}
+
+.hierarchy-tier-info {
+  flex: 1;
+}
+
+.hierarchy-tier-name {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.hierarchy-tier-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-left: 8px;
+}
+
+.hierarchy-tier-subtitle {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+
+.hierarchy-expand-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+/* ── Tier Body (expanded content) ── */
+.hierarchy-tier-body {
+  padding: 0 32px 32px;
+  animation: fadeSlideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hierarchy-explanation {
+  margin-bottom: 24px;
+}
+
+.hierarchy-analog {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  font-size: 0.85rem;
+  width: fit-content;
+}
+
+.hierarchy-analog-label {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.hierarchy-analog-value {
+  color: var(--nvidia-green);
+  font-weight: 700;
+}
+
+.hierarchy-explain-text {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.hierarchy-explain-text strong {
+  color: var(--text-primary);
+}
+
+.hierarchy-key-rule {
+  margin-top: 20px;
+  padding: 16px 20px;
+  background: rgba(37, 99, 235, 0.05);
+  border: 1px solid rgba(37, 99, 235, 0.1);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.hierarchy-key-rule strong {
+  color: var(--text-primary);
+}
+
+.hierarchy-key-rule em {
+  color: #3b82f6;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* ── Super Agent Capabilities Grid ── */
+.super-capabilities-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.super-capability-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.super-capability-card:hover {
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: var(--shadow-sm);
+}
+
+.super-capability-icon {
+  color: #3b82f6;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.super-capability-label {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.super-capability-desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Connector Between Tiers ── */
+.hierarchy-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 0;
+  color: var(--text-muted);
+}
+
+.hierarchy-connector span {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+/* ═══════════════════════════════════════════
+   AGENT CARDS GRID (Tier 2)
+   ═══════════════════════════════════════════ */
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.agent-card {
+  padding: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slide-in-agent 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  opacity: 0;
+  transition: border-color var(--transition-base);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.agent-card:hover {
+  border-color: var(--border-medium);
+}
+
+.agent-card-expanded {
+  grid-column: span 2;
+}
+
+.agent-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.agent-icon {
+  font-size: 2rem;
+}
+
+.agent-category {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+}
+
+/* ── Role Name Row ── */
+.role-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.role-human-name {
+  font-size: 1.0625rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.role-arrow {
+  color: var(--nvidia-green);
+  flex-shrink: 0;
+}
+
+.role-agent-name {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--nvidia-green);
+}
+
+/* ── Description ── */
+.agent-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* ── Task Tags ── */
+.role-tasks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.role-task-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 0;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+}
+
+.role-task-tag svg {
+  color: var(--nvidia-green);
+}
+
+/* ── Super Agent Access Badge ── */
+.agent-sa-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  background: transparent;
+  border: none;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #3b82f6;
+  margin-top: 4px;
+}
+
+/* ── Stat Bar ── */
+/* Stat Bar Removed */
+
+/* ═══════════════════════════════════════════
+   SUB-AGENTS GRID (Tier 3)
+   ═══════════════════════════════════════════ */
+
+.sub-agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.sub-agent-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 18px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.sub-agent-card:hover {
+  border-color: rgba(168, 85, 247, 0.4);
+  background: rgba(168, 85, 247, 0.04);
+  box-shadow: var(--shadow-sm);
+}
+
+.sub-agent-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(168, 85, 247, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #a855f7;
+}
+
+.sub-agent-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub-agent-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.sub-agent-desc {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.sub-agent-used-by {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sub-agent-used-by span {
+  font-weight: 700;
+  color: #a855f7;
+}
+
+/* ── Footer ── */
+.agents-footer {
+  text-align: center;
+  margin-top: 48px;
+}
+
+.agents-coming {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.agents-lock-note {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+.agents-lock-note strong {
+  color: var(--nvidia-green);
+}
+
+@keyframes slide-in-agent {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── FIRM CONTROLS (Insights) ── */
+.firm-controls {
+  margin-top: 80px;
+}
+
+.firm-controls-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.firm-controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.firm-control-card {
+  padding: 32px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
+}
+
+.firm-control-card:hover {
+  border-color: var(--border-medium);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.firm-control-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--nvidia-green-glow);
+  color: var(--nvidia-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.firm-control-card h4 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.firm-control-card p {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .agents-grid { grid-template-columns: 1fr; }
+  .agent-card-expanded { grid-column: span 1; }
+  .super-capabilities-grid { grid-template-columns: 1fr; }
+  .sub-agents-grid { grid-template-columns: 1fr; }
+  
+  .hierarchy-tier-header {
+    padding: 18px 20px;
+    gap: 12px;
+  }
+
+  .hierarchy-tier-body {
+    padding: 0 20px 24px;
+  }
+
+  .hierarchy-tier-name {
+    font-size: 1rem;
+  }
+}

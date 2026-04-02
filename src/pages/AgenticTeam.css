@@ -1,0 +1,458 @@
+/* ── Team / About Page — Agentic Hierarchy ── */
+
+.team-page {
+  padding: 120px 0 80px;
+  min-height: 100vh;
+  background: var(--bg-primary);
+  font-family: var(--font-sans);
+  transition: background var(--transition-base);
+}
+
+/* ── Hero ── */
+.team-hero {
+  text-align: center;
+  max-width: 800px;
+  margin: 0 auto 80px;
+  padding: 0 24px;
+}
+
+.team-hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: var(--radius-full);
+  background: var(--nvidia-green-glow);
+  border: 1px solid var(--border-accent);
+  color: var(--nvidia-green);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 24px;
+}
+
+.team-hero h1 {
+  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.team-hero h1 span {
+  color: var(--nvidia-green);
+}
+
+.team-hero-sub {
+  font-size: 1.125rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  max-width: 640px;
+  margin: 0 auto 32px;
+}
+
+/* ── Hero Stats ── */
+.team-hero-stats {
+  display: flex;
+  justify-content: center;
+  gap: 48px;
+  margin-top: 40px;
+}
+
+.team-hero-stat {
+  text-align: center;
+}
+
+.team-hero-stat-value {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.team-hero-stat-value.green {
+  color: var(--nvidia-green);
+}
+
+.team-hero-stat-label {
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 6px;
+  font-weight: 600;
+}
+
+/* ── Founder Section ── */
+.team-founder {
+  max-width: 480px;
+  margin: 0 auto 64px;
+  padding: 0 24px;
+}
+
+.team-founder-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  text-align: center;
+  position: relative;
+  transition: all var(--transition-base);
+}
+
+.team-founder-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  transform: translateY(-2px);
+}
+
+.team-founder-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--nvidia-green), transparent);
+  opacity: 0.4;
+}
+
+.team-founder-photo {
+  width: 100%;
+  aspect-ratio: 4/5;
+  object-fit: cover;
+  object-position: center 80%;
+  display: block;
+}
+
+.team-founder-info {
+  padding: 24px;
+}
+
+.team-founder-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--nvidia-green-glow);
+  color: var(--nvidia-green);
+  border: 1px solid var(--border-accent);
+  margin-bottom: 12px;
+}
+
+.team-founder-info h2 {
+  font-size: 1.375rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.team-founder-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.team-founder-bio {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  text-align: left;
+}
+
+.team-founder-bio em {
+  color: var(--text-primary);
+  font-style: italic;
+}
+
+/* ── Connector Line ── */
+.team-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: -16px 0 -8px;
+  position: relative;
+  z-index: 1;
+}
+
+.team-connector-line {
+  width: 1px;
+  height: 40px;
+  background: linear-gradient(180deg, var(--nvidia-green), transparent);
+  opacity: 0.3;
+}
+
+.team-connector-node {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--nvidia-green);
+  box-shadow: 0 0 12px var(--nvidia-green-glow);
+}
+
+/* ── Section Headings ── */
+.team-section {
+  max-width: 1200px;
+  margin: 0 auto 64px;
+  padding: 0 24px;
+}
+
+.team-section-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.team-section-header h2 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.team-section-header p {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.team-section-tier {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 12px;
+  background: var(--nvidia-green-glow);
+  color: var(--nvidia-green);
+  border: 1px solid var(--border-accent);
+}
+
+/* ── Agent Grid ── */
+.team-grid {
+  display: grid;
+  gap: 20px;
+}
+
+.team-grid.csuite { grid-template-columns: repeat(4, 1fr); }
+.team-grid.dept { grid-template-columns: repeat(3, 1fr); }
+.team-grid.specialist { grid-template-columns: repeat(3, 1fr); }
+
+/* ── Agent Profile Card ── */
+.team-profile-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-base);
+  cursor: default;
+}
+
+.team-profile-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-medium);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+
+.team-profile-photo {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-secondary);
+}
+
+.team-profile-body {
+  padding: 20px;
+  text-align: center;
+}
+
+.team-profile-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+  background: rgba(22,163,74,0.1);
+  color: #16a34a;
+  border: 1px solid rgba(22,163,74,0.2);
+}
+
+.team-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+  display: inline-block;
+  animation: teamPulse 2s infinite;
+}
+
+@keyframes teamPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.team-profile-abbr {
+  font-size: 1.125rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.team-profile-fullname {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: var(--nvidia-green);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.team-profile-title {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  margin-bottom: 14px;
+}
+
+.team-profile-bio {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  font-style: italic;
+  text-align: left;
+  margin-bottom: 14px;
+  min-height: 60px;
+}
+
+.team-profile-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.5625rem;
+  color: var(--text-muted);
+}
+
+.team-profile-meta strong {
+  color: var(--text-secondary);
+}
+
+/* ── Why Agentic Section ── */
+.team-why {
+  max-width: 800px;
+  margin: 80px auto 0;
+  padding: 0 24px;
+}
+
+.team-why-card {
+  padding: 48px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+.team-why-card h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.team-why-card p {
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+  max-width: 600px;
+  margin: 0 auto 16px;
+}
+
+.team-why-quote {
+  font-size: 1rem;
+  color: var(--text-primary);
+  opacity: 0.8;
+  font-style: italic;
+  border-left: 3px solid var(--nvidia-green);
+  padding: 16px 24px;
+  margin: 32px auto 0;
+  max-width: 560px;
+  text-align: left;
+  line-height: 1.7;
+  background: var(--nvidia-green-glow);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+
+.team-why-quote cite {
+  display: block;
+  margin-top: 12px;
+  font-style: normal;
+  font-size: 0.75rem;
+  color: var(--nvidia-green);
+  font-weight: 700;
+}
+
+/* ── CTA ── */
+.team-cta {
+  text-align: center;
+  padding: 80px 24px 0;
+}
+
+.team-cta a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  background: var(--nvidia-green);
+  color: var(--bg-primary);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  border-radius: var(--radius-md);
+  text-decoration: none;
+  transition: all var(--transition-base);
+}
+
+.team-cta a:hover {
+  background: var(--nvidia-green-light);
+  transform: translateY(-1px);
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .team-grid.csuite { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .team-grid.csuite { grid-template-columns: repeat(2, 1fr); }
+  .team-grid.dept { grid-template-columns: repeat(2, 1fr); }
+  .team-hero-stats { gap: 32px; flex-wrap: wrap; }
+}
+
+@media (max-width: 500px) {
+  .team-grid.csuite,
+  .team-grid.dept,
+  .team-grid.specialist { grid-template-columns: 1fr; }
+  .team-hero-stats { flex-direction: column; gap: 20px; }
+  .team-hero h1 { font-size: 2rem; }
+  .team-why-card { padding: 24px; }
+  .team-founder { max-width: 100%; }
+}

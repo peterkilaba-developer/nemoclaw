@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 58" fill="none">
+  <!-- NemoC LAW AI — Clownfish Identity -->
+  <text y="38" font-family="'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="38" font-weight="800" letter-spacing="-0.5">
+    <tspan fill="#76b900">Nemo</tspan><tspan fill="#cc2222">C</tspan>
+    <tspan fill="#cc2222"> LAW</tspan>
+    <tspan fill="#76b900"> AI</tspan>
+  </text>
+  <!-- Tagline — uses a standard gray to ensure visibility across <img>-loaded contexts -->
+  <text y="54" font-family="'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="11" font-weight="600" fill="#71717a" opacity="0.8" letter-spacing="2.5">BORN AGENTIC FOR LAW FIRMS</text>
+</svg>

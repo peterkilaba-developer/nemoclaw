@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ═══════════════════════════════════════════════
+    //  INTERNAL TOPOLOGY (AgaaS / Admin)
+    // ═══════════════════════════════════════════════
+    match /_internalAgents/{agentId} { allow read, write: if true; }
+    match /_internalAuditLog/{auditId} { allow read, write: if true; }
+    match /_internalEscalations/{escId} { allow read, write: if true; }
+    match /_internalMarketingDrafts/{draftId} { allow read, write: if true; }
+    match /_internalStrategicPlans/{planId} { allow read, write: if true; }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Checks if the user's profile document associates them with this firm.
+    // This is the source of truth for institutional membership.
+    function isFirmMember(firmId) {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firmId == firmId ||
+        get(/databases/$(database)/documents/firms/$(firmId)).data.ownerId == request.auth.uid ||
+        get(/databases/$(database)/documents/firms/$(firmId)).data.ownerUid == request.auth.uid
+      );
+    }
+
+    function isFirmOwner(firmId) {
+      let firm = get(/databases/$(database)/documents/firms/$(firmId)).data;
+      return isAuthenticated() && (
+        firm.ownerId == request.auth.uid ||
+        firm.ownerUid == request.auth.uid ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner'
+      );
+    }
+
+    // ═══════════════════════════════════════════════
+    //  USER PROFILES
+    // ═══════════════════════════════════════════════
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isFirmOwner(get(/databases/$(database)/documents/users/$(userId)).data.firmId));
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && (request.auth.uid == userId || isFirmOwner(resource.data.firmId));
+      allow delete: if false; 
+    }
+
+    // ═══════════════════════════════════════════════
+    //  FIRMS — Institutional Workspace Hierarchy
+    // ═══════════════════════════════════════════════
+    match /firms/{firmId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if false;
+
+      // FIRM CONFIG — Agent, Security, Knowledge Base
+      match /config/{configDoc} {
+        allow read: if isFirmMember(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // SUPER AGENT — Partner Telemetry
+      match /superAgent/{doc} {
+        allow read: if isFirmMember(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // EMPLOYEES
+      match /employees/{employeeId} {
+        allow read: if isFirmMember(firmId);
+        allow create: if isFirmOwner(firmId);
+        allow update: if isFirmOwner(firmId);
+        allow delete: if isFirmOwner(firmId);
+      }
+
+      // AGENTS — Each document is private to the employee & owner
+      match /agents/{agentId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated();
+        allow delete: if isFirmOwner(firmId);
+
+        match /messages/{messageId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated();
+          allow update: if false;
+          allow delete: if false;
+        }
+      }
+
+      // MATTERS / CASES — Institutional Visibility
+      match /matters/{matterId} {
+        allow read: if isFirmMember(firmId);
+        allow create: if isFirmOwner(firmId);
+        allow update: if isFirmMember(firmId);
+        allow delete: if isFirmOwner(firmId);
+
+        // Matter Documents
+        match /documents/{docId} {
+          allow read: if isFirmMember(firmId);
+          allow write: if isFirmMember(firmId);
+        }
+      }
+
+      // CLIENT CONTACTS
+      match /clients/{clientId} {
+        allow read: if isFirmMember(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // BILLING
+      match /billing/{billingDoc} {
+        allow read: if isFirmOwner(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // AUDIT TRAIL
+      match /auditLog/{logId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated();
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    // ═══════════════════════════════════════════════
+    //  PUBLIC / ADMIN (WAITLIST, PROSPECTS, MAIL)
+    // ═══════════════════════════════════════════════
+    match /waitlist/{entryId} {
+      allow create: if true; 
+      allow read: if isAuthenticated(); 
+      allow update: if isAuthenticated();
+    }
+
+    match /prospects/{prospectId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /mail/{mailId} {
+      allow read, create, update: if isAuthenticated();
+      allow delete: if false;
+    }
+
+    match /mail_queue/{mailId} {
+      allow read, create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,131 @@
+.paradigm-section {
+  padding: 80px 0;
+  background: var(--bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.paradigm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+  position: relative;
+  z-index: 2;
+}
+
+.paradigm-card {
+  padding: 48px;
+  background: var(--bg-secondary);
+  border: none;
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  transition: transform var(--transition-base);
+}
+
+.paradigm-card:hover {
+  transform: translateY(-2px);
+}
+
+.paradigm-card-header {
+  margin-bottom: 40px;
+}
+
+.paradigm-card-header .section-label {
+  margin-bottom: 16px;
+  justify-content: flex-start;
+}
+
+.paradigm-card-header .section-label.accent {
+  background: transparent;
+  color: #a855f7;
+  border: none;
+  padding: 0;
+}
+
+.paradigm-title {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.paradigm-subtitle {
+  font-size: 1.0625rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.paradigm-features {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  flex: 1;
+}
+
+.p-feature {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.pf-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--nvidia-green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.pf-icon.accent {
+  background: transparent;
+  color: #a855f7;
+  border: none;
+  box-shadow: none;
+}
+
+.p-feature h4 {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0 0 8px 0;
+  line-height: 1.3;
+}
+
+.p-feature p {
+  font-size: 0.9375rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+@media (max-width: 992px) {
+  .paradigm-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .paradigm-card {
+    padding: 32px 24px;
+  }
+  
+  .paradigm-title {
+    font-size: 1.75rem;
+  }
+  
+  .pf-icon {
+    width: 40px;
+    height: 40px;
+  }
+}

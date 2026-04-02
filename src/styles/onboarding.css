@@ -1,0 +1,716 @@
+/* ══════════════════════════════════════════════════════════════
+   NemoC Law AI — Onboarding Wizard Styles
+   Professional, calm, step-by-step flow for law firm setup.
+   ══════════════════════════════════════════════════════════════ */
+
+.onboarding-layout {
+  min-height: 100vh;
+  background: var(--db-bg);
+  font-family: var(--db-font);
+  color: var(--db-text-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Top Bar ── */
+.onboarding-topbar {
+  background: var(--db-surface);
+  border-bottom: 1px solid var(--db-border);
+  padding: 0 32px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.onboarding-topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--db-text-primary);
+}
+
+.onboarding-topbar-logo-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--db-nvidia-green);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+.onboarding-topbar-logo-text {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.onboarding-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.onboarding-topbar-help {
+  font-size: 0.8125rem;
+  color: var(--db-text-muted);
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.onboarding-topbar-help:hover {
+  color: var(--db-text-primary);
+}
+
+/* ── Wizard Body ── */
+.onboarding-body {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 48px 32px 80px;
+}
+
+.onboarding-container {
+  width: 100%;
+  max-width: 1200px;
+}
+
+/* ── Progress ── */
+.onboarding-progress {
+  margin-bottom: 48px;
+}
+
+.onboarding-steps-bar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 24px;
+}
+
+.onboarding-step-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.onboarding-step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 2px solid var(--db-border);
+  color: var(--db-text-muted);
+  background: var(--db-surface);
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+
+.onboarding-step-indicator.completed .onboarding-step-dot {
+  background: var(--db-accent);
+  border-color: var(--db-accent);
+  color: #ffffff;
+}
+
+.onboarding-step-indicator.active .onboarding-step-dot {
+  border-color: var(--db-text-primary);
+  color: var(--db-text-primary);
+}
+
+.onboarding-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--db-border);
+  transition: background 0.3s ease;
+}
+
+.onboarding-step-indicator.completed .onboarding-step-line {
+  background: var(--db-accent);
+}
+
+.onboarding-step-labels {
+  display: flex;
+  justify-content: space-between;
+}
+
+.onboarding-step-label {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  color: var(--db-text-muted);
+  text-align: center;
+  flex: 1;
+  transition: color 0.3s;
+}
+
+.onboarding-step-label.active {
+  color: var(--db-text-primary);
+  font-weight: 600;
+}
+
+.onboarding-step-label.completed {
+  color: var(--db-accent);
+}
+
+/* ── Step Content ── */
+.onboarding-step-card {
+  background: var(--db-surface);
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius-lg);
+  padding: 48px 64px;
+  animation: fadeSlideUp 0.35s ease-out;
+  box-shadow: 0 20px 50px -12px rgba(0,0,0,0.05);
+}
+
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.onboarding-step-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.onboarding-step-desc {
+  font-size: 0.875rem;
+  color: var(--db-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 32px;
+}
+
+/* ── Form Fields ── */
+.ob-form-group {
+  margin-bottom: 20px;
+}
+
+.ob-form-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--db-text-primary);
+  margin-bottom: 6px;
+}
+
+.ob-form-label .required {
+  color: var(--db-danger);
+  margin-left: 2px;
+}
+
+.ob-form-input,
+.ob-form-select,
+.ob-form-textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  font-size: 0.875rem;
+  font-family: var(--db-font);
+  color: var(--db-text-primary);
+  background: rgba(255, 255, 255, 0.02);
+  transition: border-color 0.15s;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.ob-form-input:focus,
+.ob-form-textarea:focus {
+  border-color: var(--db-text-primary);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 0 0 3px rgba(118, 185, 0, 0.08); /* NVIDIA green glow */
+}
+
+.ob-form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 40px !important; /* Proper right padding for dropdown */
+}
+
+.ob-form-select:focus {
+  border-color: var(--db-text-primary);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.ob-form-input::placeholder,
+.ob-form-textarea::placeholder {
+  color: var(--db-text-muted);
+}
+
+.ob-form-textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.ob-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.ob-form-hint {
+  font-size: 0.75rem;
+  color: var(--db-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Checkboxes ── */
+.ob-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.ob-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.ob-checkbox-item:hover {
+  border-color: #d1d5db;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ob-checkbox-item.checked {
+  border-color: var(--db-text-primary);
+  background: rgba(17, 24, 39, 0.02);
+}
+
+.ob-checkbox-box {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--db-border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.ob-checkbox-item.checked .ob-checkbox-box {
+  background: var(--db-text-primary);
+  border-color: var(--db-text-primary);
+  color: #ffffff;
+}
+
+.ob-checkbox-label {
+  font-size: 0.8125rem;
+  color: var(--db-text-primary);
+  font-weight: 500;
+}
+
+/* ── Agent Selection Cards ── */
+.ob-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.ob-agent-card {
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius-lg);
+  padding: 18px;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+  position: relative;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ob-agent-card:hover {
+  border-color: #d1d5db;
+}
+
+.ob-agent-card.selected {
+  border-color: rgba(118, 185, 0, 0.06);
+  background: rgba(118, 185, 0, 0.02);
+}
+
+.ob-agent-card.recommended {
+  border-color: rgba(118, 185, 0, 0.03);
+}
+
+.ob-agent-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.ob-agent-card-icon {
+  font-size: 1.25rem;
+}
+
+.ob-agent-card-badge {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  border-radius: 99px;
+  background: rgba(118, 185, 0, 0.02);
+  border: 1px solid rgba(118, 185, 0, 0.03);
+  color: var(--db-nvidia-green);
+}
+
+.ob-agent-card-name {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--db-text-primary);
+  margin-bottom: 4px;
+}
+
+.ob-agent-card-desc {
+  font-size: 0.75rem;
+  color: var(--db-text-secondary);
+  line-height: 1.4;
+}
+
+.ob-agent-card-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--db-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.ob-agent-card.selected .ob-agent-card-check {
+  background: var(--db-nvidia-green);
+  border-color: var(--db-nvidia-green);
+  color: #111827;
+  font-size: 0.6875rem;
+  font-weight: 800;
+}
+
+/* ── Security Toggles ── */
+.ob-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ob-toggle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ob-toggle-item:hover {
+  border-color: #d1d5db;
+}
+
+.ob-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ob-toggle-icon {
+  font-size: 1rem;
+}
+
+.ob-toggle-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.ob-toggle-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--db-text-primary);
+}
+
+.ob-toggle-desc {
+  font-size: 0.75rem;
+  color: var(--db-text-secondary);
+}
+
+.ob-toggle-switch {
+  width: 40px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.08);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.02);
+  position: relative;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ob-toggle-switch.on {
+  background: var(--db-accent);
+  border-color: var(--db-accent);
+}
+
+.ob-toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  top: 3px;
+  left: 3px;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.ob-toggle-switch.on::after {
+  transform: translateX(18px);
+}
+
+/* ── Billing Card Reactive State ── */
+.ob-billing-card {
+  background: var(--db-surface);
+  padding: 32px;
+  border: 1px solid var(--db-border);
+  border-radius: var(--db-radius-lg);
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.ob-billing-card:focus-within {
+  border-color: var(--db-text-primary);
+  box-shadow: 0 20px 40px -15px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.ob-billing-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--db-nvidia-green);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.ob-billing-card:focus-within::before {
+  opacity: 1;
+}
+
+/* ── Upload Area ── */
+.ob-upload-area {
+  border: 1px dashed var(--db-border);
+  border-radius: var(--db-radius-lg);
+  padding: 40px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ob-upload-area:hover {
+  border-color: #9ca3af;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.ob-upload-icon {
+  font-size: 2rem;
+  margin-bottom: 12px;
+}
+
+.ob-upload-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--db-text-primary);
+  margin-bottom: 4px;
+}
+
+.ob-upload-hint {
+  font-size: 0.75rem;
+  color: var(--db-text-muted);
+}
+
+.ob-upload-files {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ob-upload-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--db-radius);
+  font-size: 0.8125rem;
+}
+
+.ob-upload-file-icon {
+  font-size: 0.875rem;
+}
+
+.ob-upload-file-name {
+  flex: 1;
+  font-weight: 500;
+  color: var(--db-text-primary);
+}
+
+.ob-upload-file-size {
+  color: var(--db-text-muted);
+  font-size: 0.75rem;
+}
+
+.ob-upload-file-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ob-upload-file-status.done {
+  color: var(--db-accent);
+}
+
+/* ── Review Summary ── */
+.ob-review-section {
+  margin-bottom: 24px;
+}
+
+.ob-review-section-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.ob-review-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 0.8125rem;
+}
+
+.ob-review-label {
+  color: var(--db-text-secondary);
+}
+
+.ob-review-value {
+  font-weight: 600;
+  color: var(--db-text-primary);
+}
+
+.ob-review-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ob-review-agent-tag {
+  padding: 4px 12px;
+  background: rgba(118, 185, 0, 0.02);
+  border: 1px solid rgba(118, 185, 0, 0.03);
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #4d7a00;
+}
+
+.ob-review-security-tag {
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--db-accent);
+}
+
+/* ── Footer Actions ── */
+.onboarding-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--db-border-light);
+}
+
+.onboarding-actions-right {
+  display: flex;
+  gap: 12px;
+}
+
+.ob-skip-btn {
+  background: none;
+  border: none;
+  font-size: 0.8125rem;
+  color: var(--db-text-muted);
+  cursor: pointer;
+  padding: 10px 16px;
+  font-family: var(--db-font);
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.ob-skip-btn:hover {
+  color: var(--db-text-secondary);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .onboarding-body {
+    padding: 24px 16px 48px;
+  }
+
+  .onboarding-step-card {
+    padding: 24px;
+  }
+
+  .ob-form-row,
+  .ob-checkbox-grid,
+  .ob-agent-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-step-labels {
+    display: none;
+  }
+}

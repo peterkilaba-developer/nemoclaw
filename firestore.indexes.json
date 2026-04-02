@@ -1,0 +1,13 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "firms",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "stateBar", "order": "ASCENDING" },
+        { "fieldPath": "founderPriceLocked", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

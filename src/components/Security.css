@@ -1,0 +1,199 @@
+/* ── Security Section ── */
+.security-section {
+  background: var(--bg-primary);
+  padding: 120px 0;
+}
+
+.security-header {
+  text-align: center;
+  margin-bottom: 80px;
+}
+
+.security-header .section-label {
+  justify-content: center;
+}
+
+.security-header .section-subtitle {
+  margin: 0 auto;
+  max-width: 700px;
+}
+
+/* Zero Data Leak — Minimalist Row */
+.zero-leak-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+  max-width: 1000px;
+  margin: 0 auto 100px;
+}
+
+.zero-leak-item {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+
+.zero-leak-item-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background: var(--nvidia-green-glow);
+  color: var(--nvidia-green);
+}
+
+.zero-leak-item-title {
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.zero-leak-item-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Public AI Comparison — Transparent Table */
+.public-ai-comparison {
+  max-width: 900px;
+  margin: 0 auto 120px;
+}
+
+.public-ai-comparison-title {
+  text-align: center;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 48px;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.public-ai-table {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.public-ai-header {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  padding: 24px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pai-col-risk-label { color: #ff6b6b; }
+.pai-col-nemoc-label { color: var(--nvidia-green); }
+
+.public-ai-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  padding: 24px;
+  font-size: 0.9375rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pai-col-risk {
+  color: var(--text-secondary);
+}
+
+.pai-col-nemoc {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Security Layers — Architectural Stack */
+.security-layers {
+  max-width: 800px;
+  margin: 0 auto 80px;
+  display: flex;
+  flex-direction: column;
+}
+
+.security-layer {
+  display: flex;
+  gap: 32px;
+  padding: 40px 0;
+  border-bottom: 1px solid var(--border-subtle);
+  align-items: flex-start;
+}
+
+.security-layer:last-child {
+  border-bottom: none;
+}
+
+.security-layer-num {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--nvidia-green);
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-accent);
+  background: var(--nvidia-green-glow);
+  border-radius: var(--radius-sm);
+}
+
+.security-layer-content {
+  flex: 1;
+}
+
+.security-layer-content h3 {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  letter-spacing: -0.02em;
+}
+
+.security-layer-content p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+/* Badges cleanup */
+.security-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.security-badge-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.security-badge-icon {
+  color: var(--nvidia-green);
+}
+
+@media (max-width: 900px) {
+  .zero-leak-grid, .public-ai-header, .public-ai-row {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    text-align: left;
+  }
+}
