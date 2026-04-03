@@ -7,7 +7,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { auth, db, googleProvider, appleProvider } from '../lib/firebase';
 import { sendWelcomeSignupEmail } from '../lib/emailService';
 
@@ -24,49 +24,63 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      // CIRCUIT BREAKER: Don't let a hanging getDoc block the entire app boot
-      const timeoutPromise = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), 2500));
-      
+    let profileUnsub;
+    
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       try {
         if (firebaseUser) {
-          // Attempt to fetch profile with a strict timeout
-          const docRef = doc(db, 'users', firebaseUser.uid);
-          const result = await Promise.race([
-            getDoc(docRef),
-            timeoutPromise
-          ]);
+          // 1. Immediately set base user to unblock routing & UI instantly
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            isPartial: true
+          });
+          setLoading(false);
 
-          if (result === 'TIMEOUT') {
-            console.warn('Auth: Firestore profile fetch timed out. Proceeding with basic auth data.');
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              isPartial: true
-            });
-          } else {
-            const userDoc = result;
-            setUser({
-              uid: firebaseUser.uid,
-              email: firebaseUser.email,
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL,
-              ...(userDoc.exists() ? userDoc.data() : {}),
-            });
-          }
+          // 2. Subscribe to profile to get roles and firmId organically
+          if (profileUnsub) profileUnsub(); // cleanup previous
+          profileUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (docSnap) => {
+            if (docSnap.exists()) {
+              setUser(prev => ({
+                ...(prev || {}),
+                ...docSnap.data(),
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                isPartial: false
+              }));
+            } else {
+              // User document is missing. We must clear isPartial so DashboardLayout handles them.
+              setUser(prev => ({
+                ...(prev || {}),
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                isPartial: false
+              }));
+            }
+          }, (err) => {
+            console.error('Profile snapshot error:', err);
+          });
         } else {
+          if (profileUnsub) {
+            profileUnsub();
+            profileUnsub = null;
+          }
           setUser(null);
+          setLoading(false);
         }
       } catch (err) {
         console.error('Auth state observer error:', err);
         setUser(firebaseUser ? { uid: firebaseUser.uid, email: firebaseUser.email } : null);
-      } finally {
         setLoading(false);
       }
     });
-    return unsub;
+
+    return () => {
+      unsub();
+      if (profileUnsub) profileUnsub();
+    };
   }, []);
 
   const loginWithEmail = async (email, password) => {
@@ -85,8 +99,8 @@ export function AuthProvider({ children }) {
       onboardingComplete: false,
       createdAt: serverTimestamp(),
     });
-    // Send 7-day urgency lock welcome email
-    await sendWelcomeSignupEmail(email, displayName);
+    // Send 7-day urgency lock welcome email asynchronously (fire and forget)
+    sendWelcomeSignupEmail(email, displayName).catch(console.error);
     return result.user;
   };
 
@@ -103,7 +117,8 @@ export function AuthProvider({ children }) {
         onboardingComplete: false,
         createdAt: serverTimestamp(),
       });
-      await sendWelcomeSignupEmail(result.user.email, result.user.displayName);
+      // Fire and forget email queueing
+      sendWelcomeSignupEmail(result.user.email, result.user.displayName).catch(console.error);
     }
     return result.user;
   };
@@ -120,7 +135,7 @@ export function AuthProvider({ children }) {
         onboardingComplete: false,
         createdAt: serverTimestamp(),
       });
-      await sendWelcomeSignupEmail(result.user.email, result.user.displayName);
+      sendWelcomeSignupEmail(result.user.email, result.user.displayName).catch(console.error);
     }
     return result.user;
   };

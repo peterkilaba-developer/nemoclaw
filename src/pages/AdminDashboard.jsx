@@ -229,16 +229,13 @@ export default function AdminDashboard() {
           padding: sidebarOpen ? '20px 16px' : '20px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', alignItems: 'center', gap: '10px',
         }}>
-          <div style={{
-            width: '36px', height: '36px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #76b900 0%, #4a7a00 100%)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '0.875rem', fontWeight: 800, color: '#fff', flexShrink: 0,
-          }}>NC</div>
+          <img src="/logos/claw-64-transparent.png" alt="" style={{
+            width: '36px', height: '36px', objectFit: 'contain', flexShrink: 0,
+          }} />
           {sidebarOpen && (
             <div>
-              <div style={{ fontSize: '0.875rem', fontWeight: 800, color: '#fff' }}>NemoC LAW AI Admin</div>
-              <div style={{ fontSize: '0.5625rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>COO Dashboard</div>
+              <img src="/logos/wordmark.svg" alt="NemoC LAW AI" style={{ height: '24px', objectFit: 'contain', display: 'block' }} />
+              <div style={{ fontSize: '0.5625rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '2px' }}>COO Dashboard</div>
             </div>
           )}
         </div>

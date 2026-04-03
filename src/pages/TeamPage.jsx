@@ -151,7 +151,7 @@ export default function TeamPage() {
             Attorneys, Of Counsel, Paralegals, Law Clerks — legal service delivery
           </span>
         </div>
-        <button className="db-btn db-btn-primary db-btn-sm" onClick={() => setShowAddModal(true)}>
+        <button className="db-btn db-btn-primary db-btn-sm" onClick={() => setShowAddModal('practice')}>
           <Plus size={14} /> Add Team Member
         </button>
       </div>
@@ -169,20 +169,34 @@ export default function TeamPage() {
           return <EmployeeCard key={emp.id || `p-${i}`} emp={emp} roleConfig={roleConfig} agentType={agentType} Icon={Icon} color={color} subAgentCount={subAgentCount} matchedAgent={matchedAgent} agentName={agentName} onEdit={setEditingEmployee} />;
         })}
         {practiceRoles.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', padding: '24px', textAlign: 'center', color: 'var(--db-text-muted)', fontSize: '0.8125rem' }}>
-            No practice-side team members yet. Add attorneys, paralegals, or law clerks.
+          <div className="db-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px' }}>
+            <Users size={48} color="var(--db-text-muted)" style={{ marginBottom: '16px' }} />
+            <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--db-text-primary)', marginBottom: '8px' }}>
+              No Practice of Law Resources
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', marginBottom: '20px' }}>
+              Add attorneys, paralegals, or law clerks to create their corresponding Agentic Resources.
+            </div>
+            <button className="db-btn db-btn-primary" onClick={() => setShowAddModal('practice')}>
+              <Plus size={14} /> Add Human Resource
+            </button>
           </div>
         )}
       </div>
 
       {/* Business of Law Section */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-secondary)' }}>
-          Business of Law
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-secondary)' }}>
+            Business of Law
+          </div>
+          <span style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', fontWeight: 400 }}>
+            Secretaries, Receptionists, Billing, Office Managers, Bookkeepers — firm operations
+          </span>
         </div>
-        <span style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', fontWeight: 400 }}>
-          Secretaries, Receptionists, Billing, Office Managers, Bookkeepers — firm operations
-        </span>
+        <button className="db-btn db-btn-primary db-btn-sm" onClick={() => setShowAddModal('business')}>
+          <Plus size={14} /> Add Team Member
+        </button>
       </div>
 
       {/* Business team grid */}
@@ -198,26 +212,22 @@ export default function TeamPage() {
           return <EmployeeCard key={emp.id || `b-${i}`} emp={emp} roleConfig={roleConfig} agentType={agentType} Icon={Icon} color={color} subAgentCount={subAgentCount} matchedAgent={matchedAgent} agentName={agentName} onEdit={setEditingEmployee} />;
         })}
         {businessRoles.length === 0 && (
-          <div style={{ gridColumn: '1 / -1', padding: '24px', textAlign: 'center', color: 'var(--db-text-muted)', fontSize: '0.8125rem' }}>
-            No business-side team members yet. Add secretaries, billing clerks, or office managers.
+          <div className="db-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 20px' }}>
+            <Users size={48} color="var(--db-text-muted)" style={{ marginBottom: '16px' }} />
+            <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--db-text-primary)', marginBottom: '8px' }}>
+              No Business of Law Resources
+            </div>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', marginBottom: '20px' }}>
+              Add secretaries, billing clerks, or office managers to create their corresponding Agentic Resources.
+            </div>
+            <button className="db-btn db-btn-primary" onClick={() => setShowAddModal('business')}>
+              <Plus size={14} /> Add Human Resource
+            </button>
           </div>
         )}
       </div>
 
-      {employees.length === 0 && (
-        <div className="db-card" style={{ textAlign: 'center', padding: '60px 20px' }}>
-          <Users size={48} color="var(--db-text-muted)" style={{ marginBottom: '16px' }} />
-          <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--db-text-primary)', marginBottom: '8px' }}>
-            No Human Resources yet
-          </div>
-          <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', marginBottom: '20px' }}>
-            Add Human Resources to create their corresponding Agentic Resources.
-          </div>
-          <button className="db-btn db-btn-primary" onClick={() => setShowAddModal(true)}>
-            <Plus size={14} /> Add Human Resource
-          </button>
-        </div>
-      )}
+
 
       {/* Edit Modal */}
       {(showAddModal || editingEmployee) && (
@@ -226,7 +236,7 @@ export default function TeamPage() {
           onClose={() => { setShowAddModal(false); setEditingEmployee(null); }}
           onAdded={addTeamMember}
           onUpdated={updateTeamMember}
-          initialData={editingEmployee}
+          initialData={editingEmployee || { name: '', email: '', role: showAddModal === 'business' ? 'secretary' : 'associate', supervisingPartnerId: null, agentName: '', photoURL: '' }}
         />
       )}
     </>
@@ -419,11 +429,15 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, initialData
     if (!formData.name.trim() || !formData.email.trim()) return;
     setSaving(true);
     try {
+      console.log('handleSave execution started:', formData);
       if (initialData?.id) {
+        console.log('Calling onUpdated with id:', initialData.id);
         await onUpdated(initialData.id, formData);
       } else {
+        console.log('Calling onAdded');
         await onAdded(formData);
       }
+      console.log('Save successful');
       setSuccess(true);
       setTimeout(() => { onClose(); }, 1200);
     } catch (err) {
@@ -479,10 +493,11 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, initialData
                 {formData.name} has been added!
               </div>
               <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', marginTop: '4px', marginBottom: '20px' }}>
-                Agentic resources provisioned automatically.
+                Agentic resources provisioned and subscription automatically updated.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', textAlign: 'left', background: 'var(--db-bg)', padding: '16px', borderRadius: '8px', border: '1px solid var(--db-border)' }}>
                 {[
+                  { label: 'Agentic Role Payment', detail: 'Authorized additional $149.00/mo', color: 'var(--db-nvidia-green)' },
                   { label: 'Personal Agent Created', detail: `${formData.name.split(' ')[0]}'s AI ${agentType}` },
                   { label: 'Sub-Agents Deployed', detail: `${subAgentCount} specialists auto-assigned` },
                   { label: 'Ethical Wall Configured', detail: 'Matter-level access control active' },
@@ -491,7 +506,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, initialData
                   <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <CheckCircle size={14} color="#16a34a" />
                     <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{item.label}</span>
-                    <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginLeft: 'auto' }}>{item.detail}</span>
+                    <span style={{ fontSize: '0.6875rem', color: item.color || 'var(--db-text-muted)', marginLeft: 'auto', fontWeight: item.color ? 600 : 400 }}>{item.detail}</span>
                   </div>
                 ))}
               </div>
@@ -542,7 +557,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, initialData
                   >
                     {EMPLOYEE_ROLES.map(r => r.value === EMPLOYEE_ROLES.find(x => x.division === 'business')?.value ? null : null)}
                     <optgroup label="Practice of Law">
-                      {EMPLOYEE_ROLES.filter(r => r.division === 'practice').map(r => (
+                      {EMPLOYEE_ROLES.filter(r => r.division === 'practice' && r.value !== 'solo-partner').map(r => (
                         <option key={r.value} value={r.value}>{r.label}</option>
                       ))}
                     </optgroup>
@@ -668,7 +683,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, initialData
                   onClick={handleSave}
                   disabled={saving || !formData.name.trim() || !formData.email.trim()}
                 >
-                  {saving ? 'Provisioning Agent...' : 'Add & Create Agent'}
+                  {saving ? 'Authorizing Payment & Provisioning...' : 'Authorize $149/mo & Provision Agent'}
                 </button>
               </div>
             </>

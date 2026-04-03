@@ -5,13 +5,17 @@ import {
   DollarSign, ScanSearch, Clock, ShieldCheck, Lock, ClipboardList,
   Gavel, MapPin, FileCheck, Rocket, Upload, File, Lightbulb, Infinity, Check,
   Plus, Trash2, Briefcase, Phone, Bot, Crown, CreditCard, ArrowLeft, ArrowRight,
-  ChevronLeft, ChevronRight, AlertCircle, Globe, Users
+  ChevronLeft, ChevronRight, AlertCircle, Globe, Users, Zap, Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { completeOnboarding } from '../lib/firestore';
 import { createCheckoutSession } from '../lib/firebase';
 import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS } from '../lib/agentHierarchy';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../styles/onboarding.css';
+
+const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
 
 const PRACTICE_AREA_GROUPS = [
   {
@@ -53,18 +57,18 @@ const PRACTICE_AREA_GROUPS = [
 const PRACTICE_AREAS = PRACTICE_AREA_GROUPS.flatMap(g => g.areas);
 
 const AGENT_NAME_SUGGESTIONS = [
-  { name: 'Lexi', desc: 'Latin for Law' },
-  { name: 'Prudence', desc: 'Jurisprudence' },
-  { name: 'Justice', desc: 'Fairness' },
-  { name: 'Amicus', desc: 'Friend of the Court' },
-  { name: 'Portia', desc: 'Merchant of Venice' },
-  { name: 'Atticus', desc: 'To Kill a Mockingbird' },
-  { name: 'Harvey', desc: 'Suits' },
-  { name: 'Marshall', desc: 'Supreme Court' },
-  { name: 'Solon', desc: 'Ancient Lawmaker' },
-  { name: 'Verity', desc: 'Latin for Truth' },
-  { name: 'Lincoln', desc: 'The Lincoln Lawyer' },
-  { name: 'Sterling', desc: 'High Quality' },
+  { name: 'Lexi', desc: 'Jurisdictional Logic' },
+  { name: 'Prudence', desc: 'Standard of Care' },
+  { name: 'Justice', desc: 'Equity & Fairness' },
+  { name: 'Amicus', desc: 'Procedural Advisory' },
+  { name: 'Portia', desc: 'Advanced Drafting' },
+  { name: 'Atticus', desc: 'Litigation Strategy' },
+  { name: 'Harvey', desc: 'Aggressive Advocacy' },
+  { name: 'Marshall', desc: 'Constitutional Depth' },
+  { name: 'Solon', desc: 'Regulatory Framework' },
+  { name: 'Verity', desc: 'Evidentiary Truth' },
+  { name: 'Lincoln', desc: 'Trial Readiness' },
+  { name: 'Sterling', desc: 'Operations Excellence' },
 ];
 
 const AGENTS = [
@@ -107,16 +111,20 @@ export default function OnboardingWizard() {
   const [step, setStep] = useState(0);
   const [launching, setLaunching] = useState(false);
   const [error, setError] = useState('');
+  const [firmId, setFirmId] = useState(null);
+  const [clientSecret, setClientSecret] = useState(null);
+  const nameParts = (user?.displayName || '').split(' ');
   const [data, setData] = useState({
     firmName: '',
     firmAddress: '',
     firmPhone: '',
     firmWebsite: '',
     placeId: '',
-    stateBar: 'California',
+    stateBar: '',
     practiceAreas: [],
     firmSize: 'solo',
-    contactName: user?.displayName || '',
+    firstName: nameParts[0] || '',
+    lastName: nameParts.slice(1).join(' ') || '',
     email: user?.email || '',
     employees: [
       { name: user?.displayName || '', email: user?.email || '', role: 'managing-partner', practiceAreas: [], supervisingPartnerId: null, agentName: '' },
@@ -125,6 +133,13 @@ export default function OnboardingWizard() {
     security: SECURITY_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: opt.default }), {}),
     services: EXTERNAL_SERVICES.reduce((acc, svc) => ({ ...acc, [svc.id]: svc.default }), {}),
   });
+
+  // Ensure every new step starts at the top of the viewport
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    // Also scroll the root element just in case the body is locked
+    document.getElementById('root')?.scrollTo(0, 0);
+  }, [step]);
 
   const updateData = (key, value) => setData(prev => ({ ...prev, [key]: value }));
 
@@ -165,7 +180,8 @@ export default function OnboardingWizard() {
     if (step === 0) {
       return (data.firmName?.trim().length || 0) > 2 && 
              data.practiceAreas.length > 0 && 
-             (data.contactName?.trim().length || 0) > 1 && 
+             (data.firstName?.trim().length || 0) > 0 &&
+             (data.lastName?.trim().length || 0) > 0 &&
              (data.email?.includes('@') || false);
     }
     if (step === 1) {
@@ -174,50 +190,86 @@ export default function OnboardingWizard() {
     return true;
   };
 
-  const handleLaunch = async () => {
+  // Auto-provision firm and fetch Stripe clientSecret
+  const provisionFirm = async () => {
     setLaunching(true);
     setError('');
     try {
-      // 1. Save onboarding data and create firm
-      const firmId = await completeOnboarding(user.uid, data);
-      
-      // 2. Initialize Stripe Checkout for the $297/mo Agentic OS
-      // We pass the number of employees for seat calculation (first one included)
-      const result = await createCheckoutSession({
-        firmId,
-        userId: user.uid,
-        userEmail: user.email,
-        firmName: data.firmName,
-        extraSeats: Math.max(0, data.employees.length - 1),
-      });
-
-      if (result.data?.url) {
-        // Redirect to Stripe
-        window.location.href = result.data.url;
-      } else {
-        // Fallback to dashboard if checkout creation fails but firm is saved
-        navigate('/dashboard');
+      let currentFirmId = user?.firmId || firmId;
+      if (!currentFirmId) {
+        currentFirmId = await completeOnboarding(user.uid, data);
+        setFirmId(currentFirmId);
+      }
+      // Fetch Stripe clientSecret for inline checkout
+      if (!clientSecret) {
+        const response = await fetch('https://createinlinesubscription-2sejsgollq-uc.a.run.app', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firmId: currentFirmId,
+            userId: user.uid,
+            userEmail: user.email,
+            firmName: data.firmName,
+            extraSeats: Math.max(0, data.employees.length - 1),
+          }),
+        });
+        const result = await response.json();
+        if (result?.clientSecret) {
+          setClientSecret(result.clientSecret);
+        }
       }
     } catch (err) {
-      console.error('Onboarding/Checkout error:', err);
-      setError('Failed to create your workspace. Please try again.');
+      console.error('Firm provisioning error:', err);
+    } finally {
       setLaunching(false);
     }
   };
 
+  // Auto-provision when Review step is reached
+  useEffect(() => {
+    if (step === 3 && !firmId && !user?.firmId) {
+      provisionFirm();
+    }
+  }, [step]);
+
+  const handleSkip = async () => {
+    setLaunching(true);
+    setError('');
+    try {
+      let currentFirmId = user?.firmId || firmId;
+      if (!currentFirmId) {
+        currentFirmId = await completeOnboarding(user.uid, data);
+        setFirmId(currentFirmId);
+      }
+      navigate('/dashboard');
+    } catch (err) {
+      console.error('Skip error:', err);
+      // Even if provisioning fails, let them into the dashboard
+      navigate('/dashboard');
+    } finally {
+      setLaunching(false);
+    }
+  };
+
+  const handlePaymentSuccess = () => {
+    navigate('/dashboard');
+  };
+
   const totalSteps = STEP_LABELS.length - 1;
-  const next = () => step < totalSteps ? setStep(step + 1) : handleLaunch();
+  const next = () => step < totalSteps ? setStep(step + 1) : null;
   const back = () => step > 0 && setStep(step - 1);
 
   return (
     <div className="onboarding-layout">
       <div className="onboarding-topbar">
-        <a href="/" className="onboarding-topbar-logo">
-          <div className="onboarding-topbar-logo-icon">NC</div>
-          <span className="onboarding-topbar-logo-text">NemoC Law AI</span>
-        </a>
-        <div className="onboarding-topbar-right">
-          <span className="onboarding-topbar-help">Need help?</span>
+        <div className="onboarding-topbar-inner">
+          <a href="/" className="onboarding-topbar-logo">
+            <img src="/logos/claw-64-transparent.png" alt="" className="onboarding-topbar-logo-icon" />
+            <img src="/logos/wordmark.svg" alt="NemoC LAW AI" className="onboarding-topbar-wordmark" />
+          </a>
+          <div className="onboarding-topbar-right">
+            <span className="onboarding-topbar-help">Need help?</span>
+          </div>
         </div>
       </div>
 
@@ -244,15 +296,29 @@ export default function OnboardingWizard() {
             </div>
           </div>
 
+          {/* AI Concierge — Below steps, vertically aligned with card */}
+          <AIConcierge step={step} data={data} />
+
           {/* Step Content */}
           <div className="onboarding-step-card" key={step}>
             {step === 0 && <StepFirmProfile data={data} updateData={updateData} togglePracticeArea={togglePracticeArea} />}
             {step === 1 && <StepKnowledgeBase data={data} updateData={updateData} />}
             {step === 2 && <StepSecurity data={data} toggleSecurity={toggleSecurity} toggleService={toggleService} />}
-            {step === 3 && <StepReview data={data} onLaunch={handleLaunch} launching={launching} />}
+            {step === 3 && (
+              <StepReview 
+                data={data} 
+                launching={launching} 
+                clientSecret={clientSecret} 
+                firmId={firmId || user?.firmId}
+                onPaymentSuccess={handlePaymentSuccess}
+                setError={setError}
+                onSkip={handleSkip}
+                onProvision={provisionFirm}
+              />
+            )}
 
             {error && (
-              <div style={{ margin: '0 0 16px', padding: '10px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', fontSize: '0.8125rem', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ margin: '0 0 16px', padding: '10px 14px', background: 'var(--db-danger-subtle)', border: '1px solid var(--db-danger-subtle)', borderRadius: '8px', fontSize: '0.8125rem', color: 'var(--db-danger)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <AlertCircle size={14} /> {error}
               </div>
             )}
@@ -273,7 +339,6 @@ export default function OnboardingWizard() {
                   )}
                 </div>
                 <div className="onboarding-actions-right">
-                  {/* Skip only allowed on Step 2 (Security) if needed; Step 1 Knowledge Base is now REQUIRED */}
                   {step === 2 && (
                     <button className="ob-skip-btn" onClick={next} disabled={launching}>Skip for now</button>
                   )}
@@ -304,7 +369,6 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
 
-  // State-to-abbreviation map for auto-detecting state bar
   const STATE_MAP = {
     'Alabama': 'Alabama', 'Alaska': 'Alaska', 'Arizona': 'Arizona', 'Arkansas': 'Arkansas',
     'California': 'California', 'Colorado': 'Colorado', 'Connecticut': 'Connecticut',
@@ -328,7 +392,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
     if (!window.google?.maps?.places || !inputRef.current || autocompleteRef.current) return;
 
     const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['establishment'],
+      types: ['lawyer'],
       componentRestrictions: { country: 'us' },
       fields: ['name', 'formatted_address', 'address_components', 'place_id', 'formatted_phone_number', 'website', 'types'],
     });
@@ -337,14 +401,20 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
       const place = ac.getPlace();
       if (!place?.name) return;
 
-      // Auto-fill firm name
       updateData('firmName', place.name);
       if (place.formatted_address) updateData('firmAddress', place.formatted_address);
       if (place.place_id) updateData('placeId', place.place_id);
       if (place.formatted_phone_number) updateData('firmPhone', place.formatted_phone_number);
-      if (place.website) updateData('firmWebsite', place.website);
+      if (place.website) {
+        updateData('firmWebsite', place.website);
+        let websiteName = place.website;
+        try { websiteName = new URL(place.website).hostname; } catch(e) {}
+        updateData('files', [{
+          name: websiteName, size: 'Website Crawl', status: 'done',
+          role: 'company-wide', category: 'Digital Footprint'
+        }]);
+      }
 
-      // Auto-detect state bar from address
       const stateComponent = place.address_components?.find(c =>
         c.types.includes('administrative_area_level_1')
       );
@@ -367,45 +437,50 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
     <>
       <h2 className="onboarding-step-title">Tell us about your firm</h2>
       <p className="onboarding-step-desc">
-        Start typing your firm name — we'll auto-fill details from Google. We'll use this to configure your AI agents with the right jurisdictional knowledge.
+        Start typing your firm name — we'll auto-fill details from Google. Only verified law firms, attorneys, and legal businesses are returned.
       </p>
+
+      {/* Managing Partner Name — First/Last */}
+      <div className="ob-form-row">
+        <div className="ob-form-group">
+          <label className="ob-form-label">First Name <span className="required">*</span></label>
+          <input className="ob-form-input" type="text" placeholder="First name" value={data.firstName} onChange={e => updateData('firstName', e.target.value)} />
+        </div>
+        <div className="ob-form-group">
+          <label className="ob-form-label">Last Name <span className="required">*</span></label>
+          <input className="ob-form-input" type="text" placeholder="Last name" value={data.lastName} onChange={e => updateData('lastName', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="ob-form-group">
+        <label className="ob-form-label">Email <span className="required">*</span></label>
+        <input className="ob-form-input" type="email" placeholder="you@firm.com" value={data.email} onChange={e => updateData('email', e.target.value)} />
+      </div>
 
       <div className="ob-form-group">
         <label className="ob-form-label">Firm Name <span className="required">*</span></label>
-        <input
-          ref={inputRef}
-          className="ob-form-input"
-          type="text"
-          placeholder="Start typing your firm name..."
-          defaultValue={data.firmName}
-          onChange={e => updateData('firmName', e.target.value)}
-          autoComplete="off"
-        />
+        <input ref={inputRef} className={`ob-form-input ob-places-input${data.firmAddress ? ' ob-places-filled' : ''}`} type="text" placeholder="Start typing your law firm name..." defaultValue={data.firmName} onChange={e => updateData('firmName', e.target.value)} autoComplete="off" />
         <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <MapPin size={10} /> Powered by Google Places — address & state bar auto-detected
+          <MapPin size={10} /> Powered by Google Places — only law firms and legal businesses returned
         </div>
       </div>
 
       {data.firmAddress && (
-        <div style={{ padding: '10px 14px', background: 'rgba(118,185,0,0.02)', border: '1px solid rgba(118,185,0,0.03)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.8125rem', color: 'var(--db-text-secondary)' }}>
+        <div style={{ padding: '10px 14px', background: 'var(--bg-card-hover)', border: '1px solid var(--db-border)', borderRadius: '8px', marginBottom: '16px', fontSize: '0.8125rem', color: 'var(--db-text-secondary)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-            <Check size={12} color="#76b900" />
-            <strong style={{ color: '#76b900' }}>Auto-filled from Google</strong>
+            <Check size={12} />
+            <strong style={{ color: 'var(--db-text-primary)' }}>Presence Verified via Cloud</strong>
           </div>
           <div>{data.firmAddress}</div>
-          {data.firmPhone && <div style={{ marginTop: '2px' }}>📞 {data.firmPhone}</div>}
-          {data.firmWebsite && <div style={{ marginTop: '2px' }}>🌐 {data.firmWebsite}</div>}
+          {data.firmPhone && <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={10} /> {data.firmPhone}</div>}
+          {data.firmWebsite && <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}><Globe size={10} /> {data.firmWebsite}</div>}
         </div>
       )}
 
       <div className="ob-form-row">
         <div className="ob-form-group">
-          <label className="ob-form-label">State Bar <span className="required">*</span></label>
-          <select className="ob-form-select" value={data.stateBar} onChange={e => updateData('stateBar', e.target.value)}>
-            {['California', 'New York', 'Texas', 'Florida', 'Illinois', 'Pennsylvania', 'Ohio', 'Georgia', 'North Carolina', 'Michigan', 'New Jersey', 'Virginia', 'Washington', 'Arizona', 'Massachusetts', 'Tennessee', 'Indiana', 'Missouri', 'Maryland', 'Wisconsin', 'Colorado', 'Minnesota', 'South Carolina', 'Alabama', 'Louisiana', 'Kentucky', 'Oregon', 'Oklahoma', 'Connecticut', 'Utah', 'Iowa', 'Nevada', 'Arkansas', 'Mississippi', 'Kansas', 'New Mexico', 'Nebraska', 'Idaho', 'West Virginia', 'Hawaii', 'New Hampshire', 'Maine', 'Montana', 'Rhode Island', 'Delaware', 'South Dakota', 'North Dakota', 'Alaska', 'Vermont', 'Wyoming', 'District of Columbia'].map(s => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <label className="ob-form-label">State Bar {data.stateBar ? <Check size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> : <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', fontWeight: 400 }}>(auto-detected)</span>}</label>
+          <input className="ob-form-input" type="text" value={data.stateBar || 'Select a firm above to auto-detect'} readOnly style={{ background: 'rgba(0,0,0,0.02)', cursor: 'default', color: data.stateBar ? 'var(--db-text-primary)' : 'var(--db-text-muted)' }} />
         </div>
         <div className="ob-form-group">
           <label className="ob-form-label">Firm Size</label>
@@ -414,31 +489,26 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
-          <div style={{ fontSize: '0.6875rem', marginTop: '4px', color: data.firmSize === '10+' ? '#f59e0b' : 'var(--db-text-muted)' }}>
+          <div style={{ fontSize: '0.6875rem', marginTop: '4px', color: 'var(--db-text-muted)' }}>
             {FIRM_SIZE_OPTIONS.find(o => o.value === data.firmSize)?.desc}
           </div>
         </div>
       </div>
 
       {data.firmSize === '10+' && (
-        <div style={{
-          padding: '12px 16px', marginBottom: '16px',
-          background: 'rgba(245, 158, 11, 0.02)', border: '1px solid rgba(245, 158, 11, 0.03)',
-          borderRadius: '8px', fontSize: '0.8125rem', color: '#f59e0b',
-          display: 'flex', alignItems: 'flex-start', gap: '10px',
-        }}>
+        <div style={{ padding: '12px 16px', marginBottom: '16px', background: 'var(--db-warning-subtle)', border: '1px solid var(--db-warning-subtle)', borderRadius: '8px', fontSize: '0.8125rem', color: 'var(--db-text-secondary)', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
           <div>
             <strong>Enterprise Token Pricing</strong>
             <div style={{ color: 'var(--db-text-secondary)', marginTop: '2px', fontSize: '0.75rem' }}>
-              Firms with 10+ attorneys use significantly more AI tokens. Your plan includes a generous base allocation, with additional tokens billed at cost ($0.002/1K tokens). Most firms stay well under the base limit.
+              Firms with 10+ attorneys use significantly more AI tokens. Additional tokens billed at cost ($0.002/1K tokens).
             </div>
           </div>
         </div>
       )}
 
       <div className="ob-form-group">
-        <label className="ob-form-label">Practice Areas <span className="required">*</span></label>
+        <label className="ob-form-label">Practice Areas <span className="required">*</span> <span style={{ fontSize: '0.6875rem', fontWeight: 400, color: 'var(--db-text-muted)' }}>(select at least 1)</span></label>
         {PRACTICE_AREA_GROUPS.map(group => (
           <div key={group.label} style={{ marginBottom: '16px' }}>
             <div style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-muted)', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid var(--db-border)' }}>
@@ -446,14 +516,8 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
             </div>
             <div className="ob-checkbox-grid">
               {group.areas.map(area => (
-                <div
-                  key={area}
-                  className={`ob-checkbox-item ${data.practiceAreas.includes(area) ? 'checked' : ''}`}
-                  onClick={() => togglePracticeArea(area)}
-                >
-                  <div className="ob-checkbox-box">
-                    {data.practiceAreas.includes(area) && <Check size={12} />}
-                  </div>
+                <div key={area} className={`ob-checkbox-item ${data.practiceAreas.includes(area) ? 'checked' : ''}`} onClick={() => togglePracticeArea(area)}>
+                  <div className="ob-checkbox-box">{data.practiceAreas.includes(area) && <Check size={12} />}</div>
                   <span className="ob-checkbox-label">{area}</span>
                 </div>
               ))}
@@ -461,32 +525,10 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
           </div>
         ))}
       </div>
-
-      <div className="ob-form-row">
-        <div className="ob-form-group">
-          <label className="ob-form-label">Primary Contact</label>
-          <input
-            className="ob-form-input"
-            type="text"
-            placeholder="Full name"
-            value={data.contactName}
-            onChange={e => updateData('contactName', e.target.value)}
-          />
-        </div>
-        <div className="ob-form-group">
-          <label className="ob-form-label">Email</label>
-          <input
-            className="ob-form-input"
-            type="email"
-            placeholder="you@firm.com"
-            value={data.email}
-            onChange={e => updateData('email', e.target.value)}
-          />
-        </div>
-      </div>
     </>
   );
 }
+
 
 /* Step 2: Team Roster — Add employees & auto-assign agents */
 function StepTeamRoster({ data, updateData }) {
@@ -531,18 +573,18 @@ function StepTeamRoster({ data, updateData }) {
         display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap',
       }}>
         <div style={{
-          padding: '8px 14px', background: 'rgba(118,185,0,0.02)',
-          border: '1px solid rgba(118,185,0,0.03)', borderRadius: '8px',
-          fontSize: '0.8125rem', fontWeight: 600, color: '#4d7a00',
+          padding: '8px 14px', background: 'var(--bg-card-hover)',
+          border: '1px solid var(--db-border)', borderRadius: '8px',
+          fontSize: '0.8125rem', fontWeight: 600, color: 'var(--db-text-secondary)',
           display: 'flex', alignItems: 'center', gap: '6px',
         }}>
           <Bot size={14} /> {totalAgents} Agent{totalAgents !== 1 ? 's' : ''} will be created
         </div>
         {partners.length > 0 && (
           <div style={{
-            padding: '8px 14px', background: 'rgba(37,99,235,0.02)',
-            border: '1px solid rgba(37,99,235,0.03)', borderRadius: '8px',
-            fontSize: '0.8125rem', fontWeight: 600, color: '#2563eb',
+            padding: '8px 14px', background: 'var(--bg-card-hover)',
+            border: '1px solid var(--db-border)', borderRadius: '8px',
+            fontSize: '0.8125rem', fontWeight: 600, color: 'var(--db-text-secondary)',
             display: 'flex', alignItems: 'center', gap: '6px',
           }}>
             <Crown size={14} /> {partners.length} Partner{partners.length !== 1 ? 's' : ''} → Super Agent access
@@ -628,9 +670,9 @@ function StepTeamRoster({ data, updateData }) {
                   <span>{roleConfig?.agentType} agent · {subAgentCount} sub-agents</span>
                   {roleConfig?.superAgentAccess && (
                     <span style={{
-                      padding: '2px 6px', background: 'rgba(37,99,235,0.02)',
-                      borderRadius: '4px', border: '1px solid rgba(37,99,235,0.03)', fontSize: '0.5625rem', fontWeight: 700,
-                      color: '#2563eb', textTransform: 'uppercase',
+                      padding: '2px 6px', background: 'var(--bg-card-hover)',
+                      borderRadius: '4px', border: '1px solid var(--db-border)', fontSize: '0.5625rem', fontWeight: 700,
+                      color: 'var(--db-text-secondary)', textTransform: 'uppercase',
                     }}>Super Agent</span>
                   )}
                 </div>
@@ -736,22 +778,49 @@ function StepKnowledgeBase({ data, updateData }) {
     const selected = Array.from(e.target.files);
     if (selected.length === 0) return;
 
-    // Map files to the internal representation
-    const newFiles = selected.map(f => ({
-      name: f.name,
-      size: (f.size / (1024 * 1024)).toFixed(1) + ' MB',
-      status: 'done'
-    }));
+    // Map files to the internal representation with Smart AI Categorization
+    const newFiles = selected.map(f => {
+      let role = 'managing-partner';
+      let category = 'General Knowledge';
+      const nameLower = f.name.toLowerCase();
+      
+      if (nameLower.includes('employee') || nameLower.includes('handbook') || nameLower.includes('policy')) { role = 'office-manager'; category = 'HR & Compliance'; }
+      else if (nameLower.includes('motion') || nameLower.includes('pleading') || nameLower.includes('complaint')) { role = 'associate (litigation)'; category = 'Litigation Drafts'; }
+      else if (nameLower.includes('retainer') || nameLower.includes('fee') || nameLower.includes('invoice')) { role = 'billing automation'; category = 'Financial'; }
+      else if (nameLower.includes('discovery') || nameLower.includes('deposition') || nameLower.includes('questionnaire')) { role = 'ediscovery agent'; category = 'Litigation prep'; }
+      else if (nameLower.includes('branding') || nameLower.includes('logo') || nameLower.includes('voice')) { role = 'marketing agent'; category = 'Marketing assets'; }
+
+      return {
+        name: f.name,
+        size: (f.size / (1024 * 1024)).toFixed(1) + ' MB',
+        status: 'done',
+        role,
+        category,
+        isSmartCategorized: true
+      };
+    });
 
     updateData('files', [...data.files, ...newFiles]);
   };
 
   return (
     <>
-      <h2 className="onboarding-step-title">Upload your firm's knowledge base</h2>
+      <h2 className="onboarding-step-title">Optimize your Knowledge Base</h2>
       <p className="onboarding-step-desc">
-        Upload templates, standards, and internal documents. These train your agents to work the way your firm works — using your language, your formatting, your standards.
+        Your website is being crawled to act as your foundational knowledge base. Upload templates and standards to train your agents on your firm's specific formatting. If an agent lacks a required document to perform a prompt, they will explicitly alert you to upload it.
       </p>
+
+      {data.practiceAreas?.length > 0 && (
+        <div style={{ marginBottom: '24px', padding: '16px', background: 'rgba(37,99,235,0.05)', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.2)' }}>
+          <div style={{ fontWeight: 700, color: '#2563eb', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}><Bot size={16}/> Autonomous Skills Optimized</div>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)', marginBottom: '12px' }}>Because your firm practices {data.practiceAreas.join(', ')}, we are pre-loading the following compliance rules and baseline knowledge:</div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+             {data.practiceAreas.map(pa => (
+               <span key={pa} style={{ padding: '6px 10px', background: 'rgba(37,99,235,0.1)', color: '#1d4ed8', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid rgba(37,99,235,0.2)' }}>{pa} Case Law Cache</span>
+             ))}
+          </div>
+        </div>
+      )}
 
       {/* Hidden input */}
       <input
@@ -800,9 +869,16 @@ function StepKnowledgeBase({ data, updateData }) {
       {data.files.length > 0 && (
         <div className="ob-upload-files">
           {data.files.map((f, i) => (
-            <div key={i} className="ob-upload-file">
+            <div key={i} className="ob-upload-file" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span className="ob-upload-file-icon"><File size={16} /></span>
-              <span className="ob-upload-file-name">{f.name}</span>
+              <div style={{ flex: 1 }}>
+                <div className="ob-upload-file-name">{f.name}</div>
+                {f.category && (
+                  <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ color: '#2563eb', fontWeight: 600 }}>{f.category}</span> • Assigned to {f.role}
+                  </div>
+                )}
+              </div>
               <span className="ob-upload-file-size">{f.size}</span>
               <span className={`ob-upload-file-status done`}>
                 <Check size={12} /> Indexed
@@ -923,32 +999,8 @@ function StepSecurity({ data, toggleSecurity, toggleService }) {
 }
 
 /* Step 5: Review & Launch (Two-Column) */
-function StepReview({ data, onLaunch, launching }) {
+function StepReview({ data, launching, clientSecret, firmId, onPaymentSuccess, setError, onSkip, onProvision }) {
   const activeSecurityFeatures = SECURITY_OPTIONS.filter(s => data.security[s.id]);
-  const [card, setCard] = useState({
-    name: data.contactName || '',
-    number: '',
-    expiry: '',
-    cvc: ''
-  });
-
-  // Card detection
-  const getCardType = (number) => {
-    const raw = number.replace(/\s/g, '');
-    if (/^4/.test(raw)) return 'visa';
-    if (/^5[1-5]/.test(raw)) return 'mastercard';
-    if (/^3[47]/.test(raw)) return 'amex';
-    if (/^6(?:011|5)/.test(raw)) return 'discover';
-    return 'default';
-  };
-
-  const cardType = getCardType(card.number);
-
-  // Simple formatters
-  const formatNumber = (val) => val.replace(/\D/g, '').replace(/(.{4})/g, '$1 ').trim().slice(0, 19);
-  const formatExpiry = (val) => val.replace(/\D/g, '').replace(/(.{2})/, '$1/').trim().slice(0, 5);
-
-  const isReady = card.name.length > 2 && card.number.length >= (cardType === 'amex' ? 17 : 19) && card.expiry.length === 5 && card.cvc.length >= 3;
 
   return (
     <>
@@ -1030,80 +1082,241 @@ function StepReview({ data, onLaunch, launching }) {
             </div>
           </div>
 
-          {/* Payment Form */}
-          <div className="ob-form-group">
-            <label className="ob-form-label">Cardholder Name</label>
-            <input
-              className="ob-form-input"
-              type="text"
-              value={card.name}
-              onChange={e => setCard({ ...card, name: e.target.value })}
-              placeholder="Name on card"
-            />
-          </div>
-
-          <div className="ob-form-group">
-            <label className="ob-form-label">Card Number</label>
-            <div style={{ position: 'relative' }}>
-              <input
-                className="ob-form-input"
-                type="text"
-                value={card.number}
-                onChange={e => setCard({ ...card, number: formatNumber(e.target.value) })}
-                placeholder="0000 0000 0000 0000"
+          {/* Card Input — Always visible */}
+          <div style={{ marginTop: '16px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Payment Method</div>
+            <Elements stripe={stripePromise}>
+              <InlinePaymentForm
+                clientSecret={clientSecret}
+                firmId={firmId}
+                onSuccess={onPaymentSuccess}
+                onError={(msg) => setError(msg)}
+                launching={launching}
+                setLaunching={() => {}}
+                onProvision={onProvision}
               />
-              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                {cardType !== 'default' && (
-                   <span style={{ fontSize: '0.625rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--db-nvidia-green)', background: 'rgba(118,185,0,0.1)', padding: '2px 6px', borderRadius: '4px' }}>
-                     {cardType}
-                   </span>
-                )}
-                <CreditCard size={16} color={cardType !== 'default' ? 'var(--db-nvidia-green)' : 'var(--db-text-muted)'} />
-              </div>
-            </div>
-          </div>
+            </Elements>
 
-          <div className="ob-form-row">
-            <div className="ob-form-group">
-              <label className="ob-form-label">Expiry</label>
-              <input
-                className="ob-form-input"
-                type="text"
-                value={card.expiry}
-                onChange={e => setCard({ ...card, expiry: formatExpiry(e.target.value) })}
-                placeholder="MM/YY"
-              />
-            </div>
-            <div className="ob-form-group">
-              <label className="ob-form-label">CVC</label>
-              <input
-                className="ob-form-input"
-                type="text"
-                value={card.cvc}
-                onChange={e => setCard({ ...card, cvc: e.target.value.replace(/\D/g, '').slice(0, 4) })}
-                placeholder="123"
-              />
-            </div>
+            <button
+              className="db-btn"
+              style={{ width: '100%', padding: '14px', fontSize: '0.875rem', marginTop: '12px', background: 'transparent', border: '1px solid var(--db-border)', color: 'var(--db-text-secondary)', transition: 'all 0.2s', height: '52px' }}
+              onClick={onSkip}
+              disabled={launching}
+            >
+              Access Dashboard in Trial Mode
+            </button>
           </div>
-
-          <button
-            className="db-btn db-btn-primary"
-            style={{ width: '100%', padding: '14px', marginTop: '12px', fontSize: '1rem', opacity: isReady ? 1 : 0.5, transition: 'all 0.2s' }}
-            onClick={onLaunch}
-            disabled={launching || !isReady}
-          >
-            {launching ? (
-               <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'auth-spin 0.6s linear infinite', display: 'inline-block' }} />
-            ) : (
-              <>Launch My Workspace <ChevronRight size={18} /></>
-            )}
-          </button>
 
           <p style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginTop: '16px', textAlign: 'center', lineHeight: '1.4' }}>
-            By clicking Launch, you agree to the $297/mo price-lock. Monthly billing starting today. Cancel anytime.
+            By checking out, you agree to the $297/mo price-lock. Cancel anytime.
           </p>
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * AI CONCIERGE — NEMO THE BORN AGENTIC SDR
+ * Clownfish avatar with typewriter animation, law jokes, and humorous self-awareness.
+ */
+function AIConcierge({ step, data }) {
+  const [displayText, setDisplayText] = useState('');
+  const [avatarSrc, setAvatarSrc] = useState('/logos/claw-128-transparent.png');
+  const [showJoke, setShowJoke] = useState(false);
+  const fileInputRef = useRef(null);
+  const charIndex = useRef(0);
+  const timerRef = useRef(null);
+
+  const LAW_JOKES = [
+    "Why did the lawyer bring a ladder to court? Because the case was on a higher level.",
+    "What's the difference between a good lawyer and a great lawyer? A good lawyer knows the law. A great lawyer knows the judge.",
+    "How many lawyers does it take to change a light bulb? Three — one to climb the ladder, one to shake it, and one to sue the ladder company.",
+    "What do you call a smiling, courteous person at a bar association convention? The caterer.",
+    "Why don't sharks attack lawyers? Professional courtesy.",
+    "A paralegal walks into a bar. The Bar Association says that's unauthorized practice.",
+    "What's the difference between a jellyfish and a lawyer? One is a spineless, toxic creature. The other one lives in the ocean.",
+    "I used to be a lawyer, but I couldn't pass the bar. So I became a fish. Better hours, same amount of objections.",
+  ];
+
+  const firstName = data.firstName || 'Counselor';
+
+  const messages = [
+    `Hey ${firstName}! I'm Nemo — yes, the clownfish. I know, I know… a clownfish running an Agentic OS for law firms. Trust me, I've heard every "Finding Nemo" joke in the book. Speaking of jokes — being a clownfish, I've got hundreds. But let's get your firm set up first, and I'll tell you my best law joke when we're done. Deal? Start with your name below, then search for your firm.`,
+    `${data.practiceAreas?.length > 0 ? `${data.practiceAreas.slice(0, 2).join(' and ')} — excellent choices.` : 'Pick your practice areas so I can calibrate your knowledge base.'} Now upload a retainer template or motion brief — I'll learn your firm's drafting style faster than any summer associate. And unlike that associate, I don't need coffee breaks or a parking spot.`,
+    `Security time — and yes, I see the irony. My species literally hides inside anemones for protection. But I've enabled AES-256 encryption, PII auto-redaction, and full ABA-compliant audit trails. Your client data is safer with me than a clownfish in the Great Barrier Reef. (That's actually very safe — we have a symbiotic relationship with anemones. Google it.)`,
+    `${firstName}, we're at the finish line! Your firm qualifies for the $297/mo Founder Price-Lock. Once you launch, I'll provision your Managing Partner agent and start indexing. As promised — here's your law joke. You've earned it. 🐠`
+  ];
+
+  const currentJoke = LAW_JOKES[Math.floor(Math.random() * LAW_JOKES.length)];
+
+  // Typewriter effect
+  useEffect(() => {
+    const fullText = messages[step] || messages[0];
+    charIndex.current = 0;
+    setDisplayText('');
+    setShowJoke(false);
+    if (timerRef.current) clearInterval(timerRef.current);
+
+    timerRef.current = setInterval(() => {
+      charIndex.current++;
+      if (charIndex.current >= fullText.length) {
+        setDisplayText(fullText);
+        clearInterval(timerRef.current);
+        // Show joke on final step after typing completes
+        if (step === 3) setTimeout(() => setShowJoke(true), 400);
+      } else {
+        setDisplayText(fullText.slice(0, charIndex.current));
+      }
+    }, 18);
+
+    return () => clearInterval(timerRef.current);
+  }, [step, data.practiceAreas?.length, data.firstName]);
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setAvatarSrc(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="ob-concierge">
+      <div className="ob-concierge-inner">
+        <div className="ob-concierge-avatar" onClick={() => fileInputRef.current?.click()} title="Click to change Nemo's look">
+          <img src={avatarSrc} alt="Nemo" className="ob-concierge-avatar-img" />
+          <div className="ob-concierge-pulse" />
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarChange} style={{ display: 'none' }} />
+        </div>
+        <div className="ob-concierge-content">
+          <div className="ob-concierge-label">Nemo — Onboarding Concierge</div>
+          <div className="ob-concierge-text">
+            {displayText}
+            {displayText.length < (messages[step] || messages[0]).length && (
+              <span className="ob-concierge-cursor">|</span>
+            )}
+          </div>
+          {showJoke && step === 3 && (
+            <div style={{
+              marginTop: '10px', padding: '10px 14px',
+              background: 'var(--bg-card-hover)', borderRadius: '10px',
+              fontSize: '0.8125rem', color: 'var(--db-text-primary)',
+              fontStyle: 'italic', lineHeight: 1.5,
+              borderLeft: '3px solid var(--db-border)',
+              animation: 'fadeIn 0.5s ease'
+            }}>
+              🐠 "{currentJoke}"
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+/*
+ * Inline Payment Form Sub-component (CardElement Classic)
+ */
+function InlinePaymentForm({ clientSecret, firmId, onSuccess, onError, launching, setLaunching, onProvision }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [btnText, setBtnText] = useState('Start Subscription');
+  const [processing, setProcessing] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    // If no clientSecret yet, trigger provisioning first
+    if (!clientSecret && onProvision) {
+      onProvision();
+      return;
+    }
+
+    if (!clientSecret) return;
+
+    setProcessing(true);
+    setBtnText('Confirming...');
+    
+    try {
+      const cardElement = elements.getElement(CardElement);
+      const isSetupIntent = clientSecret.startsWith('seti_');
+      let submitResult;
+
+      if (isSetupIntent) {
+        submitResult = await stripe.confirmCardSetup(clientSecret, {
+          payment_method: { card: cardElement },
+        });
+      } else {
+        submitResult = await stripe.confirmCardPayment(clientSecret, {
+          payment_method: { card: cardElement },
+        });
+      }
+
+      const { error, paymentIntent, setupIntent } = submitResult;
+
+      if (error) {
+        onError(error.message);
+        setProcessing(false);
+        setBtnText('Retry Payment');
+      } else if ((paymentIntent?.status === 'succeeded') || (setupIntent?.status === 'succeeded')) {
+        setBtnText('Success!');
+        const intentId = paymentIntent?.id || setupIntent?.id;
+        try {
+          await fetch('https://finalizepaymentsetup-2sejsgollq-uc.a.run.app', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              firmId: firmId,
+              intentId: intentId,
+              type: isSetupIntent ? 'setup' : 'payment'
+            })
+          });
+        } catch (e) {
+          console.error('Finalize sync failed:', e);
+        }
+        setTimeout(() => onSuccess(), 1000);
+      } else {
+        onSuccess();
+      }
+    } catch (err) {
+      console.error(err);
+      onError('Payment processing failed. Please try again.');
+      setProcessing(false);
+      setBtnText('Retry Payment');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div style={{ padding: '12px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+        <CardElement options={{
+          hidePostalCode: true,
+          style: {
+            base: {
+              fontSize: '14px',
+              color: '#1e293b',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              '::placeholder': { color: '#94a3b8' },
+              iconColor: '#76b900'
+            },
+            invalid: { color: '#ef4444', iconColor: '#ef4444' }
+          }
+        }} />
+      </div>
+      
+      <button
+        type="submit"
+        className="db-btn db-btn-primary"
+        style={{ width: '100%', padding: '14px', fontSize: '1rem', height: '52px' }}
+        disabled={!stripe || processing || launching}
+      >
+        {(processing || launching) ? (
+          <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
+        ) : (
+          <><Zap size={18} /> {clientSecret ? btnText : 'Provision & Pay'}</>
+        )}
+      </button>
+    </form>
   );
 }

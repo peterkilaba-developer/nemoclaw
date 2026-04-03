@@ -349,11 +349,12 @@ export default function CEAChat() {
                     ? 'linear-gradient(135deg, #dc2626, #991b1b)' // Red for CEO
                     : msg.role === 'system'
                     ? '#ef4444'
-                    : 'linear-gradient(135deg, #76b900, #4a7a00)',
+                    : 'rgba(118,185,0,0.1)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                   fontSize: '0.75rem', color: '#fff', fontWeight: 700,
+                  overflow: 'hidden', border: msg.role === 'assistant' ? '1px solid rgba(118,185,0,0.2)' : 'none'
                 }}>
-                  {msg.role === 'user' ? <Crown size={14} /> : msg.role === 'system' ? '!' : <Bot size={14} color="#111" />}
+                  {msg.role === 'user' ? <Crown size={14} /> : msg.role === 'system' ? '!' : <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
                 </div>
 
                 {/* Message bubble */}
@@ -388,10 +389,10 @@ export default function CEAChat() {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div style={{
                   width: '30px', height: '30px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #76b900, #4a7a00)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  background: 'rgba(118,185,0,0.1)', border: '1px solid rgba(118,185,0,0.2)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden'
                 }}>
-                  <Crown size={14} color="#111" />
+                  <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{
                   background: 'rgba(255,255,255,0.03)', padding: '12px 16px',

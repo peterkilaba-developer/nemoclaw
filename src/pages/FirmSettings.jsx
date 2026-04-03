@@ -1,72 +1,147 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useFirm } from '../contexts/FirmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Upload, FileText, Trash2, Check, X, Key, Copy, Eye, EyeOff } from 'lucide-react';
+import { 
+  Upload, FileText, Trash2, Check, X, Key, Copy, Eye, EyeOff, 
+  MapPin, Phone, Globe, AlertCircle, Search, UserCheck, Bot, Crown, ArrowRight
+} from 'lucide-react';
+import '../styles/onboarding.css';
+
+const PRACTICE_AREA_GROUPS = [
+  {
+    label: 'Individuals',
+    areas: [
+      'Adoption', 'Animal / Pet Law', 'Bankruptcy (Personal)', 'Child Custody & Support',
+      'Civil Rights', 'Consumer Protection', 'Criminal Defense', 'Disability / ADA',
+      'Divorce & Separation', 'DUI / DWI', 'Education Law', 'Elder Law',
+      'Employment (Employee Side)', 'Entertainment / Sports Law', 'Estate Planning & Probate',
+      'Expungement / Record Sealing', 'Family Law', 'Guardianship & Conservatorship',
+      'Immigration', 'Insurance Claims', 'Juvenile Law', 'Landlord-Tenant (Tenant Side)',
+      'Medical Malpractice', 'Military / Veterans Law', 'Native American Law',
+      'Nursing Home Abuse', 'Personal Injury', 'Product Liability',
+      'Sexual Harassment / Assault', 'Social Security Disability', 'Traffic Violations',
+      'Trusts & Wills', 'Workers\' Compensation', 'Wrongful Death',
+    ],
+  },
+  {
+    label: 'Businesses',
+    areas: [
+      'Antitrust / Competition', 'Aviation Law', 'Banking & Finance', 'Bankruptcy (Business)',
+      'Business Formation & LLC', 'Cannabis / Marijuana Law', 'Class Action Defense',
+      'Commercial Litigation', 'Construction Law', 'Contracts & Agreements',
+      'Corporate Governance', 'Corporate / M&A', 'Cybersecurity & Data Privacy',
+      'eDiscovery', 'Employment (Employer Side)', 'Energy & Utilities',
+      'Environmental & EPA', 'Franchise Law', 'Government Contracts',
+      'Healthcare & HIPAA', 'Insurance Defense', 'Intellectual Property / Patent',
+      'International Trade', 'Landlord-Tenant (Landlord Side)', 'Maritime / Admiralty',
+      'Media & Communications', 'Mergers & Acquisitions', 'Non-Profit / Tax-Exempt',
+      'Oil & Gas', 'Real Estate (Commercial)', 'Real Estate (Residential)',
+      'Regulatory & Compliance', 'Securities & SEC', 'Tax (Business)',
+      'Tax (Individual)', 'Technology & Software', 'Telecommunications',
+      'Transportation & Logistics', 'White Collar Crime', 'Zoning & Land Use',
+    ],
+  },
+];
 
 export default function FirmSettings() {
   const { user } = useAuth();
   const { firm, firmId, employees, refreshFirm } = useFirm();
   const [activeTab, setActiveTab] = useState('profile');
-  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [knowledgeDocs, setKnowledgeDocs] = useState([]);
   const [showApiKey, setShowApiKey] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Editable fields
-  const [editFields, setEditFields] = useState({
-    firmName: '',
-    stateBar: '',
-    practiceAreas: '',
-    contactName: '',
-    contactEmail: '',
+  // High-fidelity edit data (matches Onboarding step 1)
+  const nameParts = (user?.displayName || '').split(' ');
+  const [data, setData] = useState({
+    firmName: firm?.firmName || firm?.name || '',
+    firmAddress: firm?.firmAddress || '',
+    firmPhone: firm?.firmPhone || '',
+    firmWebsite: firm?.firmWebsite || '',
+    placeId: firm?.placeId || '',
+    stateBar: firm?.stateBar || firm?.practiceArea || '',
+    practiceAreas: firm?.practiceAreas || [],
+    firmSize: firm?.firmSize || 'solo',
+    firstName: nameParts[0] || '',
+    lastName: nameParts.slice(1).join(' ') || '',
+    email: user?.email || '',
   });
 
-  const firmName = firm?.firmName || firm?.name || 'Not configured';
-  const stateBar = firm?.stateBar || firm?.practiceArea || '—';
-  const practiceAreas = firm?.practiceAreas?.join(', ') || firm?.practiceArea || '—';
-  const firmSize = employees?.length ? `${employees.length} team member${employees.length > 1 ? 's' : ''}` : '—';
-  const primaryContact = user?.displayName || '—';
-  const email = user?.email || '—';
-
-  const startEditing = () => {
-    setEditFields({
-      firmName: firm?.firmName || firm?.name || '',
-      stateBar: firm?.stateBar || firm?.practiceArea || '',
-      practiceAreas: (firm?.practiceAreas || []).join(', ') || firm?.practiceArea || '',
-      contactName: user?.displayName || '',
-      contactEmail: user?.email || '',
-    });
-    setIsEditing(true);
-  };
-
-  const cancelEditing = () => {
-    setIsEditing(false);
-  };
+  useEffect(() => {
+    if (firm) {
+      const parts = (user?.displayName || '').split(' ');
+      setData({
+        firmName: firm?.firmName || firm?.name || '',
+        firmAddress: firm?.firmAddress || '',
+        firmPhone: firm?.firmPhone || '',
+        firmWebsite: firm?.firmWebsite || '',
+        placeId: firm?.placeId || '',
+        stateBar: firm?.stateBar || firm?.practiceArea || '',
+        practiceAreas: firm?.practiceAreas || [],
+        firmSize: firm?.firmSize || 'solo',
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' ') || '',
+        email: user?.email || '',
+      });
+    }
+  }, [firm, user]);
 
   const saveProfile = async () => {
     if (!firmId) return;
     setSaving(true);
     try {
-      const areas = editFields.practiceAreas
-        .split(',').map(a => a.trim()).filter(Boolean);
       await updateDoc(doc(db, 'firms', firmId), {
-        firmName: editFields.firmName,
-        name: editFields.firmName,
-        stateBar: editFields.stateBar,
-        practiceAreas: areas,
-        practiceArea: editFields.stateBar,
+        firmName: data.firmName,
+        name: data.firmName,
+        firmAddress: data.firmAddress,
+        firmPhone: data.firmPhone,
+        firmWebsite: data.firmWebsite,
+        placeId: data.placeId,
+        stateBar: data.stateBar,
+        practiceAreas: data.practiceAreas,
+        firmSize: data.firmSize,
         updatedAt: serverTimestamp(),
       });
+      
+      // Update user name if changed
+      if (data.firstName || data.lastName) {
+        const newName = `${data.firstName} ${data.lastName}`.trim();
+        if (newName !== user?.displayName) {
+          await updateDoc(doc(db, 'users', user.uid), {
+            displayName: newName,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
       if (refreshFirm) await refreshFirm();
-      setIsEditing(false);
     } catch (err) {
       console.error('Error saving firm profile:', err);
     }
     setSaving(false);
+  };
+
+  const updateData = (key, value) => setData(prev => ({ ...prev, [key]: value }));
+
+  const togglePracticeArea = (area) => {
+    setData(prev => ({
+      ...prev,
+      practiceAreas: prev.practiceAreas.includes(area)
+        ? prev.practiceAreas.filter(a => a !== area)
+        : [...prev.practiceAreas, area],
+    }));
+  };
+
+  const isProfileValid = () => {
+    return (data.firmName?.trim().length || 0) > 2 && 
+           data.practiceAreas.length > 0 && 
+           (data.firstName?.trim().length || 0) > 0 &&
+           (data.lastName?.trim().length || 0) > 0 &&
+           (data.email?.includes('@') || false);
   };
 
   const handleFileUpload = async (e) => {
@@ -152,86 +227,35 @@ export default function FirmSettings() {
         ))}
       </div>
 
-      {/* ═══════════════ PROFILE TAB ═══════════════ */}
+      {/* ═══════════════ PROFILE TAB (INLINE EDIT) ═══════════════ */}
       {activeTab === 'profile' && (
         <div className="db-card" style={{ marginBottom: '24px' }}>
-          <div className="db-card-header">
-            <div className="db-card-title">Firm Profile</div>
-            {!isEditing ? (
-              <button className="db-btn db-btn-secondary db-btn-sm" onClick={startEditing}>Edit</button>
-            ) : (
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  className="db-btn db-btn-primary db-btn-sm"
-                  onClick={saveProfile}
-                  disabled={saving}
-                  style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  {saving ? <><span className="auth-spinner" style={{ width: '12px', height: '12px', borderTopColor: '#000' }} /> Saving...</> : <><Check size={14} /> Save</>}
-                </button>
-                <button className="db-btn db-btn-secondary db-btn-sm" onClick={cancelEditing} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <X size={14} /> Cancel
-                </button>
+          <div className="onboarding-step-card" style={{ padding: '0', border: 'none', boxShadow: 'none' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+              <div>
+                <h2 className="onboarding-step-title">Refine your firm profile</h2>
+                <p className="onboarding-step-desc">
+                  Update your firm details and practice areas. Your AI workforce will automatically adjust to these changes.
+                </p>
               </div>
-            )}
+              <button 
+                className="db-btn db-btn-primary" 
+                onClick={saveProfile} 
+                disabled={saving || !isProfileValid()}
+                style={{ opacity: isProfileValid() ? 1 : 0.5, borderRadius: '8px' }}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+            </div>
+            
+            <StepFirmProfile 
+              data={data} 
+              updateData={updateData} 
+              togglePracticeArea={togglePracticeArea} 
+              firmId={firmId}
+              user={user}
+            />
           </div>
-
-          {!isEditing ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              {[
-                { label: 'Firm Name', value: firmName },
-                { label: 'State Bar / Jurisdiction', value: stateBar },
-                { label: 'Practice Areas', value: practiceAreas },
-                { label: 'Firm Size', value: firmSize },
-                { label: 'Primary Contact', value: primaryContact },
-                { label: 'Email', value: email },
-              ].map(item => (
-                <div key={item.label}>
-                  <div style={{ fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--db-text-muted)', marginBottom: '4px' }}>{item.label}</div>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--db-text-primary)' }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--db-text-muted)', marginBottom: '4px' }}>Firm Name</label>
-                <input
-                  type="text"
-                  value={editFields.firmName}
-                  onChange={(e) => setEditFields(prev => ({ ...prev, firmName: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 12px', background: 'var(--db-bg)', border: '1px solid var(--db-border)', borderRadius: '6px', fontSize: '0.875rem', color: 'var(--db-text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--db-text-muted)', marginBottom: '4px' }}>State Bar / Jurisdiction</label>
-                <input
-                  type="text"
-                  value={editFields.stateBar}
-                  onChange={(e) => setEditFields(prev => ({ ...prev, stateBar: e.target.value }))}
-                  style={{ width: '100%', padding: '8px 12px', background: 'var(--db-bg)', border: '1px solid var(--db-border)', borderRadius: '6px', fontSize: '0.875rem', color: 'var(--db-text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--db-text-muted)', marginBottom: '4px' }}>Practice Areas (comma-separated)</label>
-                <input
-                  type="text"
-                  value={editFields.practiceAreas}
-                  onChange={(e) => setEditFields(prev => ({ ...prev, practiceAreas: e.target.value }))}
-                  placeholder="e.g. Corporate Law, Real Estate, Employment"
-                  style={{ width: '100%', padding: '8px 12px', background: 'var(--db-bg)', border: '1px solid var(--db-border)', borderRadius: '6px', fontSize: '0.875rem', color: 'var(--db-text-primary)', outline: 'none' }}
-                />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--db-text-muted)', marginBottom: '4px' }}>Firm Size</label>
-                <div style={{ padding: '8px 12px', fontSize: '0.875rem', color: 'var(--db-text-secondary)' }}>{firmSize}</div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.6875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--db-text-muted)', marginBottom: '4px' }}>Primary Contact</label>
-                <div style={{ padding: '8px 12px', fontSize: '0.875rem', color: 'var(--db-text-secondary)' }}>{primaryContact}</div>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -317,9 +341,14 @@ export default function FirmSettings() {
                 <div style={{
                   width: '32px', height: '32px', borderRadius: '50%', background: 'var(--db-bg)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.75rem', fontWeight: 700, color: 'var(--db-text-secondary)', flexShrink: 0
+                  fontSize: '0.75rem', fontWeight: 700, color: 'var(--db-text-secondary)', flexShrink: 0,
+                  overflow: 'hidden'
                 }}>
-                  {(member.name || '?').split(' ').map(n => n[0]).join('')}
+                  {member.photoURL ? (
+                    <img src={member.photoURL} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+                  ) : (
+                    (member.name || '?').split(' ').map(n => n[0]).join('')
+                  )}
                 </div>
                 <div className="db-feed-content">
                   <div className="db-feed-title">{member.name} · <span style={{ fontWeight: 400, color: 'var(--db-text-muted)' }}>{member.role || 'Team Member'}</span></div>
@@ -404,6 +433,176 @@ export default function FirmSettings() {
           </div>
         </div>
       )}
+    </>
+  );
+}
+
+/* ═══════════════ STEP 1 CLONE COMPONENT ═══════════════ */
+function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user }) {
+  const inputRef = useRef(null);
+  const autocompleteRef = useRef(null);
+
+  const STATE_MAP = {
+    'Alabama': 'Alabama', 'Alaska': 'Alaska', 'Arizona': 'Arizona', 'Arkansas': 'Arkansas',
+    'California': 'California', 'Colorado': 'Colorado', 'Connecticut': 'Connecticut',
+    'Delaware': 'Delaware', 'Florida': 'Florida', 'Georgia': 'Georgia', 'Hawaii': 'Hawaii',
+    'Idaho': 'Idaho', 'Illinois': 'Illinois', 'Indiana': 'Indiana', 'Iowa': 'Iowa',
+    'Kansas': 'Kansas', 'Kentucky': 'Kentucky', 'Louisiana': 'Louisiana', 'Maine': 'Maine',
+    'Maryland': 'Maryland', 'Massachusetts': 'Massachusetts', 'Michigan': 'Michigan',
+    'Minnesota': 'Minnesota', 'Mississippi': 'Mississippi', 'Missouri': 'Missouri',
+    'Montana': 'Montana', 'Nebraska': 'Nebraska', 'Nevada': 'Nevada',
+    'New Hampshire': 'New Hampshire', 'New Jersey': 'New Jersey', 'New Mexico': 'New Mexico',
+    'New York': 'New York', 'North Carolina': 'North Carolina', 'North Dakota': 'North Dakota',
+    'Ohio': 'Ohio', 'Oklahoma': 'Oklahoma', 'Oregon': 'Oregon', 'Pennsylvania': 'Pennsylvania',
+    'Rhode Island': 'Rhode Island', 'South Carolina': 'South Carolina',
+    'South Dakota': 'South Dakota', 'Tennessee': 'Tennessee', 'Texas': 'Texas',
+    'Utah': 'Utah', 'Vermont': 'Vermont', 'Virginia': 'Virginia', 'Washington': 'Washington',
+    'West Virginia': 'West Virginia', 'Wisconsin': 'Wisconsin', 'Wyoming': 'Wyoming',
+    'District of Columbia': 'District of Columbia',
+  };
+
+  useEffect(() => {
+    if (!window.google?.maps?.places || !inputRef.current || autocompleteRef.current) return;
+
+    const ac = new window.google.maps.places.Autocomplete(inputRef.current, {
+      types: ['lawyer'],
+      componentRestrictions: { country: 'us' },
+      fields: ['name', 'formatted_address', 'address_components', 'place_id', 'formatted_phone_number', 'website', 'types'],
+    });
+
+    ac.addListener('place_changed', async () => {
+      const place = ac.getPlace();
+      if (!place?.name) return;
+
+      updateData('firmName', place.name);
+      if (place.formatted_address) updateData('firmAddress', place.formatted_address);
+      if (place.place_id) updateData('placeId', place.place_id);
+      if (place.formatted_phone_number) updateData('firmPhone', place.formatted_phone_number);
+      
+      if (place.website) {
+        updateData('firmWebsite', place.website);
+        // Rescan URL content directly to KnowledgeBase
+        if (firmId && user) {
+          try {
+            let websiteName = place.website;
+            try { websiteName = new URL(place.website).hostname; } catch(e) {}
+            await addDoc(collection(db, 'firms', firmId, 'knowledgeBase'), {
+              fileName: websiteName,
+              fileSize: 'Website Crawl',
+              fileType: 'url',
+              content: `Digital footprint auto-scanned from ${place.website}`, 
+              uploadedBy: user.email || 'system',
+              uploadedAt: serverTimestamp(),
+            });
+            console.log('Digital footprint successfully rescanned and added to Knowledge Base.');
+          } catch (err) {
+            console.error('Failed to auto-rescan website content:', err);
+          }
+        }
+      }
+
+      const stateComponent = place.address_components?.find(c =>
+        c.types.includes('administrative_area_level_1')
+      );
+      if (stateComponent?.long_name && STATE_MAP[stateComponent.long_name]) {
+        updateData('stateBar', STATE_MAP[stateComponent.long_name]);
+      }
+    });
+
+    autocompleteRef.current = ac;
+  }, []);
+
+  const FIRM_SIZE_OPTIONS = [
+    { value: 'solo', label: '1 — Solo Practitioner', desc: 'Agentic OS included' },
+    { value: '2-5', label: '2–5 Attorneys', desc: 'Add seats as needed' },
+    { value: '6-10', label: '6–10 Attorneys', desc: 'Add seats as needed' },
+    { value: '10+', label: '10+ Attorneys', desc: 'Enterprise allocation' },
+  ];
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--db-bg)', border: '2px solid var(--db-border)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {user?.photoURL ? (
+            <img src={user.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+          ) : (
+            <div style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--db-text-muted)' }}>
+              {(data.firstName?.[0] || '') + (data.lastName?.[0] || '')}
+            </div>
+          )}
+        </div>
+        <div>
+          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>Managing Partner</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>{user?.email}</div>
+        </div>
+      </div>
+
+      <div className="ob-form-row">
+        <div className="ob-form-group">
+          <label className="ob-form-label">First Name <span className="required">*</span></label>
+          <input className="ob-form-input" type="text" name="firstName" placeholder="First name" value={data.firstName} onChange={e => updateData('firstName', e.target.value)} autoComplete="off" data-lpignore="true" data-1p-ignore="true" />
+        </div>
+        <div className="ob-form-group">
+          <label className="ob-form-label">Last Name <span className="required">*</span></label>
+          <input className="ob-form-input" type="text" name="lastName" placeholder="Last name" value={data.lastName} onChange={e => updateData('lastName', e.target.value)} autoComplete="off" data-lpignore="true" data-1p-ignore="true" />
+        </div>
+      </div>
+
+      <div className="ob-form-row">
+        <div className="ob-form-group">
+          <label className="ob-form-label">Email <span className="required">*</span></label>
+          <input className="ob-form-input" type="email" name="contactEmail" placeholder="you@firm.com" value={data.email} onChange={e => updateData('email', e.target.value)} autoComplete="off" data-lpignore="true" data-1p-ignore="true" />
+        </div>
+        <div className="ob-form-group">
+          <label className="ob-form-label">Firm Size</label>
+          <select className="ob-form-select" value={data.firmSize} onChange={e => updateData('firmSize', e.target.value)}>
+            {FIRM_SIZE_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="ob-form-row">
+        <div className="ob-form-group">
+          <label className="ob-form-label">Firm Name / Search <span className="required">*</span></label>
+          <input 
+            ref={inputRef} 
+            className={`ob-form-input ob-places-input${data.firmAddress ? ' ob-places-filled' : ''}`} 
+            type="text" 
+            placeholder="Start typing your law firm name..." 
+            defaultValue={data.firmName} 
+            autoComplete="off" 
+            title="Manual editing locked. Please search and select from the dropdown to verify your firm."
+          />
+          <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <MapPin size={10} /> Refetch to auto-rescan footprint
+          </div>
+        </div>
+        <div className="ob-form-group">
+          <label className="ob-form-label">State Bar {data.stateBar ? <Check size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> : <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', fontWeight: 400 }}>(auto-detected)</span>}</label>
+          <input className="ob-form-input" type="text" value={data.stateBar || 'Select Firm to Auto Detect Bar Jurisdiction'} readOnly style={{ background: 'rgba(255,255,255,0.02)', cursor: 'default', color: data.stateBar ? 'var(--db-text-primary)' : 'var(--db-text-muted)' }} />
+        </div>
+      </div>
+
+      <div className="ob-form-group">
+        <label className="ob-form-label">Practice Areas <span className="required">*</span> <span style={{ fontSize: '0.6875rem', fontWeight: 400, color: 'var(--db-text-muted)' }}>(select at least 1)</span></label>
+        {PRACTICE_AREA_GROUPS.map(group => (
+          <div key={group.label} style={{ marginBottom: '16px' }}>
+            <div style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-muted)', marginBottom: '8px', paddingBottom: '4px', borderBottom: '1px solid var(--db-border)' }}>
+              {group.label}
+            </div>
+            <div className="ob-checkbox-grid">
+              {group.areas.map(area => (
+                <div key={area} className={`ob-checkbox-item ${data.practiceAreas.includes(area) ? 'checked' : ''}`} onClick={() => togglePracticeArea(area)}>
+                  <div className="ob-checkbox-box">{data.practiceAreas.includes(area) && <Check size={12} />}</div>
+                  <span className="ob-checkbox-label">{area}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </>
   );
 }

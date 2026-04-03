@@ -1,17 +1,70 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Calendar, ArrowRight, Zap, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
+import { getOwnerRole } from '../lib/agentHierarchy';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 // Onboarding is exclusively handled by FrictionlessOnboardingPanel.jsx
 
 export default function DashboardHome() {
   const { user } = useAuth();
-  const { firm, agents, refreshFirm } = useFirm();
+  const { firm, agents, personalAgents, superAgent, employees, refreshFirm, firmId } = useFirm();
   const firstName = user?.displayName?.split(' ')[0] || 'there';
-  const agentCount = agents?.activeAgents?.length || 0;
+  const agentCount = (personalAgents?.length || 0) + (superAgent ? 1 : 0);
+  const employeeCount = employees?.length || 0;
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
+  // Self-healing: provision missing owner agent & super agent for existing firms
+  useEffect(() => {
+    if (!firmId || !user?.uid) return;
+    const repairAgents = async () => {
+      try {
+        // Check if owner's personal agent exists
+        const ownerAgentSnap = await getDoc(doc(db, 'firms', firmId, 'agents', user.uid));
+        if (!ownerAgentSnap.exists()) {
+          const ownerName = user.displayName || firm?.contactName || 'Firm Owner';
+          const ownerEmail = user.email || firm?.email || '';
+          const ownerRole = getOwnerRole(firm?.firmSize);
+          // Create owner employee with proper legal role
+          await setDoc(doc(db, 'firms', firmId, 'employees', user.uid), {
+            name: ownerName, email: ownerEmail, role: ownerRole,
+            photoURL: user.photoURL || null, isOwner: true,
+            practiceAreas: firm?.practiceAreas || [],
+            createdAt: serverTimestamp(),
+          }, { merge: true });
+          // Create owner agent
+          await setDoc(doc(db, 'firms', firmId, 'agents', user.uid), {
+            employeeId: user.uid, employeeName: ownerName, employeeEmail: ownerEmail,
+            employeePhotoURL: user.photoURL || null, agentType: 'partner',
+            agentName: 'AI Chief of Staff', firmId,
+            permissions: {}, availableSubAgents: ['legal-research','contract-review','drafting','case-analytics','business-intelligence','knowledge-search','communication-drafter'],
+            context: { preferences: {}, writingStyle: null, caseload: [] },
+            settings: { showSubAgentVisibility: false },
+            superAgentAccess: true, canEditFirmPolicies: true, isOwner: true,
+            status: 'active', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          }, { merge: true });
+        }
+        // Check if super agent exists
+        const saSnap = await getDoc(doc(db, 'firms', firmId, 'superAgent', 'config'));
+        if (!saSnap.exists()) {
+          await setDoc(doc(db, 'firms', firmId, 'superAgent', 'config'), {
+            agentName: 'NemoClaw Super Agent', firmId, status: 'active',
+            capabilities: ['firm-wide-analytics','cross-matter-search','compliance-monitoring','resource-allocation','risk-assessment','performance-metrics'],
+            accessControl: { allowedRoles: ['managing-partner','partner','solo-partner'] },
+            createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+          }, { merge: true });
+        }
+        // Refresh to pick up changes
+        if (!ownerAgentSnap.exists() || !(await getDoc(doc(db, 'firms', firmId, 'superAgent', 'config'))).exists()) {
+          await refreshFirm();
+        }
+      } catch (err) { console.error('Agent auto-repair:', err); }
+    };
+    repairAgents();
+  }, [firmId, user?.uid]);
 
 
 
@@ -113,7 +166,7 @@ export default function DashboardHome() {
         <div className="db-stat-card">
           <div className="db-stat-label">Active Firm Agents</div>
           <div className="db-stat-value nvidia">{agentCount}/{agentCount}</div>
-          <div className="db-stat-meta">{firm?.isConfigured ? 'Deployed AI counterparts' : 'Awaiting firm setup'}</div>
+          <div className="db-stat-meta">{agentCount > 0 ? `${employeeCount} humans · ${agentCount} AI counterparts` : 'Awaiting firm setup'}</div>
         </div>
         <div className="db-stat-card" style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/dashboard/billing'}>
           <div className="db-stat-label">Amount Due</div>

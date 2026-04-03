@@ -212,7 +212,7 @@ export default function MatterWorkspace() {
         {/* Center Column: AI Matter Chat */}
         <div className="db-card" style={{ display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '12px 16px', background: 'var(--db-card-bg)', borderBottom: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Bot size={18} style={{ color: '#76b900' }} />
+            <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ height: '18px', width: 'auto' }} />
             <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{agentName} (Matter Context Active)</span>
           </div>
 
@@ -220,8 +220,8 @@ export default function MatterWorkspace() {
             {messages.map(msg => (
               <div key={msg.id} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
                 {msg.role !== 'user' && (
-                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--db-card-bg)', border: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Bot size={18} style={{ color: '#76b900' }} />
+                  <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--db-card-bg)', border: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden' }}>
+                    <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   </div>
                 )}
                 
@@ -232,8 +232,8 @@ export default function MatterWorkspace() {
             ))}
             {isTyping && (
               <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--db-card-bg)', border: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Bot size={18} style={{ color: '#76b900' }} />
+                <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--db-card-bg)', border: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                  <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{ padding: '12px 16px', borderRadius: '8px', background: 'var(--db-card-bg)', border: '1px solid var(--db-border)', display: 'flex', gap: '4px' }}>
                   <div className="typing-dot" style={{ animationDelay: '0s' }}></div>

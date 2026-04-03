@@ -221,13 +221,18 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     }
   }
 
-  // 1.5. Determine configuration state and fetch firm active matters
+  // 1.5. Determine configuration state, firm specialty, and fetch active matters
   let isFirmConfigured = false;
   let activeMattersList = [];
+  let firmPracticeAreas = [];
   if (firmId) {
     try {
       const firmSnap = await getDoc(doc(db, 'firms', firmId));
-      isFirmConfigured = firmSnap.exists() && firmSnap.data().isConfigured;
+      if (firmSnap.exists()) {
+        const firmData = firmSnap.data();
+        isFirmConfigured = firmData.isConfigured;
+        firmPracticeAreas = firmData.practiceAreas || [];
+      }
 
       const mattersSnap = await getDocs(query(collection(db, 'firms', firmId, 'matters'), where('status', '==', 'Active')));
       activeMattersList = mattersSnap.docs.map(d => d.data());
@@ -255,6 +260,11 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
         systemPrompt += `${idx + 1}. Title: ${m.title || 'Unknown'} | Client: ${m.client || 'Unknown'} | Type: ${m.type || 'General'} | Description: ${m.description || 'N/A'}\n`;
       });
     }
+  }
+
+  // Append Pre-loaded Specialty Knowledgebase (Firm Practice Areas)
+  if (firmPracticeAreas.length > 0) {
+    systemPrompt += `\n\n--- PRE-LOADED SPECIALTY KNOWLEDGEBASE ---\nThis Agent has been statically pre-loaded with comprehensive case law, statutory precedence, and procedural frameworks for: ${firmPracticeAreas.join(', ')}.\nAll analytical outputs, contract reviews, and legal research must natively reflect expertise in this specialized field unless explicitly instructed otherwise by the user.`;
   }
 
   // Append Ethical Wall Enforcement Context
@@ -466,6 +476,10 @@ function detectSubAgentUsage(message, availableSubAgents) {
     'communication-drafter': ['draft email', 'engagement letter', 'client update letter'],
     'case-analytics': ['predict outcome', 'win rate', 'judge analytics', 'case benchmark'],
     'business-intelligence': ['revenue pipeline', 'firm metrics', 'growth trend', 'kpi'],
+    'due-diligence': ['due diligence', 'data room', 'red flag report', 'm&a review'],
+    'deadline-tracker': ['statute of limitations', 'deadline', 'docket', 'court calendar', 'timeline rule'],
+    'trust-accounting': ['trust account', 'iolta', 'retainer replenishment', 'trust ledger', 'client funds'],
+    'court-filing': ['file with the court', 'pacer', 'ecf', 'notice of appearance', 'service of process'],
   };
 
   for (const [subAgent, triggers] of Object.entries(subAgentTriggers)) {

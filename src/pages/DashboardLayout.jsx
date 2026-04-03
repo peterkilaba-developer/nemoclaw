@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Bot, ShieldCheck, Settings, CreditCard, Search, Bell, LogOut, Globe, Crown, Users, Briefcase, Menu, ChevronLeft, ChevronRight, X, FileText, Clock } from 'lucide-react';
+import { LayoutDashboard, Bot, ShieldCheck, Settings, CreditCard, Search, Bell, LogOut, Globe, Crown, Users, Briefcase, Menu, ChevronLeft, ChevronRight, X, FileText, Clock, DollarSign, MessageSquare, Database, HeartHandshake, Network } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { isAdminUser } from '../components/AdminRoute';
@@ -9,19 +9,19 @@ import '../styles/dashboard.css';
 
 const NAV_ITEMS = {
   main: [
-    { path: '/dashboard', Icon: Crown, label: 'AI Chief of Staff', exact: true },
+    { path: '/dashboard', Icon: MessageSquare, label: 'AI Chief of Staff', exact: true },
     { path: '/dashboard/overview', Icon: LayoutDashboard, label: 'Command Center' },
     { path: '/dashboard/matters', Icon: Briefcase, label: 'Matters' },
-    { path: '/dashboard/client-portal', Icon: Users, label: 'Client Portals' },
+    { path: '/dashboard/client-portal', Icon: HeartHandshake, label: 'Client Portals' },
     { path: '/dashboard/team', Icon: Users, label: 'HR & AR' },
     { path: '/dashboard/super-agent', Icon: Crown, label: 'Super Agent', badge: '⚡' },
-    { path: '/dashboard/agents', Icon: Bot, label: 'Sub-Agent Library' },
+    { path: '/dashboard/agents', Icon: Database, label: 'Agents & Knowledgebase' },
     { path: '/dashboard/security', Icon: ShieldCheck, label: 'Security Audit' },
     { path: '/dashboard/website-builder', Icon: Globe, label: 'Website Builder' },
   ],
   manage: [
     { path: '/dashboard/settings', Icon: Settings, label: 'Firm Settings' },
-    { path: '/dashboard/billing', Icon: CreditCard, label: 'Billing & Usage' },
+    { path: '/dashboard/billing', Icon: DollarSign, label: 'Financials & Revenue' },
   ],
 };
 
@@ -33,32 +33,32 @@ const BREADCRUMBS = {
   '/dashboard/my-agent': 'AI Chief of Staff',
   '/dashboard/team': 'Human Resources & Agentic Resources',
   '/dashboard/website-builder': 'Website Builder',
-  '/dashboard/agents': 'Agent Library',
+  '/dashboard/agents': 'Agents & Knowledgebase',
   '/dashboard/security': 'Security Audit',
   '/dashboard/super-agent': 'Super Agent',
   '/dashboard/settings': 'Firm Settings',
-  '/dashboard/billing': 'Billing & Usage',
+  '/dashboard/billing': 'Financials & Revenue',
 };
 
 // Searchable pages within dashboard
 const SEARCHABLE_PAGES = [
-  { label: 'AI Chief of Staff', desc: 'Chat with your personal AI agent', path: '/dashboard', icon: Crown },
+  { label: 'AI Chief of Staff', desc: 'Chat with your personal AI agent', path: '/dashboard', icon: MessageSquare },
   { label: 'Command Center', desc: 'Dashboard overview and firm analytics', path: '/dashboard/overview', icon: LayoutDashboard },
   { label: 'Matters', desc: 'Manage legal matters and workspaces', path: '/dashboard/matters', icon: Briefcase },
-  { label: 'Client Portals', desc: 'Secure client communication channels', path: '/dashboard/client-portal', icon: Users },
+  { label: 'Client Portals', desc: 'Secure client communication channels', path: '/dashboard/client-portal', icon: HeartHandshake },
   { label: 'HR & AR', desc: 'Team members and agentic resources', path: '/dashboard/team', icon: Users },
   { label: 'Super Agent', desc: 'Firm-wide agent oversight dashboard', path: '/dashboard/super-agent', icon: Crown },
-  { label: 'Sub-Agent Library', desc: 'Browse and activate AI sub-agents', path: '/dashboard/agents', icon: Bot },
+  { label: 'Agents & Knowledgebase', desc: 'Browse human role mirroring agents', path: '/dashboard/agents', icon: Database },
   { label: 'Security Audit', desc: 'NemoClaw sandbox security monitoring', path: '/dashboard/security', icon: ShieldCheck },
   { label: 'Website Builder', desc: 'AI-powered law firm website redesign', path: '/dashboard/website-builder', icon: Globe },
   { label: 'Firm Settings', desc: 'Profile, knowledge base, team, API keys', path: '/dashboard/settings', icon: Settings },
-  { label: 'Billing & Usage', desc: 'Plan management and usage metrics', path: '/dashboard/billing', icon: CreditCard },
+  { label: 'Financials & Revenue', desc: 'Firm subscription, client billing, and revenue metrics', path: '/dashboard/billing', icon: DollarSign },
   // Feature-specific entries
   { label: 'Edit Firm Profile', desc: 'Update firm name, jurisdiction, practice areas', path: '/dashboard/settings', icon: Settings },
   { label: 'Upload Knowledge Base', desc: 'Upload documents to train your AI', path: '/dashboard/settings', icon: FileText },
   { label: 'API Keys', desc: 'View and manage API credentials', path: '/dashboard/settings', icon: Settings },
   { label: 'Export Security Report', desc: 'Download audit trail as PDF', path: '/dashboard/security', icon: ShieldCheck },
-  { label: 'Manage Subscription', desc: 'Update payment method and billing', path: '/dashboard/billing', icon: CreditCard },
+  { label: 'Manage Subscription', desc: 'Update payment method and billing', path: '/dashboard/billing', icon: DollarSign },
   { label: 'Legal Research Agent', desc: 'Case law search and citation', path: '/dashboard/agents', icon: Search },
   { label: 'Contract Review Agent', desc: 'Automated NDA and MSA redlining', path: '/dashboard/agents', icon: FileText },
 ];
@@ -306,7 +306,13 @@ export default function DashboardLayout() {
 
         <div className="db-sidebar-footer">
           <div className="db-sidebar-user">
-            <div className="db-sidebar-avatar">{initials}</div>
+            <div className="db-sidebar-avatar" style={{ padding: user?.photoURL ? 0 : '', overflow: 'hidden' }}>
+              {user?.photoURL ? (
+                <img src={user.photoURL} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
+              ) : (
+                initials
+              )}
+            </div>
             <div className="db-sidebar-user-info">
               <span className="db-sidebar-user-name">{user?.displayName || 'User'}</span>
               <span className="db-sidebar-user-role">{user?.email}</span>

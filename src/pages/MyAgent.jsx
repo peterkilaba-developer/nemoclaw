@@ -10,9 +10,12 @@ import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { AGENT_SUB_AGENTS, SUB_AGENT_CATALOG } from '../lib/agentHierarchy';
 import { sendAgentMessage, getConversationHistory } from '../lib/agentAPI';
-import { collection, query, getDocs, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import FrictionlessOnboardingPanel from '../components/FrictionlessOnboardingPanel';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+
+const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
 
 const SUB_AGENT_ICONS = {
   'legal-research': Search, 'contract-review': FileText, 'drafting': PenTool,
@@ -304,7 +307,7 @@ export default function MyAgent() {
       <div className="db-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--db-border)' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Bot size={24} style={{ color: 'var(--db-nvidia-green)' }} />
+            <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ height: '24px', width: 'auto' }} />
             <span style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--db-text-primary)' }}>{agentName}</span>
             <span style={{ fontSize: '0.75rem', padding: '2px 8px', background: 'var(--db-nvidia-green-subtle)', color: 'var(--db-nvidia-green)', borderRadius: '4px', fontWeight: 600 }}>{humanizedType}</span>
             {hasSuperAccess && <span style={{ fontSize: '0.75rem', padding: '2px 8px', background: 'rgba(37,99,235,0.1)', color: '#2563eb', borderRadius: '4px', fontWeight: 600 }}>Super Agent</span>}
@@ -379,10 +382,10 @@ export default function MyAgent() {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div style={{
                   width: '32px', height: '32px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #76b900, #4a7a00)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  background: 'rgba(118,185,0,0.1)', border: '1px solid var(--db-nvidia-green-subtle)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden'
                 }}>
-                  <Bot size={16} color="#111" />
+                  <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{
                   background: 'var(--db-bg)', padding: '12px 16px',
@@ -530,11 +533,12 @@ export default function MyAgent() {
                       ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)'
                       : msg.role === 'system'
                       ? '#ef4444'
-                      : 'linear-gradient(135deg, #76b900, #4a7a00)',
+                      : 'rgba(118,185,0,0.1)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
                     fontSize: '0.75rem', color: '#fff', fontWeight: 700,
+                    overflow: 'hidden', border: msg.role === 'assistant' ? '1px solid var(--db-nvidia-green-subtle)' : 'none'
                   }}>
-                    {msg.role === 'user' ? firstName[0] : msg.role === 'system' ? '!' : <Bot size={14} color="#111" />}
+                    {msg.role === 'user' ? firstName[0] : msg.role === 'system' ? '!' : <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
                   </div>
 
                   {/* Message bubble */}
@@ -594,10 +598,10 @@ export default function MyAgent() {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div style={{
                   width: '30px', height: '30px', borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #76b900, #4a7a00)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  background: 'rgba(118,185,0,0.1)', border: '1px solid var(--db-nvidia-green-subtle)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden'
                 }}>
-                  <Bot size={14} color="#111" />
+                  <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{
                   background: 'var(--db-bg)', padding: '12px 16px',
@@ -676,11 +680,9 @@ export default function MyAgent() {
 
         {/* Context Panel — Onboarding + Matter Context always visible */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
-          {/* Frictionless Onboarding Panel (only during setup) */}
-          {isOnboarding && (
-            <div className="db-card" style={{ border: '2px solid var(--db-nvidia-green-subtle)', background: 'var(--db-surface)' }}>
-               <FrictionlessOnboardingPanel onComplete={refreshFirmData} />
-            </div>
+          {/* Subscription / Setup — inline in context panel */}
+          {(isOnboarding || firm?.status === 'trial') && (
+            <ContextSubscriptionPanel firm={firm} firmId={firmId} user={user} isOnboarding={isOnboarding} navigate={navigate} />
           )}
 
           {/* Matters panel — always visible for preview/test */}
@@ -755,5 +757,179 @@ export default function MyAgent() {
         }
       `}</style>
     </div>
+  );
+}
+
+/**
+ * Context Panel Subscription Widget — inline in the AI Chief of Staff right panel
+ */
+function ContextSubscriptionPanel({ firm, firmId, user, isOnboarding, navigate }) {
+  const [clientSecret, setClientSecret] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!firmId || clientSecret) return;
+    const fetchIntent = async () => {
+      try {
+        const response = await fetch('https://createinlinesubscription-2sejsgollq-uc.a.run.app', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            firmId,
+            userId: user?.uid,
+            userEmail: user?.email,
+            firmName: firm?.firmName || '',
+            extraSeats: Math.max(0, (firm?.members?.length || 1) - 1),
+          }),
+        });
+        const result = await response.json();
+        if (result?.clientSecret) setClientSecret(result.clientSecret);
+      } catch (err) {
+        console.error('Context panel: intent fetch failed', err);
+      }
+    };
+    fetchIntent();
+  }, [firmId, clientSecret]);
+
+  if (dismissed) {
+    return (
+      <div className="db-card" style={{ border: '2px solid var(--db-nvidia-green-subtle)', background: 'var(--db-surface)', padding: '24px', textAlign: 'center' }}>
+        <Zap size={24} style={{ color: 'var(--db-nvidia-green)', marginBottom: '8px' }} />
+        <h3 style={{ fontSize: '1rem', color: 'var(--db-text-primary)', marginBottom: '8px', fontWeight: 700 }}>Subscription Active</h3>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)', marginBottom: '0' }}>Your Founder Price-Lock is secured. Full AI workforce is now live.</p>
+      </div>
+    );
+  }
+
+  if (isOnboarding && !firmId) {
+    return (
+      <div className="db-card" style={{ border: '2px solid var(--db-nvidia-green-subtle)', background: 'var(--db-surface)', padding: '24px', textAlign: 'center' }}>
+        <h3 style={{ fontSize: '1rem', color: 'var(--db-text-primary)', marginBottom: '8px', fontWeight: 700 }}>Finish Your Firm Setup</h3>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)', marginBottom: '16px' }}>Launch your NemoC LAW AI workspace to unlock your real-time agent.</p>
+        <button className="db-btn db-btn-primary" onClick={() => navigate('/onboarding')}>Launch Workspace Configuration →</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="db-card" style={{ border: '2px solid var(--db-nvidia-green-subtle)', background: 'var(--db-surface)', padding: '20px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <h3 style={{ fontSize: '0.875rem', color: 'var(--db-text-primary)', fontWeight: 700, margin: 0 }}>Activate Subscription</h3>
+        <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--db-nvidia-green)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Lock size={10} /> Encrypted
+        </span>
+      </div>
+      <div style={{ padding: '10px 12px', background: 'rgba(0,0,0,0.02)', borderRadius: '8px', marginBottom: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--db-text-secondary)' }}>Founder Price-Lock</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--db-text-primary)' }}>$297/mo</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--db-text-secondary)' }}>Unlimited Legal Tokens</span>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--db-nvidia-green)' }}>INCLUDED</span>
+        </div>
+      </div>
+
+      {error && <div style={{ fontSize: '0.6875rem', color: '#ef4444', marginBottom: '8px' }}>{error}</div>}
+
+      <Elements stripe={stripePromise}>
+        <ContextCardForm
+          clientSecret={clientSecret}
+          firmId={firmId}
+          onError={setError}
+          onSuccess={() => setDismissed(true)}
+        />
+      </Elements>
+
+      <p style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', marginTop: '10px', textAlign: 'center', lineHeight: 1.4 }}>
+        $297/mo price-lock. Cancel anytime. Powered by Stripe.
+      </p>
+    </div>
+  );
+}
+
+function ContextCardForm({ clientSecret, firmId, onError, onSuccess }) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+  const [btnText, setBtnText] = useState('Start Subscription');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!stripe || !elements || !clientSecret) return;
+    setProcessing(true);
+    setBtnText('Confirming...');
+    try {
+      const cardElement = elements.getElement(CardElement);
+      const isSetupIntent = clientSecret.startsWith('seti_');
+      const submitResult = isSetupIntent
+        ? await stripe.confirmCardSetup(clientSecret, { payment_method: { card: cardElement } })
+        : await stripe.confirmCardPayment(clientSecret, { payment_method: { card: cardElement } });
+      const { error, paymentIntent, setupIntent } = submitResult;
+      if (error) {
+        onError(error.message);
+        setProcessing(false);
+        setBtnText('Retry Payment');
+      } else if ((paymentIntent?.status === 'succeeded') || (setupIntent?.status === 'succeeded')) {
+        setBtnText('Success!');
+        const intentId = paymentIntent?.id || setupIntent?.id;
+        // Write status directly to Firestore so panel dismisses
+        try {
+          await updateDoc(doc(db, 'firms', firmId), {
+            status: 'subscribed',
+            subscribedAt: serverTimestamp(),
+          });
+        } catch (e) { console.error('Direct status update failed:', e); }
+        try {
+          await fetch('https://finalizepaymentsetup-2sejsgollq-uc.a.run.app', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ firmId, intentId, type: isSetupIntent ? 'setup' : 'payment' })
+          });
+        } catch (e) { console.error('Finalize sync failed:', e); }
+        setTimeout(() => onSuccess(), 1000);
+      } else {
+        onSuccess();
+      }
+    } catch (err) {
+      console.error(err);
+      onError('Payment failed. Please try again.');
+      setProcessing(false);
+      setBtnText('Retry');
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+        <CardElement options={{
+          hidePostalCode: true,
+          style: {
+            base: {
+              fontSize: '13px',
+              color: '#1e293b',
+              fontFamily: 'Inter, system-ui, sans-serif',
+              '::placeholder': { color: '#94a3b8' },
+              iconColor: '#76b900'
+            },
+            invalid: { color: '#ef4444', iconColor: '#ef4444' }
+          }
+        }} />
+      </div>
+      <button
+        type="submit"
+        className="db-btn db-btn-primary"
+        style={{ width: '100%', padding: '10px', fontSize: '0.8125rem', height: '40px' }}
+        disabled={!stripe || processing || !clientSecret}
+      >
+        {processing ? (
+          <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />
+        ) : (
+          <><Zap size={14} /> {clientSecret ? btnText : 'Loading...'}</>
+        )}
+      </button>
+    </form>
   );
 }

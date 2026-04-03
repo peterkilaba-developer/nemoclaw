@@ -40,38 +40,54 @@ export const EMPLOYEE_ROLES = [
   { value: 'office-manager', label: 'Office Manager', agentType: 'operations', tier: 'staff', division: 'business', superAgentAccess: false },
 ];
 
+// Roles that qualify as firm owner (isOwner: true)
+// These are the only roles with canEditFirmPolicies: true
+export const OWNER_ELIGIBLE_ROLES = ['solo-partner', 'managing-partner'];
+
+/**
+ * Derive the correct owner role from firm context.
+ * Solo firms → 'solo-partner', multi-partner firms → 'managing-partner'
+ */
+export function getOwnerRole(firmSize) {
+  return firmSize === 'solo' ? 'solo-partner' : 'managing-partner';
+}
+
 // Which sub-agents are available to each agent type
 export const AGENT_SUB_AGENTS = {
   partner: [
     'legal-research', 'contract-review', 'drafting', 'case-analytics',
     'business-intelligence', 'knowledge-search', 'communication-drafter',
+    'due-diligence', 'trust-accounting',
   ],
   'of-counsel': [
     'legal-research', 'contract-review', 'drafting', 'ediscovery',
     'deposition-prep', 'case-analytics', 'knowledge-search', 'communication-drafter',
+    'due-diligence',
   ],
   associate: [
     'legal-research', 'contract-review', 'drafting', 'ediscovery',
     'deposition-prep', 'knowledge-search', 'communication-drafter',
+    'due-diligence', 'court-filing',
   ],
   paralegal: [
     'legal-research', 'ediscovery', 'document-formatting', 'deposition-prep',
-    'knowledge-search',
+    'knowledge-search', 'court-filing', 'deadline-tracker',
   ],
   'law-clerk': [
-    'legal-research', 'drafting', 'knowledge-search',
+    'legal-research', 'drafting', 'knowledge-search', 'due-diligence',
   ],
   receptionist: [
     'client-intake', 'scheduling', 'lead-qualification', 'communication-drafter',
   ],
   secretary: [
     'scheduling', 'document-formatting', 'knowledge-search', 'communication-drafter',
+    'deadline-tracker', 'court-filing',
   ],
   billing: [
-    'billing-time', 'knowledge-search', 'communication-drafter',
+    'billing-time', 'knowledge-search', 'communication-drafter', 'trust-accounting',
   ],
   operations: [
-    'compliance-monitor', 'knowledge-search', 'communication-drafter',
+    'compliance-monitor', 'knowledge-search', 'communication-drafter', 'trust-accounting',
   ],
 
   intern: [
@@ -191,6 +207,10 @@ export const SUB_AGENT_CATALOG = [
   { id: 'communication-drafter', name: 'Communication Drafter', desc: 'Email drafts, client letters, engagement letters', icon: 'Mail' },
   { id: 'case-analytics', name: 'Case Analytics', desc: 'Outcome prediction, judge tendencies, benchmarks', icon: 'TrendingUp' },
   { id: 'business-intelligence', name: 'Business Intelligence', desc: 'Revenue trends, pipeline analysis, market insights', icon: 'BarChart3' },
+  { id: 'due-diligence', name: 'Due Diligence', desc: 'Data room analysis, red flag reports, and risk assessment', icon: 'ScanSearch' },
+  { id: 'trust-accounting', name: 'Trust Accounting', desc: 'IOLTA reconciliation, trust ledgers, and bar compliance', icon: 'Banknote' },
+  { id: 'court-filing', name: 'Court Filing', desc: 'ECF/PACER preparation, state filings, and service calculation', icon: 'Landmark' },
+  { id: 'deadline-tracker', name: 'Deadline Tracking', desc: 'Statute of limitations, docketing, and timeline rules', icon: 'Clock' },
 ];
 
 
@@ -316,9 +336,26 @@ export async function getAgentForEmployee(firmId, employeeId) {
  * Add an employee and create their agent after onboarding.
  */
 export async function addEmployee(firmId, employeeData) {
+  console.log('[DEBUG] agentHierarchy addEmployee executing with:', firmId, employeeData);
   const empRef = doc(collection(db, 'firms', firmId, 'employees'));
   const roleConfig = EMPLOYEE_ROLES.find(r => r.value === employeeData.role);
   const agentType = roleConfig?.agentType || 'associate';
+  console.log('[DEBUG] agentHierarchy agentType derived:', agentType);
+
+  // Auto-upgrade solo firms and track additional human seats for billing
+  const firmRef = doc(db, 'firms', firmId);
+  const firmSnap = await getDoc(firmRef);
+  if (firmSnap.exists()) {
+    const firmData = firmSnap.data();
+    const updatePayload = {};
+    if (firmData.firmSize === 'solo') {
+      updatePayload.firmSize = 'small_team'; // Remove solo status
+    }
+    // Increment billable extra (non-founder) seats
+    updatePayload.extraSeats = (firmData.extraSeats || 0) + 1;
+    updatePayload.updatedAt = serverTimestamp();
+    await updateDoc(firmRef, updatePayload);
+  }
 
   await setDoc(empRef, {
     name: employeeData.name,

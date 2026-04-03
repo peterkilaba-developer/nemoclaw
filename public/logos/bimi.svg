@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg version="1.2" baseProfile="tiny-ps" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>NemoC LAW AI</title>
+  <!-- BIMI SVG Tiny P/S compliant logo -->
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="#0a0f1a"/>
+  <!-- Lightning bolt / claw mark - simplified brand mark -->
+  <path d="M296 44c5 0 8 6 5 10L238 174c-6 8 1 21 10 21h62c5 0 8 6 5 10L216 468c-4 5-12 2-11-5l25-170c1-6-3-11-9-11h-62c-5 0-8-6-5-10L264 54c2-6 7-10 12-10h20z" fill="#863bff"/>
+  <!-- Inner highlight -->
+  <path d="M280 80L224 189c-4 6 1 14 8 14h52L235 440 200 290c-1-5 2-9 7-9h52L280 80z" fill="#a86fff" opacity="0.5"/>
+</svg>

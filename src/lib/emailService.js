@@ -22,84 +22,109 @@ function getPricing(firmSize) {
    ═══════════════════════════════════════════════ */
 
 const EMAIL_STYLES = `
-  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #0a0e17; margin: 0; padding: 0; }
-  .container { max-width: 600px; margin: 0 auto; padding: 40px 24px; }
-  .card { background: #111827; border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 40px 32px; }
-  .logo { color: #76b900; font-size: 24px; font-weight: 800; margin-bottom: 8px; letter-spacing: -0.5px; }
-  .tagline { color: rgba(255,255,255,0.4); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 32px; }
-  h1 { color: #fff; font-size: 28px; font-weight: 800; margin: 0 0 16px; line-height: 1.2; }
-  h1 span { color: #76b900; }
-  p { color: rgba(255,255,255,0.65); font-size: 14px; line-height: 1.7; margin: 0 0 16px; }
-  .highlight { background: rgba(118,185,0,0.08); border: 1px solid rgba(118,185,0,0.2); border-radius: 12px; padding: 20px; margin: 24px 0; }
-  .highlight-title { color: #76b900; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f9fafb; margin: 0; padding: 0; color: #111827; }
+  .container { max-width: 600px; margin: 0 auto; padding: 20px 12px; }
+  .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+  .logo { display: block; max-width: 180px; height: auto; margin-bottom: 24px; }
+  .tagline { color: #6b7280; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 32px; border-bottom: 1px solid #f3f4f6; padding-bottom: 12px; }
+  h1 { color: #111827; font-size: 24px; font-weight: 700; margin: 0 0 16px; line-height: 1.3; }
+  h1 span { color: #166534; }
+  p { color: #4b5563; font-size: 14px; line-height: 1.6; margin: 0 0 16px; }
+  
+  .text-strong { color: #111827; font-weight: 700; }
+  .text-muted-sm { font-size: 12px; color: #6b7280; font-weight: 500; }
+  .text-muted-md { font-size: 13px; color: #4b5563; }
+  .text-warning { font-size: 13px; color: #b45309; font-weight: 600; margin: 0; }
+  .text-center { text-align: center; }
+
+  .highlight { background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.06); border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #76b900; }
+  .highlight-title { color: #76b900; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
   .price-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
-  .price-future { color: rgba(255,255,255,0.3); text-decoration: line-through; font-size: 16px; }
-  .price-highlight { color: #76b900; font-size: 28px; font-weight: 800; }
-  .price-label { color: rgba(255,255,255,0.4); font-size: 12px; }
+  .price-future { color: #9ca3af; text-decoration: line-through; font-size: 16px; }
+  .price-highlight { color: #16a34a; font-size: 24px; font-weight: 800; }
+  .price-label { color: #6b7280; font-size: 12px; }
+  
   .tasks { margin: 16px 0; }
-  .task-tag { display: inline-block; background: rgba(118,185,0,0.1); border: 1px solid rgba(118,185,0,0.2); color: #76b900; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 6px; margin: 3px 4px 3px 0; }
+  .task-tag { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; color: #4b5563; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; margin: 3px 4px 3px 0; }
   .agents-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 24px; }
-  .agent-tag { display: inline-block; background: rgba(118,185,0,0.08); border: 1px solid rgba(118,185,0,0.2); color: #76b900; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 6px; }
-  .benefit-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: rgba(255,255,255,0.6); font-size: 13px; }
-  .cta { display: inline-block; background: #76b900; color: #000; font-size: 16px; font-weight: 800; padding: 16px 40px; border-radius: 12px; text-decoration: none; margin: 24px 0 16px; text-align: center; }
-  .cta:hover { background: #8fd400; }
-  .footer { text-align: center; padding: 24px 0; color: rgba(255,255,255,0.25); font-size: 11px; }
-  .footer a { color: rgba(255,255,255,0.35); text-decoration: underline; }
-  .divider { height: 1px; background: rgba(255,255,255,0.06); margin: 24px 0; }
-  .security-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: rgba(255,255,255,0.5); font-size: 11px; font-weight: 600; margin-top: 4px; }
-  .audio-player-email { display: block; text-decoration: none; background: rgba(118,185,0,0.06); border: 1px solid rgba(118,185,0,0.2); border-radius: 12px; padding: 16px 20px; margin: 24px 0; }
-  .audio-player-row { display: flex; align-items: center; gap: 14px; }
-  .audio-play-btn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, #76b900, #4a7a00); flex-shrink: 0; }
-  .audio-play-icon { width: 0; height: 0; border-style: solid; border-width: 8px 0 8px 14px; border-color: transparent transparent transparent #000; margin-left: 2px; }
-  .audio-info { flex: 1; }
-  .audio-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #76b900; margin-bottom: 3px; }
-  .audio-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
-  .audio-duration { font-size: 11px; color: rgba(255,255,255,0.35); }
-  .audio-eq { display: flex; align-items: flex-end; gap: 3px; height: 20px; flex-shrink: 0; }
-  .audio-eq-bar { width: 3px; border-radius: 1.5px; background: #76b900; }
+  .agent-tag { display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 4px; }
+  .benefit-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: #4b5563; font-size: 13px; }
+  
+  .cta { display: inline-block; background: #76b900; color: #111; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 6px; text-decoration: none; margin: 24px 0 16px; text-align: center; }
+  .cta:hover { background: #65a300; }
+  .footer { text-align: center; padding: 24px 0; color: #9ca3af; font-size: 11px; }
+  .footer a { color: #6b7280; text-decoration: underline; }
+  .divider { height: 1px; background: #e5e7eb; margin: 24px 0; }
+  
+  .audio-player-email { display: block; text-decoration: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
+  .audio-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #166534; margin-bottom: 3px; }
+  .audio-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 2px; }
+  .audio-duration { font-size: 11px; color: #6b7280; }
+  .audio-play-btn { display: inline-block; width: 44px; height: 44px; border-radius: 50%; background: #16a34a; text-align: center; line-height: 44px; }
+  
+  @media (prefers-color-scheme: dark) {
+    body { background: #0a0e17; color: #f3f4f6; }
+    .card { background: #111827; border-color: #1f2937; box-shadow: none; }
+    h1 { color: #ffffff; }
+    h1 span { color: #76b900; }
+    p { color: #9ca3af; }
+    .tagline { color: #6b7280; border-bottom-color: #1f2937; }
+    .highlight { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); border-left-color: #76b900; }
+    .highlight-title { color: #76b900; }
+    .price-future { color: #4b5563; }
+    .price-highlight { color: #76b900; }
+    .price-label { color: #6b7280; }
+    .task-tag { background: #1f2937; border-color: #374151; color: #d1d5db; }
+    .agent-tag { background: rgba(37,99,235,0.1); border-color: rgba(37,99,235,0.2); color: #60a5fa; }
+    .benefit-row { color: #9ca3af; }
+    
+    .text-strong { color: #ffffff !important; }
+    .text-muted-sm { color: rgba(255,255,255,0.5) !important; }
+    .text-muted-md { color: rgba(255,255,255,0.7) !important; }
+    .text-warning { color: #f59e0b !important; }
+    
+    .cta { background: #76b900; color: #111; font-weight: 700; }
+    .cta:hover { background: #65a300; }
+    .footer { color: #6b7280; }
+    .footer a { color: #9ca3af; }
+    .divider { background: #1f2937; }
+    
+    .audio-player-email { background: rgba(118,185,0,0.06); border-color: rgba(118,185,0,0.2); }
+    .audio-label { color: #76b900; }
+    .audio-title { color: #ffffff; }
+    .audio-duration { color: rgba(255,255,255,0.35); }
+    .audio-play-btn { background: linear-gradient(135deg, #76b900, #4a7a00); }
+  }
 `;
 
 const AUDIO_PLAYER_BLOCK = `
-  <!-- Audio Player — progressive enhancement:
-       Apple Mail & Thunderbird: native <audio> controls render inline.
-       Gmail, Outlook, Yahoo: <audio> is stripped, fallback link + styled card remains. -->
-  <div style="background:rgba(118,185,0,0.06); border:1px solid rgba(118,185,0,0.2); border-radius:12px; padding:20px; margin:24px 0;">
+  <!-- Audio Player -->
+  <div class="audio-player-email">
     <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
       <td style="vertical-align:middle;">
-        <div style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:#76b900; margin-bottom:6px;">🎧 Listen Now — 25 min Deep Dive</div>
-        <div style="font-size:15px; font-weight:800; color:#fff; margin-bottom:3px;">AI and the Agentic Legal Revolution</div>
-        <div style="font-size:11px; color:rgba(255,255,255,0.35); margin-bottom:14px;">How NemoC LAW AI is reshaping legal work with autonomous agents</div>
+        <div class="audio-label">Listen Now — 25 min Deep Dive</div>
+        <div class="audio-title">AI and the Agentic Legal Revolution</div>
+        <div class="audio-duration">How NemoC LAW AI is reshaping legal work with autonomous agents</div>
       </td>
     </tr></table>
 
-    <!-- Native player for Apple Mail / Thunderbird (stripped by Gmail/Outlook) -->
-    <audio controls preload="none" style="width:100%; height:40px; border-radius:8px; outline:none;" src="${SITE_URL}/nemoc-law-ai-deep-dive.mp3">
+    <audio controls preload="none" style="width:100%; height:40px; border-radius:8px; outline:none; margin-top:8px;" src="${SITE_URL}/nemoc-law-ai-deep-dive.mp3">
       Your email client does not support audio playback.
     </audio>
 
-    <!-- Fallback link — always visible, works in all clients -->
     <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;"><tr>
       <td width="44" style="vertical-align:middle;">
         <a href="${SITE_URL}/nemoc-law-ai-deep-dive.mp3" target="_blank" style="text-decoration:none;">
-          <div style="display:inline-block; width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#76b900,#4a7a00); text-align:center; line-height:44px;">
-            <span style="font-size:18px; color:#000;">▶</span>
+          <div class="audio-play-btn">
+            <span style="font-size:18px; color:#ffffff;">▶</span>
           </div>
         </a>
       </td>
       <td style="vertical-align:middle; padding-left:12px;">
-        <a href="${SITE_URL}/nemoc-law-ai-deep-dive.mp3" target="_blank" style="text-decoration:none; color:#76b900; font-size:13px; font-weight:700;">
+        <a href="${SITE_URL}/nemoc-law-ai-deep-dive.mp3" target="_blank" style="text-decoration:none;" class="audio-label">
           ▶ Click to play in browser
         </a>
-        <div style="font-size:10px; color:rgba(255,255,255,0.25); margin-top:2px;">Opens in a new tab if your email client doesn't support inline audio</div>
-      </td>
-      <td width="30" style="vertical-align:middle; text-align:right;">
-        <div style="display:inline-flex; align-items:flex-end; gap:2px; height:20px;">
-          <div style="width:3px; height:6px; border-radius:1.5px; background:#76b900;"></div>
-          <div style="width:3px; height:14px; border-radius:1.5px; background:#76b900;"></div>
-          <div style="width:3px; height:9px; border-radius:1.5px; background:#76b900;"></div>
-          <div style="width:3px; height:18px; border-radius:1.5px; background:#76b900;"></div>
-          <div style="width:3px; height:7px; border-radius:1.5px; background:#76b900;"></div>
-        </div>
+        <div class="audio-duration" style="margin-top:2px;">Opens in a new tab if your email client doesn't support inline audio</div>
       </td>
     </tr></table>
   </div>
@@ -164,7 +189,7 @@ export function getLaunchEmailTemplate(lead) {
       return labels[t] || t;
     });
 
-  const subject = `🚀 NemoC LAW AI is Live — Your Founder Access is Ready`;
+  const subject = `NemoC LAW AI is Live — Your Founder Access is Ready`;
 
   const html = `
 <!DOCTYPE html>
@@ -177,39 +202,39 @@ export function getLaunchEmailTemplate(lead) {
 <body>
   <div class="container">
     <div class="card">
-      <div class="logo">NemoC LAW AI</div>
-      <div class="tagline">Agentic as a Service for Lawyers</div>
+      <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" />
+      <div class="tagline">Born Agentic for Law Firms</div>
 
-      <h1>Your Founder Access is <span>Ready</span> 🎉</h1>
+      <h1>Your Founder Access is <span>Ready</span></h1>
 
       <p>
         Thank you for signing up for NemoC LAW AI. We're thrilled to announce that
-        Agentic OS is now <strong style="color:#fff">live</strong> — and as one of our
+        Agentic OS is now <strong class="text-strong">live</strong> — and as one of our
         founding members, your price is locked for life.
       </p>
 
       <div class="highlight">
-        <div class="highlight-title">🔒 Your Founder Price — Locked Forever</div>
+        <div class="highlight-title">Your Founder Price — Locked Forever</div>
         <div class="price-row">
           <span class="price-future">$${pricing.future}/mo</span>
           <span class="price-highlight">$${pricing.current}/mo</span>
           <span class="price-label">for life</span>
         </div>
-        <p style="font-size:12px; color:rgba(255,255,255,0.4); margin:8px 0 0;">
+        <p class="text-muted-sm" style="margin-top:8px;">
           ${pricing.label} plan. This price is locked as long as you maintain your subscription.
           First 100 firms per state get this rate — then standard pricing applies.
         </p>
       </div>
 
       <p>
-        As a ${pricing.label}, you get <strong style="color:#fff">one personal AI agent</strong>
+        As a ${pricing.label}, you get <strong class="text-strong">one personal AI agent</strong>
         that orchestrates everything — legal research, contract review, client intake, drafting,
         billing, and more. Just delegate in plain English. No learning curve.
       </p>
 
       ${taskList.length > 0 ? `
-      <p style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:8px;">
-        <strong>Your pre-configured capabilities:</strong>
+      <p class="text-muted-sm" style="margin-bottom:8px;">
+        <strong class="text-strong">Your pre-configured capabilities:</strong>
       </p>
       <div class="tasks">
         ${taskList.map(t => `<span class="task-tag">${t}</span>`).join('')}
@@ -220,15 +245,15 @@ export function getLaunchEmailTemplate(lead) {
         <a href="${signupLink}" class="cta">Activate My Founder Account →</a>
       </div>
 
-      <p style="text-align:center; font-size:12px; color:rgba(255,255,255,0.3);">
+      <p class="text-muted-sm text-center">
         This link is unique to your email. Your founder pricing will be
         automatically applied at checkout.
       </p>
 
       <div class="divider"></div>
 
-      <p style="font-size:12px; color:rgba(255,255,255,0.3);">
-        <strong style="color:rgba(255,255,255,0.5);">What's included in Founder Access:</strong><br/>
+      <p class="text-muted-sm">
+        <strong class="text-strong">What's included in Founder Access:</strong><br/>
         ✓ One personal AI agent — delegates to 15+ specialized sub-agents<br/>
         ✓ Unlimited AI tokens — no per-query charges, ever<br/>
         ✓ Zero data leak — secured by OpenClaw · NemoClaw · OpenShell<br/>
@@ -294,8 +319,8 @@ export function getColdOutreachTemplate(prospect) {
 <body>
   <div class="container">
     <div class="card">
-      <div class="logo">NemoC LAW AI</div>
-      <div class="tagline">Agentic as a Service for Lawyers</div>
+      <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" />
+      <div class="tagline">Born Agentic for Law Firms</div>
 
       <h1>What if <span>${firmName}</span> had a private AI workforce that never sleeps?</h1>
 
@@ -354,7 +379,7 @@ export function getColdOutreachTemplate(prospect) {
 
       <div style="text-align:center;">
         <div class="security-badge">
-          🔒 Built on OpenClaw · NemoClaw · OpenShell · ABA Ethics Compliant
+          Built on OpenClaw · NemoClaw · OpenShell · ABA Ethics Compliant
         </div>
       </div>
     </div>
@@ -423,7 +448,7 @@ export function getFollowUpTemplate(prospect) {
 <body>
   <div class="container">
     <div class="card">
-      <div class="logo">NemoC LAW AI</div>
+      <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" style="margin-bottom: 24px;" />
 
       <p>Hi — quick follow-up on my earlier note about NemoC LAW AI.</p>
 
@@ -593,7 +618,7 @@ export async function sendBulkOutreach(prospects, templateType = 'cold') {
 
 export function getSignupWelcomeEmailTemplate(email, name) {
   const pricing = getPricing('solo');
-  const subject = `🚀 Welcome to NemoC LAW AI — Lock in Your Founder Price`;
+  const subject = `Welcome to NemoC LAW AI — Lock in Your Founder Price`;
   
   const dashboardLink = `${SITE_URL}/dashboard`;
 
@@ -608,10 +633,10 @@ export function getSignupWelcomeEmailTemplate(email, name) {
 <body>
   <div class="container">
     <div class="card">
-      <div class="logo">NemoC LAW AI</div>
-      <div class="tagline">Agentic as a Service for Lawyers</div>
+      <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" />
+      <div class="tagline">Born Agentic for Law Firms</div>
 
-      <h1>Welcome aboard, <span>${name || 'Founder'}</span> 🎉</h1>
+      <h1>Welcome aboard, <span>${name || 'Founder'}</span></h1>
 
       <p>
         Your NemoC LAW AI sandbox is successfully provisioned. You now have complete access to the 
@@ -619,11 +644,11 @@ export function getSignupWelcomeEmailTemplate(email, name) {
       </p>
 
       <div class="highlight">
-        <div class="highlight-title">⚠️ ACTION REQUIRED: 7-Day Founder Lock</div>
-        <p style="font-size:13px; color:rgba(255,255,255,0.7); margin-bottom:12px;">
-          As an early adopter, you have successfully claimed a spot for our <strong>$${pricing.current}/mo Founder Pricing</strong> (Standard: $${pricing.future}/mo).
+        <div class="highlight-title">ACTION REQUIRED: 7-Day Founder Lock</div>
+        <p class="text-muted-md">
+          As an early adopter, you have successfully claimed a spot for our <strong class="text-strong">$${pricing.current}/mo Founder Pricing</strong> (Standard: $${pricing.future}/mo).
         </p>
-        <p style="font-size:13px; color:#f59e0b; font-weight:600; margin:0;">
+        <p class="text-warning">
           You must finalize your firm's onboarding and activate your payment method within 7 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
         </p>
       </div>

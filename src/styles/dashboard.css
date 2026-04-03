@@ -96,7 +96,7 @@
   justify-content: center;
   font-size: 0.875rem;
   font-weight: 800;
-  color: #111827;
+  color: var(--text-on-brand);
 }
 
 .db-sidebar-logo-text {
@@ -159,7 +159,7 @@
 
 .db-sidebar-link:hover {
   background: var(--db-sidebar-hover);
-  color: #d1d5db;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .db-sidebar-link.active {
@@ -215,7 +215,7 @@
 
 .db-sidebar-logout:hover {
   background: rgba(220, 38, 38, 0.15);
-  color: #ef4444;
+  color: var(--db-danger);
 }
 
 .db-sidebar-user {
@@ -236,13 +236,13 @@
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #374151;
+  background: rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 0.75rem;
   font-weight: 700;
-  color: #d1d5db;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .db-sidebar-user-info {
@@ -253,7 +253,7 @@
 .db-sidebar-user-name {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #e5e7eb;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .db-sidebar-user-role {
@@ -549,7 +549,7 @@
 
 .db-agent-card:hover {
   box-shadow: var(--db-shadow-md);
-  border-color: #d1d5db;
+  border-color: var(--db-text-muted);
 }
 
 .db-agent-card-header {
@@ -658,11 +658,11 @@
 
 .db-btn-primary {
   background: var(--db-text-primary);
-  color: #ffffff;
+  color: var(--text-on-dark);
 }
 
 .db-btn-primary:hover {
-  background: #1f2937;
+  background: var(--bg-tertiary);
 }
 
 .db-btn-secondary {
@@ -677,11 +677,11 @@
 
 .db-btn-accent {
   background: var(--db-nvidia-green);
-  color: #111827;
+  color: var(--text-on-brand);
 }
 
 .db-btn-accent:hover {
-  background: #6aa300;
+  background: var(--nvidia-green-dark);
 }
 
 .db-btn-sm {
@@ -835,4 +835,219 @@
   position: relative;
   background: var(--db-bg);
   padding: 8px 32px 20px;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Financials & Revenue — Billing Module Styles
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Tab Pills ── */
+.db-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 99px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--db-font);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--db-border);
+  background: transparent;
+  color: var(--db-text-secondary);
+}
+
+.db-tab-pill:hover {
+  background: var(--db-surface-elevated);
+  color: var(--db-text-primary);
+  border-color: var(--db-text-muted);
+}
+
+.db-tab-pill.active {
+  background: var(--db-nvidia-green);
+  color: #000;
+  border-color: var(--db-nvidia-green);
+  box-shadow: 0 0 12px rgba(118, 185, 0, 0.25);
+}
+
+.db-tab-pill.active svg {
+  opacity: 1;
+}
+
+.db-tab-pill svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.6;
+}
+
+/* ── Card Description ── */
+.db-card-desc {
+  font-size: 0.8125rem;
+  color: var(--db-text-muted);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* ── Billing Line Items ── */
+.db-billing-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-radius: var(--db-radius);
+  border: 1px solid var(--db-border);
+  background: var(--db-surface);
+  font-size: 0.8125rem;
+}
+
+.db-billing-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--db-radius-sm);
+  background: rgba(118, 185, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--db-nvidia-green);
+  flex-shrink: 0;
+}
+
+/* ── Plan Badge ── */
+.db-plan-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 99px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(118, 185, 0, 0.08);
+  color: var(--db-nvidia-green);
+  border: 1px solid rgba(118, 185, 0, 0.15);
+  flex-shrink: 0;
+}
+
+/* ── Outline Button ── */
+.db-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--db-radius);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--db-font);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid var(--db-border);
+  background: transparent;
+  color: var(--db-text-secondary);
+}
+
+.db-btn-outline:hover {
+  background: var(--db-surface-elevated);
+  color: var(--db-text-primary);
+  border-color: var(--db-text-muted);
+}
+
+/* ── Icon Button (small) ── */
+.db-btn-icon-sm {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--db-radius-sm);
+  border: 1px solid var(--db-border);
+  background: transparent;
+  color: var(--db-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.db-btn-icon-sm:hover {
+  background: rgba(118, 185, 0, 0.1);
+  color: var(--db-nvidia-green);
+  border-color: rgba(118, 185, 0, 0.3);
+}
+
+/* ── Alert Banners ── */
+.db-alert-success {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: var(--db-radius);
+  background: rgba(22, 163, 74, 0.06);
+  border: 1px solid rgba(22, 163, 74, 0.15);
+  color: #16a34a;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+/* ── Data Table ── */
+.db-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+}
+
+.db-table thead th {
+  text-align: left;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--db-text-muted);
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--db-border);
+}
+
+.db-table tbody td {
+  padding: 14px 12px;
+  border-bottom: 1px solid var(--db-border-light);
+  color: var(--db-text-primary);
+  vertical-align: middle;
+}
+
+.db-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.db-table tbody tr:hover {
+  background: var(--db-surface-elevated);
+}
+
+/* ── Column helpers ── */
+.db-col-main,
+.db-col-side {
+  min-width: 0;
+}
+
+/*  Button shared base (standalone usage without .db-btn wrapper) */
+.db-btn-primary,
+.db-btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: var(--db-radius);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: var(--db-font);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  text-decoration: none;
+}
+
+/* ── Surface Alt helper ── */
+.db-surface-alt {
+  background: var(--db-surface-elevated);
 }
