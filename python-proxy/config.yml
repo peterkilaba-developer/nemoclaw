@@ -1,14 +1,12 @@
 models:
   - type: main
-    engine: openai
-    model: nvidia/nemotron-4-340b-instruct
+    engine: nemotron
     parameters:
       temperature: 0.05
       top_p: 0.8
       max_tokens: 1024
   - type: rails
-    engine: openai
-    model: nvidia/nemotron-4-340b-instruct
+    engine: nemotron
 
 instructions:
   - type: general

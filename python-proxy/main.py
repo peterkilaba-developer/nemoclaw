@@ -16,20 +16,25 @@ if "OPENAI_API_BASE" not in os.environ:
 
 # NeMo Guardrails
 from nemoguardrails import LLMRails, RailsConfig
-from langchain.chat_models import ChatOpenAI
+from nemoguardrails.llm.providers import register_chat_provider
+
+try:
+    from langchain_community.chat_models import ChatOpenAI
+except ImportError:
+    from langchain.chat_models import ChatOpenAI
 
 app = FastAPI(title="NemoClaw Proxy Service", description="NVIDIA NeMo Guardrails interception layer for Agentic OS")
 
-# Explicitly instantiate the model to bypass NeMo's internal fallback to gpt-3.5-turbo
-try:
-    main_llm = ChatOpenAI(model_name="nvidia/nemotron-4-340b-instruct", temperature=0.05, max_tokens=1024)
-except ImportError:
-    from langchain_community.chat_models import ChatOpenAI
-    main_llm = ChatOpenAI(model_name="nvidia/nemotron-4-340b-instruct", temperature=0.05, max_tokens=1024)
+# A completely airtight ChatOpenAI wrapper that rejects fallback to gpt-3.5-turbo
+class NimNemotronLLM(ChatOpenAI):
+    model_name: str = "nvidia/nemotron-4-340b-instruct"
+
+# Register the custom engine globally
+register_chat_provider("nemotron", NimNemotronLLM)
 
 # Load NeMo configurations from current directory
 config = RailsConfig.from_path("./")
-rails = LLMRails(config, llm=main_llm)
+rails = LLMRails(config)
 
 class Message(BaseModel):
     role: str
