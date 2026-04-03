@@ -448,7 +448,7 @@ async def chat_completions(req: InferenceRequest, request: Request):
 
     # ── PHASE 2: Poly-Model Routing ──────────────
     result = None
-    target_engine = "NVIDIA (Default)"
+    target_engine = "OpenAI (GPT-4o)"
 
     if routing_profile == "ediscovery":
         print("  [ROUTER] Intent: eDiscovery -> Dispatching to Gemini 1.5 Pro (Massive Context)")
@@ -458,8 +458,9 @@ async def chat_completions(req: InferenceRequest, request: Request):
         print("  [ROUTER] Intent: Drafting -> Dispatching to Anthropic Claude 3.5 Sonnet (Logic/Nuance)")
         result = await call_anthropic(req)
         target_engine = "Anthropic"
-    elif routing_profile in ["scheduling", "client-intake"]:
-        print("  [ROUTER] Intent: Workflow -> Dispatching to OpenAI GPT-4o (Fast Orchestration)")
+    else:
+        # Default orchestrator profile -> GPT-4o
+        print("  [ROUTER] Intent: Orchestration -> Dispatching to OpenAI GPT-4o (Default Route)")
         result = await call_openai(req)
         target_engine = "OpenAI"
 

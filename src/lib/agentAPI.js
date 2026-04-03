@@ -342,14 +342,15 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     { role: 'user', content: safeMessage },
   ];
 
+  // 4.5 Detect sub-agent behavior BEFORE inference to determine routing profile
+  let subAgentsUsed = detectSubAgentUsage(safeMessage, agent.availableSubAgents || []);
+
   // 5. Call the inference endpoint
   let response;
-  let subAgentsUsed = [];
 
   try {
-    const result = await callInference(messages, agent);
+    const result = await callInference(messages, agent, subAgentsUsed);
     response = result.content;
-    subAgentsUsed = detectSubAgentUsage(safeMessage, agent.availableSubAgents || []);
   } catch (err) {
     console.error('Agent inference error:', err);
     response = `I apologize, but I'm experiencing a temporary issue connecting to the inference service. Please try again in a moment.\n\nError: ${err.message}`;
@@ -404,20 +405,25 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 //  INFERENCE CALL
 // ═══════════════════════════════════════════════
 
-// Map the sub-agent ID string to an architectural routing profile
-const getRoutingProfile = (agentId) => {
-  if (['legal-research', 'case-analytics'].includes(agentId)) return 'ediscovery';
-  if (['contract-review', 'drafting', 'communication-drafter'].includes(agentId)) return 'contract-review';
-  if (['client-intake', 'scheduling', 'knowledge-search'].includes(agentId)) return 'scheduling';
+// Map the sub-agent array to an architectural routing profile
+const getRoutingProfile = (subAgentsDetector) => {
+  if (!subAgentsDetector || subAgentsDetector.length === 0) return 'default';
+  
+  // Route based on the first detected sub-agent's ID
+  const primaryIntent = subAgentsDetector[0].id;
+  
+  if (['legal-research', 'case-analytics', 'due-diligence'].includes(primaryIntent)) return 'ediscovery';
+  if (['contract-review', 'drafting', 'communication-drafter'].includes(primaryIntent)) return 'contract-review';
+  if (['client-intake', 'scheduling', 'knowledge-search'].includes(primaryIntent)) return 'scheduling';
   return 'default';
 };
 
 /**
  * CORE INFERENCE GENERATOR (NEMOCLAW v4.0 POLY-MODEL SECURED)
  */
-async function callInference(messages, agent) {
-  // 1. Detect sub-agent behavior and set the routing header
-  const routeProfile = getRoutingProfile(agent.agentType);
+async function callInference(messages, agent, subAgentsUsed) {
+  // 1. Detect sub-agent behavior and set the routing header based on intent
+  const routeProfile = getRoutingProfile(subAgentsUsed);
 
   // Build headers — in dev mode the Vite proxy adds the auth header
   const headers = { 
