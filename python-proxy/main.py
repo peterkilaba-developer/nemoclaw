@@ -62,7 +62,7 @@ NVIDIA_BASE_URL = os.environ.get(
 
 DEFAULT_MODEL = os.environ.get(
     "NVIDIA_MODEL_ID",
-    "nvidia/llama-3.1-nemotron-70b-instruct"
+    "meta/llama-3.1-70b-instruct"
 )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
