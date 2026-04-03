@@ -405,10 +405,10 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 // ═══════════════════════════════════════════════
 
 async function callInference(messages, agent) {
-  if (!NEMOCLAW_API_KEY) {
-    // Check if we have the fallback simulateResponse
-    return simulateResponse(messages, agent);
-  }
+  // if (!NEMOCLAW_API_KEY) {
+  //   // Check if we have the fallback simulateResponse
+  //   return simulateResponse(messages, agent);
+  // }
 
   // Build headers — in dev mode the Vite proxy adds the auth header
   const headers = { 'Content-Type': 'application/json' };
