@@ -5,10 +5,17 @@ from pydantic import BaseModel
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 
+load_dotenv()
+
+# Safely map keys for OpenAI compatible LangChain NIM requests
+if "VITE_NVIDIA_API_KEY" in os.environ and "OPENAI_API_KEY" not in os.environ:
+    os.environ["OPENAI_API_KEY"] = os.environ["VITE_NVIDIA_API_KEY"]
+
+if "OPENAI_API_BASE" not in os.environ:
+    os.environ["OPENAI_API_BASE"] = "https://integrate.api.nvidia.com/v1"
+
 # NeMo Guardrails
 from nemoguardrails import LLMRails, RailsConfig
-
-load_dotenv()
 
 app = FastAPI(title="NemoClaw Proxy Service", description="NVIDIA NeMo Guardrails interception layer for Agentic OS")
 
