@@ -10,8 +10,9 @@ export default defineConfig(({ mode }) => {
     server: {
       proxy: {
         // Proxy NVIDIA API calls through the local Python NeMo Guardrails Sandbox
+        // Uses VITE_PYTHON_PROXY_URL if set in .env to bridge local frontend to remote Codespace backend
         '/api/nvidia': {
-          target: 'http://127.0.0.1:8080',
+          target: env.VITE_PYTHON_PROXY_URL || 'http://127.0.0.1:8080',
           changeOrigin: true,
           secure: false,
         },

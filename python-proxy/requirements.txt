@@ -1,6 +1,5 @@
-nemoguardrails
 fastapi
 uvicorn
 python-dotenv
-openai
+httpx
 pydantic
