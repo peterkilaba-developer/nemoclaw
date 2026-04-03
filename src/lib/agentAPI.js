@@ -448,7 +448,7 @@ function simulateResponse(messages, agent) {
   const role = agent.agentType || 'associate';
 
   return { 
-    content: `[DEV MODE] I am your ${role} agent (${agentName}). No real inference API key is configured. In a production environment, I would process your request using NVIDIA Nemotron 120B. Please configure VITE_NVIDIA_API_KEY to enable real intelligence.` 
+    content: `[DEV MODE DISABLED - THIS IS A CACHED MESSAGE] I am your ${role} agent (${agentName}). No real inference API key is configured. In a production environment, I would process your request using NVIDIA Nemotron 120B. Please configure VITE_NVIDIA_API_KEY to enable real intelligence.` 
   };
 }
 
