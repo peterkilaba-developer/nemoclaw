@@ -48,6 +48,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 NVIDIA_API_KEY = (
     os.environ.get("NVIDIA_API_KEY")
     or os.environ.get("OPENAI_API_KEY")
@@ -282,22 +285,18 @@ class InferenceRequest(BaseModel):
     stream: bool = False
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  NVIDIA NIM CLIENT
+#  VENDORS ASYNC CLIENTS & CALLERS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-nvidia_client = httpx.AsyncClient(
-    base_url=NVIDIA_BASE_URL,
-    timeout=httpx.Timeout(120.0, connect=10.0),
-    limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
-)
+# Persistent clients
+nvidia_client = httpx.AsyncClient(base_url=NVIDIA_BASE_URL, timeout=120.0, limits=httpx.Limits(max_connections=20))
+anthropic_client = httpx.AsyncClient(base_url="https://api.anthropic.com/v1", timeout=120.0, limits=httpx.Limits(max_connections=10))
+gemini_client = httpx.AsyncClient(base_url="https://generativelanguage.googleapis.com/v1beta", timeout=120.0, limits=httpx.Limits(max_connections=10))
+openai_client = httpx.AsyncClient(base_url="https://api.openai.com/v1", timeout=120.0, limits=httpx.Limits(max_connections=10))
 
 async def call_nvidia_nim(request: InferenceRequest) -> dict:
-    """Forward inference directly to NVIDIA NIM."""
     if not NVIDIA_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="NVIDIA API key not configured. Set NVIDIA_API_KEY, OPENAI_API_KEY, or VITE_NVIDIA_API_KEY."
-        )
+        raise HTTPException(status_code=503, detail="NVIDIA API key not configured.")
 
     model_id = request.model or DEFAULT_MODEL
     payload = {
@@ -306,46 +305,117 @@ async def call_nvidia_nim(request: InferenceRequest) -> dict:
         "max_tokens": request.max_tokens,
         "temperature": request.temperature,
         "top_p": request.top_p,
-        "frequency_penalty": request.frequency_penalty,
-        "presence_penalty": request.presence_penalty,
         "stream": False,
     }
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {NVIDIA_API_KEY}",
-    }
-
-    print(f"  [NIM] → model={model_id} | msgs={len(request.messages)} | max_tokens={request.max_tokens}")
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {NVIDIA_API_KEY}"}
 
     try:
         response = await nvidia_client.post("/chat/completions", json=payload, headers=headers)
-    except httpx.ConnectError as e:
-        raise HTTPException(status_code=502, detail=f"NVIDIA NIM connection failed: {e}")
-    except httpx.TimeoutException as e:
-        raise HTTPException(status_code=504, detail=f"NVIDIA NIM timeout: {e}")
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"  [NVIDIA] Error: {e}")
+        # Return graceful failure object so upstream can reroute if needed
+        return {"error": str(e)}
 
-    if response.status_code != 200:
-        error_body = response.text
-        print(f"  [NIM] ✗ {response.status_code}: {error_body[:300]}")
+async def call_anthropic(request: InferenceRequest) -> dict:
+    if not ANTHROPIC_API_KEY:
+        return {"error": "ANTHROPIC_API_KEY not set"}
+    
+    # Extract system prompt if present (Anthropic requires it top-level)
+    system_text = ""
+    messages = []
+    for m in request.messages:
+        if m.role == "system":
+            system_text += m.content + "\n"
+        else:
+            # Anthropic only accepts strictly alternating user/assistant messages.
+            # For simplicity in translation, we just pass them as requested.
+            messages.append({"role": "assistant" if m.role == "assistant" else "user", "content": m.content})
+    
+    payload = {
+        "model": "claude-3-5-sonnet-20240620",
+        "max_tokens": request.max_tokens or 4096,
+        "temperature": request.temperature,
+        "system": system_text.strip(),
+        "messages": messages
+    }
+    headers = {
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json"
+    }
 
-        # Auto-fallback if model not found
-        if response.status_code == 404 and model_id != DEFAULT_MODEL:
-            print(f"  [NIM] ↻ Retrying with fallback model: {DEFAULT_MODEL}")
-            payload["model"] = DEFAULT_MODEL
-            try:
-                response = await nvidia_client.post("/chat/completions", json=payload, headers=headers)
-                if response.status_code == 200:
-                    print(f"  [NIM] ✓ Fallback succeeded")
-                    return response.json()
-            except Exception:
-                pass
+    try:
+        response = await anthropic_client.post("/messages", json=payload, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        # Translate to OpenAI format
+        return {
+            "choices": [{"message": {"role": "assistant", "content": data.get("content", [{}])[0].get("text", "")}}],
+            "model": "claude-3.5-sonnet"
+        }
+    except Exception as e:
+        print(f"  [ANTHROPIC] Error: {e}")
+        return {"error": str(e)}
 
-        raise HTTPException(status_code=response.status_code, detail=f"NVIDIA NIM: {error_body}")
+async def call_gemini(request: InferenceRequest) -> dict:
+    if not GEMINI_API_KEY:
+        return {"error": "GEMINI_API_KEY not set"}
+    
+    # Translate to Gemini structure
+    contents = []
+    system_instruction = None
+    for m in request.messages:
+        if m.role == "system":
+            system_instruction = {"parts": [{"text": m.content}]}
+        else:
+            role = "model" if m.role == "assistant" else "user"
+            contents.append({"role": role, "parts": [{"text": m.content}]})
 
-    data = response.json()
-    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-    print(f"  [NIM] ✓ {len(content)} chars | model={data.get('model', 'unknown')}")
-    return data
+    payload = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": request.temperature,
+            "maxOutputTokens": request.max_tokens,
+        }
+    }
+    if system_instruction:
+        payload["systemInstruction"] = system_instruction
+
+    try:
+        url = f"/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
+        response = await gemini_client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+        return {
+            "choices": [{"message": {"role": "assistant", "content": text}}],
+            "model": "gemini-1.5-pro"
+        }
+    except Exception as e:
+        print(f"  [GEMINI] Error: {e}")
+        return {"error": str(e)}
+
+async def call_openai(request: InferenceRequest) -> dict:
+    if not OPENAI_API_KEY:
+        return {"error": "OPENAI_API_KEY not set"}
+    
+    payload = {
+        "model": "gpt-4o",
+        "messages": [{"role": m.role, "content": m.content} for m in request.messages],
+        "max_tokens": request.max_tokens,
+        "temperature": request.temperature,
+    }
+    headers = {"Content-Type": "application/json", "Authorization": f"Bearer {OPENAI_API_KEY}"}
+
+    try:
+        response = await openai_client.post("/chat/completions", json=payload, headers=headers)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        print(f"  [OPENAI] Error: {e}")
+        return {"error": str(e)}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  PRIMARY ENDPOINT
@@ -354,45 +424,55 @@ async def call_nvidia_nim(request: InferenceRequest) -> dict:
 @app.post("/api/nvidia/v1/chat/completions")
 async def chat_completions(req: InferenceRequest, request: Request):
     """
-    NemoClaw Secured Inference Pipeline:
-      1. Rate limiting
-      2. NemoClaw INPUT rails (jailbreak, ethics, PII detection)
-      3. NVIDIA NIM inference (direct httpx call)
-      4. NemoClaw OUTPUT rails (factual grounding, PII redaction, UPL guard)
+    NemoClaw Poly-Model Routed Inference Pipeline
+    Identifies target sub-agents and orchestrates optimal foundation models.
     """
     client_ip = request.client.host if request.client else "unknown"
     check_rate_limit(client_ip)
 
+    routing_profile = request.headers.get("x-routing-profile", "default").lower()
+
     ts = datetime.now().isoformat()
     print(f"\n{'━'*60}")
-    print(f"[NEMOCLAW] Inference pipeline started | {client_ip} | {ts}")
+    print(f"[NEMOCLAW] Inference pipeline started | Route: {routing_profile} | {ts}")
 
     # ── PHASE 1: NemoClaw Input Rails ────────────
     messages_dict = [{"role": m.role, "content": m.content} for m in req.messages]
     input_check = NemoClawGuardrails.check_input(messages_dict)
 
     if not input_check["allowed"]:
-        rail = input_check.get("rail", "unknown")
-        reason = input_check.get("reason", "Request blocked by security policy.")
-        print(f"  [RAIL] ✗ INPUT BLOCKED by {rail}")
         return {
-            "choices": [{
-                "message": {
-                    "role": "assistant",
-                    "content": reason,
-                }
-            }],
-            "nemoclaw": {
-                "blocked": True,
-                "rail": rail,
-                "layer": "input",
-            }
+            "choices": [{"message": {"role": "assistant", "content": input_check.get("reason", "Blocked")}}],
+            "nemoclaw": {"blocked": True, "rail": input_check.get("rail"), "layer": "input"}
         }
 
-    print(f"  [RAIL] ✓ Input rails passed")
+    # ── PHASE 2: Poly-Model Routing ──────────────
+    result = None
+    target_engine = "NVIDIA (Default)"
 
-    # ── PHASE 2: NVIDIA NIM Inference ────────────
-    result = await call_nvidia_nim(req)
+    if routing_profile == "ediscovery":
+        print("  [ROUTER] Intent: eDiscovery -> Dispatching to Gemini 1.5 Pro (Massive Context)")
+        result = await call_gemini(req)
+        target_engine = "Gemini"
+    elif routing_profile in ["contract-review", "drafting"]:
+        print("  [ROUTER] Intent: Drafting -> Dispatching to Anthropic Claude 3.5 Sonnet (Logic/Nuance)")
+        result = await call_anthropic(req)
+        target_engine = "Anthropic"
+    elif routing_profile in ["scheduling", "client-intake"]:
+        print("  [ROUTER] Intent: Workflow -> Dispatching to OpenAI GPT-4o (Fast Orchestration)")
+        result = await call_openai(req)
+        target_engine = "OpenAI"
+
+    # Evaluate routing success and fallback if needed
+    if not result or result.get("error"):
+        if result and result.get("error"):
+            print(f"  [ROUTER] ⚠ {target_engine} failed or unavailable: {result['error']}")
+        print("  [ROUTER] ↻ Falling back to NVIDIA NIM (Llama/Nemotron)")
+        result = await call_nvidia_nim(req)
+        target_engine = "NVIDIA NIM"
+
+    if result.get("error"):
+        raise HTTPException(status_code=502, detail=f"All models failed. Last error: {result['error']}")
 
     # ── PHASE 3: NemoClaw Output Rails ───────────
     raw_content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
@@ -402,13 +482,12 @@ async def chat_completions(req: InferenceRequest, request: Request):
         result["choices"][0]["message"]["content"] = output_check["content"]
         result["nemoclaw"] = {
             "rails_applied": output_check["rails_applied"],
-            "layer": "output",
+            "target_engine": target_engine
         }
-        print(f"  [RAIL] ⚠ Output modified by: {output_check['rails_applied']}")
     else:
-        print(f"  [RAIL] ✓ Output rails passed (clean)")
+        result["nemoclaw"] = {"target_engine": target_engine}
 
-    print(f"[NEMOCLAW] Pipeline complete | {datetime.now().isoformat()}")
+    print(f"[NEMOCLAW] Pipeline complete via {target_engine} | {datetime.now().isoformat()}")
     print(f"{'━'*60}\n")
 
     return result
@@ -421,16 +500,14 @@ async def chat_completions(req: InferenceRequest, request: Request):
 def health_check():
     return {
         "status": "operational",
-        "service": "NemoClaw Inference Proxy v3.0 — Enterprise Edition",
-        "security": "OpenClaw · NemoClaw · OpenShell",
-        "guardrails": {
-            "input_rails": ["jailbreak_shield", "ethics_guard", "sensitive_data_monitor"],
-            "output_rails": ["factual_grounding", "pii_redaction", "upl_guard"],
+        "service": "NemoClaw Poly-Model Inference Router v4.0",
+        "routers": {
+            "gemini": bool(GEMINI_API_KEY),
+            "anthropic": bool(ANTHROPIC_API_KEY),
+            "openai": bool(OPENAI_API_KEY),
+            "nvidia_fallback": bool(NVIDIA_API_KEY)
         },
         "nvidia_endpoint": NVIDIA_BASE_URL,
-        "model": DEFAULT_MODEL,
-        "api_key_configured": bool(NVIDIA_API_KEY),
-        "api_key_prefix": NVIDIA_API_KEY[:12] + "..." if NVIDIA_API_KEY else "NOT SET",
         "timestamp": datetime.now().isoformat(),
     }
 
@@ -488,6 +565,9 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     await nvidia_client.aclose()
+    await anthropic_client.aclose()
+    await gemini_client.aclose()
+    await openai_client.aclose()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  ENTRYPOINT

@@ -404,14 +404,26 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 //  INFERENCE CALL
 // ═══════════════════════════════════════════════
 
+// Map the sub-agent ID string to an architectural routing profile
+const getRoutingProfile = (agentId) => {
+  if (['legal-research', 'case-analytics'].includes(agentId)) return 'ediscovery';
+  if (['contract-review', 'drafting', 'communication-drafter'].includes(agentId)) return 'contract-review';
+  if (['client-intake', 'scheduling', 'knowledge-search'].includes(agentId)) return 'scheduling';
+  return 'default';
+};
+
+/**
+ * CORE INFERENCE GENERATOR (NEMOCLAW v4.0 POLY-MODEL SECURED)
+ */
 async function callInference(messages, agent) {
-  // if (!NEMOCLAW_API_KEY) {
-  //   // Check if we have the fallback simulateResponse
-  //   return simulateResponse(messages, agent);
-  // }
+  // 1. Detect sub-agent behavior and set the routing header
+  const routeProfile = getRoutingProfile(agent.agentType);
 
   // Build headers — in dev mode the Vite proxy adds the auth header
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 
+    'Content-Type': 'application/json',
+    'X-Routing-Profile': routeProfile 
+  };
   if (!IS_DEV) {
     headers['Authorization'] = `Bearer ${NEMOCLAW_API_KEY}`;
   }
