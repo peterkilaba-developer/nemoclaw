@@ -286,11 +286,11 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
   // Register the available sub-agents as formal tools
   const availableSubAgents = agent.availableSubAgents || [];
   if (availableSubAgents.length > 0) {
-    systemPrompt += `\n\n--- SUB-AGENT TOOL REGISTRY ---\nYou have access to the following sub-agents. When performing these tasks, acknowledge the use of the corresponding tool:\n`;
+    systemPrompt += `\n\n--- SUB-AGENT REGISTRY ---\nYou have access to the following specialized sub-agents. You may reference these Sub-Agents when they are relevant to your task:\n`;
     availableSubAgents.forEach(subId => {
       const catalogInfo = SUB_AGENT_CATALOG.find(c => c.id === subId);
       if (catalogInfo) {
-        systemPrompt += `- TOOL: [${subId}] | Name: ${catalogInfo.name} | Capabilities: ${catalogInfo.desc}\n`;
+        systemPrompt += `- Sub-Agent: [${subId}] | Name: ${catalogInfo.name} | Capabilities: ${catalogInfo.desc}\n`;
       }
     });
   }

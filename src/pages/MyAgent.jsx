@@ -609,8 +609,12 @@ export default function MyAgent() {
                   alignItems: 'center', gap: '8px', fontSize: '0.8125rem',
                   color: 'var(--db-text-muted)',
                 }}>
-                  <Loader2 size={14} className="spin" style={{ animation: 'spin 1s linear infinite' }} />
-                  Thinking... dispatching sub-agents
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center', height: '14px' }}>
+                    <span className="dot-bounce" style={{ width: '4px', height: '4px', background: 'var(--db-nvidia-green)', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.32s' }}></span>
+                    <span className="dot-bounce" style={{ width: '4px', height: '4px', background: 'var(--db-nvidia-green)', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both', animationDelay: '-0.16s' }}></span>
+                    <span className="dot-bounce" style={{ width: '4px', height: '4px', background: 'var(--db-nvidia-green)', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' }}></span>
+                  </div>
+                  <span style={{ marginLeft: '4px' }}>Drafting response...</span>
                 </div>
               </div>
             )}
@@ -749,8 +753,12 @@ export default function MyAgent() {
         </div>
       </div>
 
-      {/* Spinner animation */}
+      {/* Animation Styles */}
       <style>{`
+        @keyframes bounce {
+          0%, 80%, 100% { transform: scale(0); }
+          40% { transform: scale(1); }
+        }
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
