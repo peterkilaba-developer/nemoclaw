@@ -357,28 +357,38 @@ export default function CEAChat() {
                   {msg.role === 'user' ? <Crown size={14} /> : msg.role === 'system' ? '!' : <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
                 </div>
 
-                {/* Message bubble */}
-                <div style={{
-                  background: msg.role === 'user' ? 'rgba(220,38,38,0.08)' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${msg.role === 'user' ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.05)'}`,
-                  padding: '10px 14px',
-                  borderRadius: msg.role === 'user' ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
-                  fontSize: '0.8125rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6,
-                  maxWidth: '85%',
-                  ...(msg.role === 'user' ? { whiteSpace: 'pre-wrap' } : {}),
+                {/* Message wrapper */}
+                <div style={{ 
+                  display: 'flex', flexDirection: 'column', gap: '4px', 
+                  maxWidth: '85%', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' 
                 }}>
-                  {msg.role === 'user' && (
-                    <div style={{ fontSize: '0.5625rem', color: 'rgba(255,255,255,0.3)', marginBottom: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      CEO Command
-                    </div>
-                  )}
-                  {msg.role === 'assistant' ? (
-                    <div className="cea-markdown">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                    </div>
-                  ) : msg.content}
-                  <div style={{ fontSize: '0.5625rem', color: 'rgba(255,255,255,0.2)', marginTop: '6px', textAlign: 'right' }}>
-                    {timeAgo(msg.timestamp)}
+                  {/* Message bubble */}
+                  <div style={{
+                    background: msg.role === 'user' ? 'rgba(220,38,38,0.08)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${msg.role === 'user' ? 'rgba(220,38,38,0.15)' : 'rgba(255,255,255,0.05)'}`,
+                    padding: '10px 14px',
+                    borderRadius: msg.role === 'user' ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
+                    fontSize: '0.8125rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.6,
+                    width: '100%',
+                    ...(msg.role === 'user' ? { whiteSpace: 'pre-wrap' } : {}),
+                  }}>
+                    {msg.role === 'user' && (
+                      <div style={{ fontSize: '0.5625rem', color: 'rgba(255,255,255,0.3)', marginBottom: '4px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                        CEO Command
+                      </div>
+                    )}
+                    {msg.role === 'assistant' ? (
+                      <div className="cea-markdown">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      </div>
+                    ) : msg.content}
+                  </div>
+                  {/* Timestamp */}
+                  <div style={{ 
+                    fontSize: '0.625rem', color: 'rgba(255,255,255,0.3)', 
+                    padding: '0 4px', marginTop: '2px'
+                  }}>
+                    {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(msg.timestamp || new Date())}
                   </div>
                 </div>
               </div>

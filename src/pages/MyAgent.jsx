@@ -541,36 +541,49 @@ export default function MyAgent() {
                     {msg.role === 'user' ? firstName[0] : msg.role === 'system' ? '!' : <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />}
                   </div>
 
-                  {/* Message bubble */}
-                  <div style={{
-                    background: msg.role === 'user' ? 'rgba(59,130,246,0.1)' : 'var(--db-bg)',
-                    padding: '10px 14px',
-                    borderRadius: msg.role === 'user' ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
-                    fontSize: '0.8125rem', color: 'var(--db-text-primary)', lineHeight: 1.6,
-                    maxWidth: '85%', whiteSpace: 'pre-wrap',
+                  {/* Message wrapper */}
+                  <div style={{ 
+                    display: 'flex', flexDirection: 'column', gap: '4px', 
+                    maxWidth: '85%', alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start' 
                   }}>
-                    {renderWithLinks(displayContent)}
+                    {/* Message bubble */}
+                    <div style={{
+                      background: msg.role === 'user' ? 'rgba(59,130,246,0.1)' : 'var(--db-bg)',
+                      padding: '10px 14px',
+                      borderRadius: msg.role === 'user' ? '12px 2px 12px 12px' : '2px 12px 12px 12px',
+                      fontSize: '0.8125rem', color: 'var(--db-text-primary)', lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap', width: '100%',
+                    }}>
+                      {renderWithLinks(displayContent)}
 
-                    {/* Sub-agent dispatch indicators */}
-                    {showSubAgents && msg.subAgentsUsed?.length > 0 && (
-                      <div style={{
-                        marginTop: '8px', paddingTop: '8px',
-                        borderTop: '1px solid var(--db-border)',
-                        display: 'flex', flexWrap: 'wrap', gap: '4px',
-                      }}>
-                        <Cpu size={10} style={{ color: 'var(--db-nvidia-green)', marginTop: '2px' }} />
-                        <span style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)' }}>Dispatched: </span>
-                        {msg.subAgentsUsed.map(sa => (
-                          <span key={sa.id} style={{
-                            fontSize: '0.5625rem', background: 'rgba(118,185,0,0.1)',
-                            color: 'var(--db-nvidia-green)', padding: '1px 6px',
-                            borderRadius: '4px', fontWeight: 600,
-                          }}>
-                            {sa.name}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                      {/* Sub-agent dispatch indicators */}
+                      {showSubAgents && msg.subAgentsUsed?.length > 0 && (
+                        <div style={{
+                          marginTop: '8px', paddingTop: '8px',
+                          borderTop: '1px solid var(--db-border)',
+                          display: 'flex', flexWrap: 'wrap', gap: '4px',
+                        }}>
+                          <Cpu size={10} style={{ color: 'var(--db-nvidia-green)', marginTop: '2px' }} />
+                          <span style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)' }}>Dispatched: </span>
+                          {msg.subAgentsUsed.map(sa => (
+                            <span key={sa.id} style={{
+                              fontSize: '0.5625rem', background: 'rgba(118,185,0,0.1)',
+                              color: 'var(--db-nvidia-green)', padding: '1px 6px',
+                              borderRadius: '4px', fontWeight: 600,
+                            }}>
+                              {sa.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {/* Timestamp */}
+                    <div style={{ 
+                      fontSize: '0.625rem', color: 'var(--db-text-muted)', 
+                      padding: '0 4px', marginTop: '2px'
+                    }}>
+                      {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(msg.timestamp || new Date())}
+                    </div>
                   </div>
                 </div>
 
