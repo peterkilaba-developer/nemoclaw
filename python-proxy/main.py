@@ -63,9 +63,10 @@ NVIDIA_BASE_URL = os.environ.get(
     "https://integrate.api.nvidia.com/v1"
 )
 
+# Default model — the frontend sends its own model ID, but we enforce this as fallback
 DEFAULT_MODEL = os.environ.get(
     "NVIDIA_MODEL_ID",
-    "nvidia/nemotron-3-super-120b-a12b"
+    "meta/llama-3.1-70b-instruct"
 )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

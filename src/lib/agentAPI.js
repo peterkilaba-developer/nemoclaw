@@ -31,7 +31,7 @@ const NEMOCLAW_ENDPOINT = IS_DEV
 
 const NEMOCLAW_API_KEY = import.meta.env.VITE_NVIDIA_API_KEY || '';
 
-const MODEL_ID = 'nvidia/nemotron-3-super-120b-a12b';
+const MODEL_ID = 'meta/llama-3.1-70b-instruct';
 
 // ═══════════════════════════════════════════════
 //  PII REDACTION (client-side pre-filter)
