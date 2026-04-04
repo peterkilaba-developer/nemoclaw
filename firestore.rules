@@ -15,7 +15,8 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.admin == true ||
         request.auth.token.email == 'marcus@nemoclaw.com' ||
-        request.auth.token.email == 'peterkilaba@nemoc-law.ai'
+        request.auth.token.email == 'peterkilaba@nemoc-law.ai' ||
+        request.auth.token.email == 'peterkilaba@nemo-law.ai'
       );
     }
 

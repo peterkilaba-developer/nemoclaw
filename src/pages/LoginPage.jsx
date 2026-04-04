@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { isAdminUser } from '../components/AdminRoute';
 import '../styles/auth.css';
 
 export default function LoginPage() {
@@ -15,7 +16,11 @@ export default function LoginPage() {
   // Handle auth redirection via effect to avoid "two-click" issues
   useEffect(() => {
     if (user && !authLoading) {
-      navigate('/dashboard');
+      if (isAdminUser(user)) {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [user, authLoading, navigate]);
 
@@ -34,7 +39,7 @@ export default function LoginPage() {
         await signupWithEmail(form.email, form.password, form.name);
         // Navigation handled by useEffect
       } else {
-        await loginWithEmail(form.email, form.password);
+        const u = await loginWithEmail(form.email, form.password);
         // Navigation handled by useEffect
       }
     } catch (err) {
@@ -59,8 +64,12 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await loginWithGoogle();
-      navigate('/dashboard');
+      const u = await loginWithGoogle();
+      if (isAdminUser(u)) {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
         setError('Google sign-in failed. Please try again.');
@@ -74,8 +83,12 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await loginWithApple();
-      navigate('/dashboard');
+      const u = await loginWithApple();
+      if (isAdminUser(u)) {
+        navigate('/admin');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       if (err.code !== 'auth/popup-closed-by-user') {
         setError('Apple sign-in failed. Please try again.');
