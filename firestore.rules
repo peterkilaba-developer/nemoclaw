@@ -3,20 +3,23 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ═══════════════════════════════════════════════
-    //  INTERNAL TOPOLOGY (AgaaS / Admin)
+    //  HELPER FUNCTIONS
     // ═══════════════════════════════════════════════
-    match /_internalAgents/{agentId} { allow read, write: if true; }
-    match /_internalAuditLog/{auditId} { allow read, write: if true; }
-    match /_internalEscalations/{escId} { allow read, write: if true; }
-    match /_internalMarketingDrafts/{draftId} { allow read, write: if true; }
-    match /_internalStrategicPlans/{planId} { allow read, write: if true; }
 
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Helper: Checks if the user's profile document associates them with this firm.
-    // This is the source of truth for institutional membership.
+    // Admin: uses custom Firebase Auth claim (set via Admin SDK) or UID fallback
+    function isAdminUser() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email == 'marcus@nemoclaw.com'
+      );
+    }
+
+    // Source of truth: user's /users/{uid} profile must carry the firmId,
+    // OR the firm document itself must name this UID as owner.
     function isFirmMember(firmId) {
       return isAuthenticated() && (
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firmId == firmId ||
@@ -25,47 +28,69 @@ service cloud.firestore {
       );
     }
 
+    // Firm owner only — ownerId/ownerUid match. Role-based bypass removed (was a bug).
     function isFirmOwner(firmId) {
       let firm = get(/databases/$(database)/documents/firms/$(firmId)).data;
       return isAuthenticated() && (
         firm.ownerId == request.auth.uid ||
-        firm.ownerUid == request.auth.uid ||
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'partner'
+        firm.ownerUid == request.auth.uid
       );
     }
+
+    // ═══════════════════════════════════════════════
+    //  INTERNAL TOPOLOGY (AgaaS / NemoC Admin Only)
+    //  Previously: if true — WORLD PUBLIC. Fixed.
+    // ═══════════════════════════════════════════════
+    match /_internalAgents/{agentId}         { allow read, write: if isAdminUser(); }
+    match /_internalAuditLog/{auditId}       { allow read, write: if isAdminUser(); }
+    match /_internalEscalations/{escId}      { allow read, write: if isAdminUser(); }
+    match /_internalMarketingDrafts/{drafId} { allow read, write: if isAdminUser(); }
+    match /_internalStrategicPlans/{planId}  { allow read, write: if isAdminUser(); }
+    match /_internalCEAChat/{chatId}         { allow read, write: if isAdminUser(); }
 
     // ═══════════════════════════════════════════════
     //  USER PROFILES
     // ═══════════════════════════════════════════════
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isFirmOwner(get(/databases/$(database)/documents/users/$(userId)).data.firmId));
+      // Own profile + same-firm owner can read (for team management)
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isFirmOwner(get(/databases/$(database)/documents/users/$(userId)).data.firmId)
+      );
       allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && (request.auth.uid == userId || isFirmOwner(resource.data.firmId));
-      allow delete: if false; 
+      allow update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        isFirmOwner(resource.data.firmId)
+      );
+      allow delete: if false;
     }
 
     // ═══════════════════════════════════════════════
     //  FIRMS — Institutional Workspace Hierarchy
+    //  Previously: isAuthenticated() for read/update — cross-firm leak. Fixed.
     // ═══════════════════════════════════════════════
     match /firms/{firmId} {
-      allow read: if isAuthenticated();
+      // Only members of THIS firm can read its record
+      allow read: if isFirmMember(firmId);
+      // Any authenticated user can create (needed for onboarding new firm)
       allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
+      // Only the owner (ownerId/ownerUid match) can update firm settings
+      allow update: if isFirmOwner(firmId);
       allow delete: if false;
 
-      // FIRM CONFIG — Agent, Security
+      // FIRM CONFIG
       match /config/{configDoc} {
         allow read: if isFirmMember(firmId);
         allow write: if isFirmOwner(firmId);
       }
 
-      // KNOWLEDGE BASE — Documents and website footprint
+      // KNOWLEDGE BASE
       match /knowledgeBase/{kbId} {
         allow read: if isFirmMember(firmId);
         allow write: if isFirmOwner(firmId);
       }
 
-      // SUPER AGENT — Partner Telemetry
+      // SUPER AGENT — telemetry config
       match /superAgent/{doc} {
         allow read: if isFirmMember(firmId);
         allow write: if isFirmOwner(firmId);
@@ -74,27 +99,29 @@ service cloud.firestore {
       // EMPLOYEES
       match /employees/{employeeId} {
         allow read: if isFirmMember(firmId);
-        allow create: if isFirmOwner(firmId);
-        allow update: if isFirmOwner(firmId);
+        allow create: if isFirmOwner(firmId) || request.auth.uid == employeeId;
+        allow update: if isFirmOwner(firmId) || request.auth.uid == employeeId;
         allow delete: if isFirmOwner(firmId);
       }
 
-      // AGENTS — Each document is private to the employee & owner
+      // AGENTS — scoped to firm membership; each agent can update their own record
+      // Previously: any isAuthenticated() could read/write ANY firm's agents. Fixed.
       match /agents/{agentId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
-        allow update: if isAuthenticated();
+        allow read: if isFirmMember(firmId);
+        allow create: if isFirmOwner(firmId) || request.auth.uid == agentId;
+        allow update: if isFirmOwner(firmId) || request.auth.uid == agentId;
         allow delete: if isFirmOwner(firmId);
 
+        // Agent private chat messages — firm-scoped read, immutable after creation
         match /messages/{messageId} {
-          allow read: if isAuthenticated();
-          allow create: if isAuthenticated();
+          allow read: if isFirmMember(firmId);
+          allow create: if isFirmMember(firmId);
           allow update: if false;
           allow delete: if false;
         }
       }
 
-      // MATTERS / CASES — Institutional Visibility
+      // MATTERS / CASES
       match /matters/{matterId} {
         allow read: if isFirmMember(firmId);
         allow create: if isFirmOwner(firmId);
@@ -108,29 +135,51 @@ service cloud.firestore {
         }
       }
 
-      // CLIENT CONTACTS & SECURE CHANNELS
+      // CLIENT CONTACTS
       match /clients/{clientId} {
         allow read: if isFirmMember(firmId);
         allow write: if isFirmOwner(firmId);
       }
+
+      // CLIENT PORTAL CHANNELS
       match /clientChannels/{channelId} {
         allow read, write: if isFirmMember(firmId);
-        
+
         match /messages/{messageId} {
           allow read, write: if isFirmMember(firmId);
         }
       }
 
-      // BILLING
+      // BILLING — owner-only (financial data)
       match /billing/{billingDoc} {
         allow read: if isFirmOwner(firmId);
         allow write: if isFirmOwner(firmId);
       }
 
-      // AUDIT TRAIL
+      // BILLABLE ACTIVITIES — previously missing rule (silent deny). Fixed.
+      match /billableActivities/{activityId} {
+        allow read: if isFirmOwner(firmId);
+        allow create: if isFirmMember(firmId);
+        allow update, delete: if isFirmOwner(firmId);
+      }
+
+      // CLIENT INVOICES — previously missing rule. Fixed.
+      match /clientInvoices/{invoiceId} {
+        allow read: if isFirmOwner(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // INVOICES (Stripe) — previously missing rule. Fixed.
+      match /invoices/{invoiceId} {
+        allow read: if isFirmOwner(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // AUDIT TRAIL — immutable append, firm-scoped read
+      // Previously: any isAuthenticated() could read any firm's audit log. Fixed.
       match /auditLog/{logId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
+        allow read: if isFirmMember(firmId);
+        allow create: if isFirmMember(firmId);
         allow update: if false;
         allow delete: if false;
       }
@@ -139,16 +188,21 @@ service cloud.firestore {
     // ═══════════════════════════════════════════════
     //  PUBLIC / ADMIN (WAITLIST, PROSPECTS, MAIL)
     // ═══════════════════════════════════════════════
+
+    // Waitlist — anyone can submit; authenticated users can read/update
     match /waitlist/{entryId} {
-      allow create: if true; 
-      allow read: if isAuthenticated(); 
+      allow create: if true;
+      allow read: if isAuthenticated();
       allow update: if isAuthenticated();
+      allow delete: if isAdminUser();
     }
 
+    // Prospects — authenticated CRM entries
     match /prospects/{prospectId} {
       allow read, write: if isAuthenticated();
     }
 
+    // Mail queue — append-only, authenticated trigger
     match /mail/{mailId} {
       allow read, create, update: if isAuthenticated();
       allow delete: if false;
@@ -159,7 +213,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Deny everything else
+    // Call logs — previously missing rule (silent deny). Fixed.
+    match /call_logs/{callId} {
+      allow read: if isAdminUser();
+      allow create: if isAuthenticated();
+      allow update, delete: if false;
+    }
+
+    // ═══════════════════════════════════════════════
+    //  DENY EVERYTHING ELSE (fail-closed)
+    // ═══════════════════════════════════════════════
     match /{document=**} {
       allow read, write: if false;
     }
