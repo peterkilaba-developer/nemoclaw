@@ -37,9 +37,10 @@ export async function createFirm(userId, firmData) {
 
   await setDoc(firmRef, firm);
 
-  // Link user to firm
+  // Link user to firm and mark onboarding as complete
   await setDoc(doc(db, 'users', userId), {
     firmId: firmRef.id,
+    onboardingComplete: true,
     updatedAt: serverTimestamp(),
   }, { merge: true });
 

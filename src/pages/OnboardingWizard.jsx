@@ -240,6 +240,11 @@ export default function OnboardingWizard() {
       if (!currentFirmId) {
         currentFirmId = await completeOnboarding(user.uid, data);
         setFirmId(currentFirmId);
+      } else {
+        // Fallback for users stuck in loop who already have a firmId
+        const { updateDoc, doc } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        await updateDoc(doc(db, 'users', user.uid), { onboardingComplete: true });
       }
       navigate('/dashboard');
     } catch (err) {
@@ -251,7 +256,14 @@ export default function OnboardingWizard() {
     }
   };
 
-  const handlePaymentSuccess = () => {
+  const handlePaymentSuccess = async () => {
+    try {
+      const { updateDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      await updateDoc(doc(db, 'users', user.uid), { onboardingComplete: true });
+    } catch (e) {
+      console.error('Failed to set onboarding complete flag during payment callback:', e);
+    }
     navigate('/dashboard');
   };
 

@@ -75,11 +75,17 @@ export default function DashboardLayout() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
 
-  // ═══ NOTIFICATIONS STATE ═══
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const notifRef = useRef(null);
+
+  // Redirect to onboarding if not complete
+  useEffect(() => {
+    if (user && user.onboardingComplete === false) {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [user, navigate]);
 
   // Scroll to top on navigation
   useEffect(() => {
@@ -158,6 +164,15 @@ export default function DashboardLayout() {
     navigate(path);
     setShowSearch(false);
   };
+
+  if (user && user.onboardingComplete === false) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0f', color: 'var(--db-nvidia-green)', flexDirection: 'column' }}>
+        <div style={{ width: '32px', height: '32px', border: '3px solid rgba(118, 185, 0, 0.2)', borderTopColor: '#76b900', borderRadius: '50%', animation: 'spin 0.6s linear infinite', marginBottom: '16px' }} />
+        <p style={{ fontSize: '0.875rem', fontWeight: 600 }}>Loading Initial Setup...</p>
+      </div>
+    );
+  }
 
   // Breadcrumb
   const isMatterWorkspace = location.pathname.startsWith('/dashboard/matters/');
