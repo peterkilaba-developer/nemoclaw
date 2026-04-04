@@ -147,28 +147,51 @@ export default function SuperAgentDashboard() {
           </div>
 
           <div className="db-two-col">
-            {/* Revenue Impact */}
+            {/* Agent Utilization — unique per-agent breakdown not shown in stat cards */}
             <div className="db-card">
               <div className="db-card-header">
-                <div className="db-card-title">💰 Revenue Impact Estimate</div>
+                <div className="db-card-title">⚡ Agent Utilization</div>
+                <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>Inferences per agent · all time</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '4px 0' }}>
-                {[
-                  { label: 'Total Agent Interactions', value: `${auditLog.length}`, growth: 'All time', color: '#76b900' },
-                  { label: 'PII Interceptions', value: `${piiRedactions}`, growth: piiRedactions > 0 ? 'Auto-redacted' : 'Clean', color: '#76b900' },
-                  { label: 'Sub-Agent Dispatches', value: `${subAgentDispatches}`, growth: 'Specialist invocations', color: '#76b900' },
-                  { label: 'Today\'s Activity', value: `${todayLogs.length}`, growth: todayLogs.length > 0 ? 'Interactions today' : 'No activity yet', color: '#76b900' },
-                ].map((item, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: i < 3 ? '1px solid var(--db-border)' : 'none' }}>
-                    <div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)' }}>{item.label}</div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '1.125rem', fontWeight: 700, color: item.color, fontFamily: 'var(--db-font-mono)' }}>{item.value}</div>
-                      <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{item.growth}</div>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+                {auditLog.length === 0 ? (
+                  <div style={{ padding: '32px', textAlign: 'center', fontSize: '0.8125rem', color: 'var(--db-text-muted)' }}>
+                    No agent activity recorded yet. Send a message to your AI Chief of Staff to see utilization data.
                   </div>
-                ))}
+                ) : (() => {
+                  // Build per-agent breakdown from audit log
+                  const byAgent = {};
+                  auditLog.forEach(l => {
+                    const key = l.employeeName || 'Unknown';
+                    if (!byAgent[key]) byAgent[key] = { name: key, type: l.agentType || '—', count: 0, pii: 0, dispatches: 0 };
+                    byAgent[key].count++;
+                    byAgent[key].pii += l.piiRedactions?.length || 0;
+                    byAgent[key].dispatches += l.subAgentsUsed?.length || 0;
+                  });
+                  const rows = Object.values(byAgent).sort((a, b) => b.count - a.count);
+                  return rows.map((row, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--db-border)' : 'none' }}>
+                      <div>
+                        <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{row.name}</div>
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', textTransform: 'capitalize' }}>{row.type}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '20px', textAlign: 'right' }}>
+                        <div>
+                          <div style={{ fontSize: '1rem', fontWeight: 700, color: '#76b900', fontFamily: 'var(--db-font-mono)' }}>{row.count}</div>
+                          <div style={{ fontSize: '0.5625rem', color: 'var(--db-text-muted)' }}>inferences</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '1rem', fontWeight: 700, color: row.dispatches > 0 ? '#76b900' : 'var(--db-text-muted)', fontFamily: 'var(--db-font-mono)' }}>{row.dispatches}</div>
+                          <div style={{ fontSize: '0.5625rem', color: 'var(--db-text-muted)' }}>dispatches</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '1rem', fontWeight: 700, color: row.pii > 0 ? '#f59e0b' : 'var(--db-text-muted)', fontFamily: 'var(--db-font-mono)' }}>{row.pii}</div>
+                          <div style={{ fontSize: '0.5625rem', color: 'var(--db-text-muted)' }}>PII caught</div>
+                        </div>
+                      </div>
+                    </div>
+                  ));
+                })()}
               </div>
             </div>
 
