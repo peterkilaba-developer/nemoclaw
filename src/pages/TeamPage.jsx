@@ -49,16 +49,18 @@ const AGENT_NAME_SUGGESTIONS = [
 
 export default function TeamPage() {
   const { employees, personalAgents, superAgent, addTeamMember, updateTeamMember } = useFirm();
+  const safeEmployees = Array.isArray(employees) ? employees : [];
+  const safeAgents = Array.isArray(personalAgents) ? personalAgents : [];
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
 
-  const partners = employees.filter(e => PARTNER_ROLES.includes(e.role));
-  const managingPartners = employees.filter(e => ['managing-partner', 'solo-partner'].includes(e.role));
-  const practiceRoles = employees.filter(e => {
+  const partners = safeEmployees.filter(e => PARTNER_ROLES.includes(e.role));
+  const managingPartners = safeEmployees.filter(e => ['managing-partner', 'solo-partner'].includes(e.role));
+  const practiceRoles = safeEmployees.filter(e => {
     const rc = EMPLOYEE_ROLES.find(r => r.value === e.role);
     return rc?.division === 'practice';
   });
-  const businessRoles = employees.filter(e => {
+  const businessRoles = safeEmployees.filter(e => {
     const rc = EMPLOYEE_ROLES.find(r => r.value === e.role);
     return rc?.division === 'business';
   });
@@ -81,7 +83,7 @@ export default function TeamPage() {
         </div>
         <div className="db-stat-card">
           <div className="db-stat-label">Personal Agents</div>
-          <div className="db-stat-value" style={{ color: '#76b900' }}>{personalAgents.length || employees.length}</div>
+          <div className="db-stat-value" style={{ color: '#76b900' }}>{safeAgents.length || safeEmployees.length}</div>
           <div className="db-stat-meta">One per human member</div>
         </div>
         <div className="db-stat-card">
@@ -164,7 +166,7 @@ export default function TeamPage() {
           const Icon = ROLE_ICONS[emp.role] || Briefcase;
           const color = ROLE_COLORS[agentType] || '#6b7280';
           const subAgentCount = AGENT_SUB_AGENTS[agentType]?.length || 0;
-          const matchedAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
+          const matchedAgent = safeAgents.find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
           const agentName = matchedAgent?.agentName || emp.agentName || `${emp.name}'s AI Chief of Staff`;
           return <EmployeeCard key={emp.id || `p-${i}`} emp={emp} roleConfig={roleConfig} agentType={agentType} Icon={Icon} color={color} subAgentCount={subAgentCount} matchedAgent={matchedAgent} agentName={agentName} onEdit={setEditingEmployee} />;
         })}
@@ -207,7 +209,7 @@ export default function TeamPage() {
           const Icon = ROLE_ICONS[emp.role] || Briefcase;
           const color = ROLE_COLORS[agentType] || '#6b7280';
           const subAgentCount = AGENT_SUB_AGENTS[agentType]?.length || 0;
-          const matchedAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
+          const matchedAgent = safeAgents.find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
           const agentName = matchedAgent?.agentName || emp.agentName || `${emp.name}'s AI Chief of Staff`;
           return <EmployeeCard key={emp.id || `b-${i}`} emp={emp} roleConfig={roleConfig} agentType={agentType} Icon={Icon} color={color} subAgentCount={subAgentCount} matchedAgent={matchedAgent} agentName={agentName} onEdit={setEditingEmployee} />;
         })}

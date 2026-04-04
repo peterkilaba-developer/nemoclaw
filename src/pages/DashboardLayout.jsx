@@ -67,7 +67,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { firm, firmId, agents, employees, personalAgents } = useFirm();
+  const { firm, firmId, agents, employees, personalAgents, loading: firmLoading } = useFirm();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   // ═══ SEARCH STATE ═══
@@ -80,9 +80,9 @@ export default function DashboardLayout() {
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const notifRef = useRef(null);
 
-  // Redirect to onboarding if not complete
+  // Redirect to onboarding only once profile is fully hydrated (isPartial === false)
   useEffect(() => {
-    if (user && user.onboardingComplete === false) {
+    if (user && user.isPartial === false && user.onboardingComplete === false) {
       navigate('/onboarding', { replace: true });
     }
   }, [user, navigate]);
@@ -165,11 +165,12 @@ export default function DashboardLayout() {
     setShowSearch(false);
   };
 
-  if (user && user.onboardingComplete === false) {
+  // Block rendering while firm data is hydrating OR while the profile redirect is pending
+  if (firmLoading || (user?.isPartial === false && user?.onboardingComplete === false)) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0a0a0f', color: 'var(--db-nvidia-green)', flexDirection: 'column' }}>
         <div style={{ width: '32px', height: '32px', border: '3px solid rgba(118, 185, 0, 0.2)', borderTopColor: '#76b900', borderRadius: '50%', animation: 'spin 0.6s linear infinite', marginBottom: '16px' }} />
-        <p style={{ fontSize: '0.875rem', fontWeight: 600 }}>Loading Initial Setup...</p>
+        <p style={{ fontSize: '0.875rem', fontWeight: 600 }}>{firmLoading ? 'Loading Firm Data...' : 'Launching Setup...'}</p>
       </div>
     );
   }

@@ -85,7 +85,7 @@ export default function MyAgent() {
     return catalog || { id, name: id, desc: '', icon: 'Zap' };
   });
 
-  // Restore persisted chat from localStorage
+  // Restore persisted chat from localStorage — with sanitization to prevent render crashes
   useEffect(() => {
     const storageKey = `nemoc_chat_${firmId || 'demo'}_${agentId || 'default'}`;
     try {
@@ -93,10 +93,30 @@ export default function MyAgent() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setMessages(parsed);
+          // Sanitize: each message must have id, role (string), content (string)
+          const sanitized = parsed.filter(m =>
+            m && typeof m === 'object' &&
+            typeof m.role === 'string' &&
+            typeof m.content === 'string' &&
+            m.content.length > 0
+          ).map(m => ({
+            ...m,
+            id: m.id || `restored-${Math.random().toString(36).slice(2)}`,
+            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+            subAgentsUsed: Array.isArray(m.subAgentsUsed) ? m.subAgentsUsed : [],
+          }));
+          if (sanitized.length > 0) {
+            setMessages(sanitized);
+          } else {
+            // All messages were malformed — clear the corrupt entry
+            localStorage.removeItem(storageKey);
+          }
         }
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      // JSON parse failed — clear corrupt entry
+      try { localStorage.removeItem(storageKey); } catch (_) { /* ignore */ }
+    }
     hasRestoredChat.current = true;
   }, [firmId, agentId]);
 
