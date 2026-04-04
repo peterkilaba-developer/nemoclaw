@@ -182,7 +182,7 @@ export default function DashboardLayout() {
     ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
     : user?.email?.slice(0, 2).toUpperCase() || 'U';
 
-  const myAgent = personalAgents?.find(a => a.employeeEmail === user?.email || a.humanEmail === user?.email);
+  const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === user?.email || a.humanEmail === user?.email);
   const myEmployeeData = employees?.find(e => e.email === user?.email);
   
   const hasSuperAgentAccess = !!myAgent?.superAgentAccess;

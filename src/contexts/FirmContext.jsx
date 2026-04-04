@@ -44,34 +44,33 @@ export function FirmProvider({ children }) {
             const foundFirmId = snap.docs[0].id;
             const firmData = snap.docs[0].data();
             console.log('Self-healing: Recovered existing firm link:', foundFirmId);
-            await updateDoc(doc(db, 'users', user.uid), { firmId: foundFirmId });
+            await setDoc(doc(db, 'users', user.uid), { firmId: foundFirmId }, { merge: true });
             setFirm({ id: foundFirmId, ...firmData });
             setLoading(false);
           } else {
-            // 2b. Final Fallback: ONLY auto-provision if onboarding was supposed to be complete
-            // This prevents duplicating firms while a new user is still in the Onboarding Wizard.
-            if (user.onboardingComplete) {
-              console.log('Self-healing: Auto-provisioning firm for established user:', user.uid);
-              const firmRef = doc(collection(db, 'firms'));
-              const newFirmId = firmRef.id;
-              const newFirmData = {
-                ownerId: user.uid,
-                members: [user.uid],
-                name: `${user.displayName || 'My'} Law Firm`,
-                status: 'trial',
-                plan: 'trial',
-                trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-                isConfigured: false,
-                createdAt: serverTimestamp(),
-              };
-              await setDoc(firmRef, newFirmData);
-              await updateDoc(doc(db, 'users', user.uid), { firmId: newFirmId });
+            // 2b. Final Fallback: Auto-provision a default sandbox firm unconditionally.
+            // This ensures all testing buttons and dashboards work even if onboarding was skipped.
+            console.log('Self-healing: Auto-provisioning firm for user:', user.uid);
+            const firmRef = doc(collection(db, 'firms'));
+            const newFirmId = firmRef.id;
+            const newFirmData = {
+              ownerId: user.uid,
+              members: [user.uid],
+              name: `${user.displayName || 'My'} Law Firm`,
+              status: 'trial',
+              plan: 'trial',
+              trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+              isConfigured: false,
+              createdAt: serverTimestamp(),
+            };
+            await setDoc(firmRef, newFirmData);
+            await setDoc(doc(db, 'users', user.uid), { firmId: newFirmId, onboardingComplete: true }, { merge: true });
+            
+            // Wait for propagation before returning
+            setTimeout(() => {
               setFirm({ id: newFirmId, ...newFirmData });
               setLoading(false);
-            } else {
-              console.log('Self-healing: Waiting for onboarding setup...');
-              setLoading(false);
-            }
+            }, 500);
           }
         } catch (err) {
           console.warn('Firm healing error:', err);

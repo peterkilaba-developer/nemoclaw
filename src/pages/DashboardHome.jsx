@@ -5,13 +5,18 @@ import { useFirm } from '../contexts/FirmContext';
 import { getOwnerRole } from '../lib/agentHierarchy';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getFounderDaysRemaining } from '../lib/stripeService';
+import { getAuditLog } from '../lib/agentAPI';
 // Onboarding is exclusively handled by FrictionlessOnboardingPanel.jsx
 
 export default function DashboardHome() {
   const { user } = useAuth();
   const { firm, agents, personalAgents, superAgent, employees, refreshFirm, firmId } = useFirm();
   const firstName = user?.displayName?.split(' ')[0] || 'there';
-  const agentCount = (personalAgents?.length || 0) + (superAgent ? 1 : 0);
+  const personalCount = (Array.isArray(personalAgents) ? personalAgents : []).filter(a => !a.isAutonomous).length;
+  const autonomousCount = (Array.isArray(personalAgents) ? personalAgents : []).filter(a => a.isAutonomous).length;
+  const superCount = superAgent ? 1 : 0;
+  const agentCount = personalCount + autonomousCount + superCount;
   const employeeCount = employees?.length || 0;
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const hour = new Date().getHours();
@@ -66,9 +71,35 @@ export default function DashboardHome() {
     repairAgents();
   }, [firmId, user?.uid]);
 
-
-
   const [showReport, setShowReport] = useState(null);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [tasksToday, setTasksToday] = useState(0);
+  const [piiRedactedCount, setPiiRedactedCount] = useState(0);
+
+  useEffect(() => {
+    if (!firmId) return;
+    const fetchLogs = async () => {
+      try {
+        const logs = await getAuditLog(firmId, 50);
+        setAuditLogs(logs);
+        
+        const todayStart = new Date();
+        todayStart.setHours(0,0,0,0);
+        
+        const todayLogs = logs.filter(l => {
+          const ts = l.timestamp?.toDate?.() || new Date(l.timestamp);
+          return ts >= todayStart;
+        });
+        setTasksToday(todayLogs.length);
+        
+        const pii = logs.reduce((sum, l) => sum + (l.piiRedactions?.length || 0), 0);
+        setPiiRedactedCount(pii);
+      } catch (err) {
+        console.warn('Failed to load audit logs:', err);
+      }
+    };
+    fetchLogs();
+  }, [firmId]);
 
   const handleFeedAction = (type, title) => {
     setShowReport({ type, title });
@@ -160,18 +191,22 @@ export default function DashboardHome() {
       <div className="db-stats-grid">
         <div className="db-stat-card">
           <div className="db-stat-label">Tasks Today</div>
-          <div className="db-stat-value">0</div>
+          <div className="db-stat-value">{tasksToday}</div>
           <div className="db-stat-meta">Daily throughput</div>
         </div>
         <div className="db-stat-card">
           <div className="db-stat-label">Active Firm Agents</div>
-          <div className="db-stat-value nvidia">{agentCount}/{agentCount}</div>
-          <div className="db-stat-meta">{agentCount > 0 ? `${employeeCount} humans · ${agentCount} AI counterparts` : 'Awaiting firm setup'}</div>
+          <div className="db-stat-value nvidia">{agentCount}</div>
+          <div className="db-stat-meta">
+            {agentCount > 0 
+              ? `${personalCount} Personal · ${superCount} Super Agent · ${autonomousCount} Autonomous`
+              : 'Awaiting firm setup'}
+          </div>
         </div>
         <div className="db-stat-card" style={{ cursor: 'pointer' }} onClick={() => window.location.href = '/dashboard/billing'}>
           <div className="db-stat-label">Amount Due</div>
           <div className="db-stat-value accent">$0.00</div>
-          <div className="db-stat-meta">{firm?.trialEndsAt ? `Founder trial · ${Math.max(0, Math.ceil((firm.trialEndsAt.toDate ? firm.trialEndsAt.toDate() : new Date(firm.trialEndsAt)) - Date.now()) / (1000 * 60 * 60 * 24))} days left` : 'Trial active · 7 days'}</div>
+          <div className="db-stat-meta">{firm?.trialEndsAt ? `Founder trial · ${getFounderDaysRemaining(firm.trialEndsAt)} days left` : 'Trial active · 7 days'}</div>
         </div>
         <div className="db-stat-card">
           <div className="db-stat-label">Sandbox Status</div>
@@ -194,10 +229,30 @@ export default function DashboardHome() {
             )}
           </div>
 
-          <div className="db-feed">
-            {false ? (
-              <>
-              </>
+          <div className="db-feed" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+            {auditLogs.length > 0 ? (
+              auditLogs.slice(0, 8).map((log, i) => {
+                const timeStr = log.timestamp?.toDate 
+                  ? log.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+                  : 'Just now';
+                return (
+                  <div key={i} style={{ padding: '16px 20px', borderBottom: '1px solid var(--db-border)', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    <div style={{ width: '32px', height: '32px', background: 'rgba(118,185,0,0.1)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Zap size={16} color="var(--db-nvidia-green)" />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{log.employeeName || 'Staff'} · {log.agentType.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                      <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)', marginTop: '4px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontStyle: 'italic' }}>
+                        "{log.userMessage}"
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{timeStr}</span>
+                        {log.subAgentsUsed?.length > 0 && <span>⚡ {log.subAgentsUsed.length} sub-agents routed</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
               <div style={{ padding: '40px 20px', textAlign: 'center' }}>
                 <div style={{ marginBottom: '16px', opacity: 0.2 }}>
@@ -242,7 +297,7 @@ export default function DashboardHome() {
             </div>
             <div className="db-protection-grid">
               <div className="db-protection-card">
-                <div className="db-protection-value">0</div>
+                <div className="db-protection-value">{piiRedactedCount}</div>
                 <div className="db-protection-label">PII Redacted</div>
               </div>
               <div className="db-protection-card">

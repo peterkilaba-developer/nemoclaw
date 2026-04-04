@@ -28,6 +28,30 @@ const SUB_AGENT_ICONS = {
 };
 
 
+import React from 'react';
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '40px', color: 'red', fontFamily: 'monospace' }}>
+          <h2>MyAgent Crash</h2>
+          <p>{this.state.error.toString()}</p>
+          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error.stack}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function MyAgent() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -46,7 +70,7 @@ export default function MyAgent() {
   const firstName = user?.displayName?.split(' ')[0] || 'there';
 
   // Find this user's agent
-  const myAgent = personalAgents.find(a => a.employeeEmail === user?.email);
+  const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === user?.email);
   const agentType = simRole || myAgent?.agentType || 'partner';
   const humanizedType = agentType.replace(/[-_]/g, ' ').split(' ').filter(Boolean).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   const rawAgentName = myAgent?.agentName || 'AI Chief of Staff';
@@ -264,7 +288,7 @@ export default function MyAgent() {
         { label: 'Is my client data safe?', prompt: 'How do you guarantee my client data stays confidential and compliant with bar association rules?' },
         { label: 'Show me the ROI', prompt: 'What is the return on investment for a small law firm using NemoC Law AI?' },
       ],
-      alert: { type: 'setup', msg: '<strong>Welcome to NemoC Law AI!</strong> Complete your firm setup to unlock your full AI workforce — legal research, contract review, drafting, billing automation, and more. <strong>Founder pricing locks in at $297/mo for life.</strong>', action: 'Setup My Firm', icon: Zap, color: 'var(--db-nvidia-green)', bg: 'rgba(118,185,0,0.05)', border: 'rgba(118,185,0,0.15)' },
+      alert: null,
       greeting: 'Ask me anything about how NemoC Law AI can help your practice, or tap one of the questions below.',
       showMatters: true
     }
@@ -303,6 +327,7 @@ export default function MyAgent() {
   const isUnlocked = firm?.hasPaymentMethod || isTrialActive;
 
   return (
+    <ErrorBoundary>
     <div className="db-viewport-workspace">
       <div className="db-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--db-border)' }}>
         <div>
@@ -778,6 +803,7 @@ export default function MyAgent() {
         }
       `}</style>
     </div>
+    </ErrorBoundary>
   );
 }
 

@@ -12,8 +12,8 @@ import { saveRosterAndCreateAgents, getOwnerRole, AGENT_SUB_AGENTS } from './age
 /**
  * Create a new firm document after onboarding.
  */
-export async function createFirm(userId, firmData) {
-  const firmRef = doc(collection(db, 'firms'));
+export async function createFirm(userId, firmData, existingFirmId = null) {
+  const firmRef = existingFirmId ? doc(db, 'firms', existingFirmId) : doc(collection(db, 'firms'));
   const firm = {
     ownerId: userId,
     members: [userId],
@@ -35,7 +35,7 @@ export async function createFirm(userId, firmData) {
     updatedAt: serverTimestamp(),
   };
 
-  await setDoc(firmRef, firm);
+  await setDoc(firmRef, firm, { merge: true });
 
   // Link user to firm and mark onboarding as complete
   await setDoc(doc(db, 'users', userId), {
@@ -137,8 +137,8 @@ export async function addKnowledgeFile(firmId, fileData) {
  * Get the firm's knowledge base files.
  */
 export async function getKnowledgeBase(firmId) {
-  const snap = await getDoc(doc(db, 'firms', firmId, 'config', 'knowledgeBase'));
-  return snap.exists() ? snap.data() : { files: [] };
+  const snap = await getDocs(collection(db, 'firms', firmId, 'knowledgeBase'));
+  return { files: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
 }
 
 // ═══════════════════════════════════════════════
@@ -171,12 +171,12 @@ export async function updateUserProfile(userId, updates) {
  * Save all onboarding data in one go.
  * Called when user clicks "Launch My Workspace".
  */
-export async function completeOnboarding(userId, onboardingData) {
-  // 1. Create the firm
-  const firmId = await createFirm(userId, onboardingData);
+export async function completeOnboarding(userId, onboardingData, existingFirmId = null) {
+  // 1. Create or update the firm
+  const firmId = await createFirm(userId, onboardingData, existingFirmId);
 
   // 2. Save agent config (legacy — flat list of active sub-agent IDs)
-  await saveAgentConfig(firmId, onboardingData.selectedAgents);
+  await saveAgentConfig(firmId, onboardingData.selectedAgents || []);
 
   // 3. Save security config
   await saveSecurityConfig(firmId, {
@@ -186,16 +186,19 @@ export async function completeOnboarding(userId, onboardingData) {
 
   // 4. Save knowledge base file references
   if (onboardingData.files && onboardingData.files.length > 0) {
-    const ref = doc(db, 'firms', firmId, 'config', 'knowledgeBase');
-    await setDoc(ref, {
-      files: onboardingData.files.map(f => ({
-        name: f.name,
-        size: f.size,
-        status: f.status || 'indexed',
-        uploadedAt: new Date().toISOString(),
-      })),
-      updatedAt: serverTimestamp(),
-    });
+    const kbRef = collection(db, 'firms', firmId, 'knowledgeBase');
+    for (const f of onboardingData.files) {
+      const fileName = f.name || 'website_crawl';
+      const docId = fileName.replace(/[^a-zA-Z0-9_-]/g, '_') || 'default_kb';
+      await setDoc(doc(kbRef, docId), {
+        fileName: fileName,
+        fileSize: f.size || '0 KB',
+        fileType: 'text/plain',
+        content: f.content || null,
+        uploadedBy: 'NemoClaw Auto-Scraper',
+        uploadedAt: serverTimestamp(),
+      }, { merge: true });
+    }
   }
 
   // 5. Save employee roster & create agent hierarchy for staff
@@ -211,7 +214,7 @@ export async function completeOnboarding(userId, onboardingData) {
     const ownerName = userData.displayName || onboardingData.contactName || 'Firm Owner';
     const ownerEmail = userData.email || onboardingData.email || '';
     // Derive role from firm context: solo firm → solo-partner, otherwise → managing-partner
-    const ownerRole = getOwnerRole(onboardingData.firmSize);
+    const ownerRole = onboardingData.firmSize === 'solo' ? 'solo-partner' : 'managing-partner';
 
     // Create owner employee record with their actual legal role
     const ownerEmpRef = doc(db, 'firms', firmId, 'employees', userId);

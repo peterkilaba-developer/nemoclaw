@@ -701,7 +701,7 @@ function BillingUsageContent() {
             )}
 
               <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--db-border)' }}>
-                <h3 className="db-card-title" style={{ fontSize: '0.8125rem' }}>NemoC Billing History</h3>
+                <h3 className="db-card-title" style={{ fontSize: '0.8125rem' }}>Billing History</h3>
                 <div style={{ marginTop: '16px' }}>
                   {loadingInvoices ? (
                     <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>Fetching logs...</div>

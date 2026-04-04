@@ -498,6 +498,78 @@ async def chat_completions(req: InferenceRequest, request: Request):
 #  UTILITY ENDPOINTS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+class ScrapeRequest(BaseModel):
+    url: str
+
+@app.post("/api/scrape-practice-areas")
+async def scrape_practice_areas(req: ScrapeRequest):
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=10.0) as client:
+            res = await client.get(req.url, headers={"User-Agent": "Mozilla/5.0"}, follow_redirects=True)
+            
+        # Basic tag strip
+        full_text = re.sub(r'<[^>]+>', ' ', res.text)
+        full_text = re.sub(r'\s+', ' ', full_text)[:100000]
+        text = full_text[:6000]
+        
+        candidates = [
+            'Antitrust / Competition', 'Aviation Law', 'Banking & Finance', 'Bankruptcy (Business)',
+            'Bankruptcy (Personal)', 'Business Formation & LLC', 'Cannabis / Marijuana Law',
+            'Class Action Defense', 'Commercial Litigation', 'Construction Law', 'Contracts & Agreements',
+            'Corporate Governance', 'Corporate / M&A', 'Criminal Defense', 'Cybersecurity & Data Privacy',
+            'DUI / DWI', 'Elder Law', 'Employment (Employee Side)', 'Employment (Employer Side)',
+            'Energy & Utilities', 'Environmental & EPA', 'Estate Planning', 'Family Law', 'Franchise Law',
+            'Government Contracts', 'Healthcare & HIPAA', 'Immigration', 'Insurance Defense',
+            'Intellectual Property / Patent', 'International Trade', 'Juvenile Law', 'Landlord-Tenant (Landlord Side)',
+            'Landlord-Tenant (Tenant Side)', 'Maritime / Admiralty', 'Media & Communications',
+            'Medical Malpractice', 'Mergers & Acquisitions', 'Military / Veterans Law', 'Native American Law',
+            'Non-Profit / Tax-Exempt', 'Nursing Home Abuse', 'Oil & Gas', 'Personal Injury',
+            'Product Liability', 'Real Estate (Commercial)', 'Real Estate (Residential)', 'Regulatory & Compliance',
+            'Securities & SEC', 'Sexual Harassment / Assault', 'Social Security Disability', 'Tax (Business)',
+            'Tax (Individual)', 'Technology & Software', 'Telecommunications', 'Traffic Violations',
+            'Transportation & Logistics', 'Trusts & Wills', 'White Collar Crime', 'Workers\' Compensation', 
+            'Wrongful Death', 'Zoning & Land Use'
+        ]
+
+        llm_req = InferenceRequest(
+            messages=[
+                Message(role="system", content=f"Your ONLY purpose is to extract law firm practice areas mentioned in the user's text. You MUST return ONLY a comma-separated list of EXACT matches from this list: {', '.join(candidates)}. Do NOT say 'Here are the areas' or anything else. Output ONLY the list. If none found, output NONE."),
+                Message(role="user", content=text)
+            ],
+            max_tokens=150
+        )
+        
+        result = {}
+        if OPENAI_API_KEY:
+            result = await call_openai(llm_req)
+        if not result or result.get("error"):
+            if ANTHROPIC_API_KEY:
+                result = await call_anthropic(llm_req)
+        if not result or result.get("error"):
+            if GEMINI_API_KEY:
+                result = await call_gemini(llm_req)
+        if not result or result.get("error"):
+            result = await call_nvidia_nim(llm_req)
+            
+        content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        print(f"[SCRAPER] Raw LLM output: {content}")
+        
+        raw_outputs = [x.strip().strip(".'\"") for x in content.replace("\n", ",").split(",")]
+        
+        areas = []
+        for ro in raw_outputs:
+            if not ro: continue
+            for c in candidates:
+                if c.lower() == ro.lower():
+                    areas.append(c)
+                elif c.lower() in ro.lower() and len(c) > 5:
+                    areas.append(c)
+                    
+        return {"practice_areas": list(set(areas)), "content": full_text}
+    except Exception as e:
+        print(f"[SCRAPER] Error: {e}")
+        return {"practice_areas": [], "content": ""}
+
 @app.get("/health")
 def health_check():
     return {

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useFirm } from '../contexts/FirmContext';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { 
   Upload, FileText, Trash2, Check, X, Key, Copy, Eye, EyeOff, 
@@ -89,6 +89,28 @@ export default function FirmSettings() {
       });
     }
   }, [firm, user]);
+
+  useEffect(() => {
+    if (!firmId) return;
+    const fetchKb = async () => {
+      try {
+        const q = query(collection(db, 'firms', firmId, 'knowledgeBase'), orderBy('uploadedAt', 'desc'));
+        const snap = await getDocs(q);
+        setKnowledgeDocs(snap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            fileName: data.fileName,
+            fileSize: data.fileSize,
+            uploadedAt: data.uploadedAt?.toDate ? data.uploadedAt.toDate() : new Date(),
+          };
+        }));
+      } catch (err) {
+        console.warn('Failed to load knowledge base:', err);
+      }
+    };
+    fetchKb();
+  }, [firmId]);
 
   const saveProfile = async () => {
     if (!firmId) return;
@@ -179,8 +201,13 @@ export default function FirmSettings() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const removeDoc = (idx) => {
-    setKnowledgeDocs(prev => prev.filter((_, i) => i !== idx));
+  const removeDocIdx = async (idx, docId) => {
+    try {
+      if (docId) await deleteDoc(doc(db, 'firms', firmId, 'knowledgeBase', docId));
+      setKnowledgeDocs(prev => prev.filter((_, i) => i !== idx));
+    } catch (err) {
+      console.error('Failed to delete doc:', err);
+    }
   };
 
   const formatSize = (bytes) => {
@@ -297,7 +324,7 @@ export default function FirmSettings() {
                     <div className="db-feed-desc">{formatSize(docItem.fileSize)} · Uploaded {docItem.uploadedAt.toLocaleDateString()}</div>
                   </div>
                   <button
-                    onClick={() => removeDoc(i)}
+                    onClick={() => removeDocIdx(i, docItem.id)}
                     style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--db-text-muted)', padding: '4px' }}
                     title="Remove document"
                   >

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { MessageSquare, Users, Link2, ExternalLink, Send, Shield, Lock, Bell, Search, UploadCloud, ShieldCheck } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export default function ClientPortal() {
   const { user } = useAuth();
@@ -10,9 +12,48 @@ export default function ClientPortal() {
   const [message, setMessage] = useState('');
 
   const [clients, setClients] = useState([]);
-
   const [activeClient, setActiveClient] = useState(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [messages, setMessages] = useState([]);
+
+  useEffect(() => {
+    const activeFirmId = firm?.id || user?.uid;
+    if (!activeFirmId) return;
+    const q = query(collection(db, 'firms', activeFirmId, 'clientChannels'), orderBy('updatedAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [firm?.id, user?.uid]);
+
+  useEffect(() => {
+    const activeFirmId = firm?.id || user?.uid;
+    if (!activeFirmId || !activeClient?.id) {
+      setMessages([]);
+      return;
+    }
+    const q = query(collection(db, 'firms', activeFirmId, 'clientChannels', activeClient.id, 'messages'), orderBy('timestamp', 'asc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [firm?.id, user?.uid, activeClient?.id]);
+
+  const handleSendMessage = async () => {
+    const activeFirmId = firm?.id || user?.uid;
+    if (!message.trim() || !activeClient || !activeFirmId) return;
+    try {
+      await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels', activeClient.id, 'messages'), {
+        text: message,
+        sender: 'firm',
+        senderName: user?.displayName || 'Lawyer',
+        timestamp: serverTimestamp()
+      });
+      setMessage('');
+    } catch (err) {
+      console.error("Failed to send message", err);
+    }
+  };
 
   return (
     <div className="db-viewport-workspace">
@@ -54,39 +95,54 @@ export default function ClientPortal() {
               <div style={{ flex: 1, padding: '28px', overflowY: 'auto', background: 'var(--db-bg)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ textAlign: 'center', margin: '10px 0' }}>
                   <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', background: 'rgba(0,0,0,0.05)', padding: '4px 12px', borderRadius: '20px' }}>
-                    Secure communication established on {new Date().toLocaleDateString()}
+                    Secure communication established on {activeClient.createdAt?.toDate ? activeClient.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString()}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#3b82f6', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600, flexShrink: 0 }}>
-                    {activeClient.name.split(' ').map(n=>n[0]).join('')}
+                {messages.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--db-text-muted)', fontSize: '0.8125rem' }}>
+                    No messages yet. Send a message to open the secure channel.
                   </div>
-                  <div style={{ background: 'var(--db-surface)', border: '1px solid var(--db-border)', padding: '12px 16px', borderRadius: '2px 12px 12px 12px', maxWidth: '80%', boxShadow: 'var(--db-shadow-sm)' }}>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-primary)', lineHeight: 1.5 }}>
-                        Documents have been uploaded for the discovery request via the secure link. Please confirm receipt.
+                ) : (
+                  messages.map((msg, idx) => {
+                    const isFirm = msg.sender === 'firm' || msg.sender === 'agent';
+                    const isAgent = msg.sender === 'agent';
+                    return (
+                      <div key={msg.id || idx} style={{ display: 'flex', gap: '12px', flexDirection: isFirm ? 'row-reverse' : 'row' }}>
+                        <div style={{ 
+                          width: '32px', height: '32px', borderRadius: '50%', flexShrink: 0,
+                          background: isAgent ? 'linear-gradient(135deg, var(--db-nvidia-green), #4a7a00)' : (isFirm ? 'var(--db-surface)' : '#3b82f6'),
+                          border: isFirm && !isAgent ? '1px solid var(--db-border)' : 'none',
+                          color: isAgent ? '#000' : (isFirm ? 'var(--db-text-primary)' : '#fff'),
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700 
+                        }}>
+                          {isAgent ? 'NC' : (isFirm ? (msg.senderName?.[0] || 'L') : (activeClient.name?.[0] || 'C'))}
+                        </div>
+                        <div style={{ 
+                          background: isAgent ? 'rgba(118,185,0,0.08)' : (isFirm ? 'var(--db-surface)' : 'var(--db-surface)'), 
+                          border: isAgent ? '1px solid rgba(118,185,0,0.15)' : '1px solid var(--db-border)', 
+                          padding: '12px 16px', 
+                          borderRadius: isFirm ? '12px 2px 12px 12px' : '2px 12px 12px 12px', 
+                          maxWidth: '80%', 
+                          boxShadow: 'var(--db-shadow-sm)' 
+                        }}>
+                            {isAgent && <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--db-nvidia-green)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Auto-Reply · Intake Agent</div>}
+                            <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-primary)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                              {msg.text}
+                            </div>
+                            <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', marginTop: '8px', textAlign: isFirm ? 'left' : 'right' }}>
+                              {msg.timestamp?.toDate ? msg.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Just now'}
+                            </div>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', marginTop: '8px', textAlign: 'right' }}>{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '12px', flexDirection: 'row-reverse' }}>
-                  <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--db-nvidia-green), #4a7a00)', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', fontWeight: 700, flexShrink: 0 }}>
-                    NC
-                  </div>
-                  <div style={{ background: 'rgba(118,185,0,0.08)', border: '1px solid rgba(118,185,0,0.15)', padding: '12px 16px', borderRadius: '12px 2px 12px 12px', maxWidth: '80%', boxShadow: 'var(--db-shadow-sm)' }}>
-                      <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--db-nvidia-green)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Auto-Reply · Intake Agent</div>
-                      <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-primary)', lineHeight: 1.5 }}>
-                        Receipt confirmed. Documents have been securely synced to the matter workspace for attorney review. The legal team has been notified.
-                      </div>
-                      <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', marginTop: '8px', textAlign: 'left' }}>{new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
-                  </div>
-                </div>
+                    );
+                  })
+                )}
                 
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
                   <span style={{ fontSize: '0.6875rem', background: 'var(--db-surface)', padding: '6px 16px', borderRadius: '20px', color: 'var(--db-text-muted)', border: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f59e0b' }} />
-                    Waiting for Attorney Response
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }} />
+                    E2E Secure Channel Active
                   </span>
                 </div>
               </div>
@@ -103,12 +159,12 @@ export default function ClientPortal() {
                     placeholder={`Reply to ${activeClient.name}...`}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter' && message.trim()) { setMessage(''); } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { handleSendMessage(); } }}
                   />
                   <button
                     className="db-btn db-btn-primary"
                     style={{ padding: '8px 16px' }}
-                    onClick={() => { if (message.trim()) { setMessage(''); } }}
+                    onClick={handleSendMessage}
                     disabled={!message.trim()}
                   >
                     <Send size={14} />
@@ -136,9 +192,7 @@ export default function ClientPortal() {
               </div>
               <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--db-text-primary)', marginBottom: '4px' }}>No Active Channels</div>
               <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', textAlign: 'center', maxWidth: '300px' }}>
-                {firm?.isConfigured 
-                  ? "Select a client from the sidebar to view their secure portal."
-                  : "Deploy your firm sandbox in the Command Center to activate client portals."}
+                Select a client from the sidebar to view their secure portal.
               </p>
             </div>
           )}
@@ -147,11 +201,41 @@ export default function ClientPortal() {
         {/* Right Col - Context Panels */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
           <div className="db-card" style={{ padding: 0 }}>
-            <div className="db-card-header" style={{ padding: '20px 24px' }}>
+            <div className="db-card-header" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="db-card-title">
                 <Search size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
                 Messaging Channels
               </div>
+              <button 
+                className="db-btn db-btn-secondary db-btn-sm" 
+                style={{ fontSize: '0.625rem', padding: '4px 8px' }}
+                onClick={async () => {
+                  const activeFirmId = firm?.id || user?.uid;
+                  if (!activeFirmId) {
+                    alert('Please authenticate first.');
+                    return;
+                  }
+                  try {
+                    const newChannelRef = await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels'), {
+                      name: 'Test Client ' + Math.floor(Math.random() * 1000),
+                      matter: 'Simulated Matter',
+                      status: 'Active',
+                      unread: 1,
+                      updatedAt: serverTimestamp(),
+                      createdAt: serverTimestamp()
+                    });
+                    await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels', newChannelRef.id, 'messages'), {
+                      text: 'Hello, I received your intake form. Is this the secure channel?',
+                      sender: 'client',
+                      timestamp: serverTimestamp()
+                    });
+                  } catch (e) {
+                    console.error('Failed to create channel', e);
+                  }
+                }}
+              >
+                + Sandbox Client
+              </button>
             </div>
             <div style={{ padding: '0 24px 16px' }}>
               <div style={{ position: 'relative' }}>

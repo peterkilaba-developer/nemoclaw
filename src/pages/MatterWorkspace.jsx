@@ -39,7 +39,7 @@ export default function MatterWorkspace() {
   const [timeEntries, setTimeEntries] = useState([]);
 
   // Find agent config
-  const myAgent = personalAgents.find(a => a.employeeEmail === user?.email);
+  const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === user?.email);
   const agentType = myAgent?.agentType || 'associate';
   const agentName = myAgent?.agentName || 'AI Chief of Staff';
   const agentId = myAgent?.id || null;

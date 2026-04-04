@@ -35,13 +35,15 @@ export default function SuperAgentDashboard() {
   }
 
   // Compute firm-wide metrics
-  const totalAgents = agents?.length || 0;
-  const activeAgents = agents?.filter(a => a.status === 'active')?.length || totalAgents;
-  const totalEmployees = employees?.length || 0;
+  const personalCount = agents?.filter(a => !a.isAutonomous)?.length || 0;
+  const autonomousCount = agents?.filter(a => a.isAutonomous)?.length || 0;
+  const superCount = firm?.isConfigured ? 1 : 0; // Super Agent exists if firm is configured
+  const totalAgents = personalCount + autonomousCount + superCount;
+
   const partnerCount = agents?.filter(a => a.agentType === 'partner')?.length || 0;
   const associateCount = agents?.filter(a => a.agentType === 'associate')?.length || 0;
   const ofCounselCount = agents?.filter(a => a.agentType === 'of-counsel')?.length || 0;
-  const staffCount = totalAgents - partnerCount - associateCount - ofCounselCount;
+  const staffCount = personalCount - partnerCount - associateCount - ofCounselCount;
 
   // Audit metrics
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
@@ -123,9 +125,9 @@ export default function SuperAgentDashboard() {
           {/* KPI Cards */}
           <div className="db-stats-grid" style={{ marginBottom: '24px' }}>
             <div className="db-stat-card">
-              <div className="db-stat-label">Agentic Resource</div>
-              <div className="db-stat-value" style={{ color: activeAgents === totalAgents ? '#76b900' : activeAgents > 0 ? '#f59e0b' : '#ef4444' }}>{activeAgents}/{totalAgents}</div>
-              <div className="db-stat-meta">{activeAgents === totalAgents ? 'All agents operational' : `${totalAgents - activeAgents} agent(s) offline`}</div>
+              <div className="db-stat-label">Total Firm Agents</div>
+              <div className="db-stat-value" style={{ color: '#76b900' }}>{totalAgents}</div>
+              <div className="db-stat-meta">{personalCount} Tethered · {autonomousCount} Autonomous · {superCount} Super</div>
             </div>
             <div className="db-stat-card">
               <div className="db-stat-label">Today's Inferences</div>
@@ -182,7 +184,7 @@ export default function SuperAgentDashboard() {
                     <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: '#22c55e' }}>NO ACTIVE CONFLICTS</span>
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>
-                    Last scan: {new Date().toLocaleTimeString()} · Checked all {totalAgents} agents against current caseload
+                    Last scan: {new Date().toLocaleTimeString()} · Checked all tethered agents against current caseload
                   </div>
                 </div>
 
@@ -208,7 +210,7 @@ export default function SuperAgentDashboard() {
               { type: 'Associate', count: associateCount, icon: Scale, color: '#76b900', access: 'Assigned matters only' },
               { type: 'Staff', count: staffCount, icon: Users, color: '#76b900', access: 'Role-restricted' },
               { type: 'Of Counsel', count: ofCounselCount, icon: Scale, color: '#f59e0b', access: 'Read-only Super Agent' },
-              { type: 'Total', count: totalAgents, icon: Zap, color: '#76b900', access: `${activeAgents} active` },
+              { type: 'Total Tethered', count: personalCount, icon: Zap, color: '#76b900', access: 'Human-paired workforce' },
             ].map((item, i) => (
               <div key={i} className="db-stat-card" style={item.type === 'Of Counsel' ? { border: '1px solid rgba(245,158,11,0.15)' } : {}}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>

@@ -53,8 +53,14 @@ service cloud.firestore {
       allow update: if isAuthenticated();
       allow delete: if false;
 
-      // FIRM CONFIG — Agent, Security, Knowledge Base
+      // FIRM CONFIG — Agent, Security
       match /config/{configDoc} {
+        allow read: if isFirmMember(firmId);
+        allow write: if isFirmOwner(firmId);
+      }
+
+      // KNOWLEDGE BASE — Documents and website footprint
+      match /knowledgeBase/{kbId} {
         allow read: if isFirmMember(firmId);
         allow write: if isFirmOwner(firmId);
       }
@@ -102,10 +108,17 @@ service cloud.firestore {
         }
       }
 
-      // CLIENT CONTACTS
+      // CLIENT CONTACTS & SECURE CHANNELS
       match /clients/{clientId} {
         allow read: if isFirmMember(firmId);
         allow write: if isFirmOwner(firmId);
+      }
+      match /clientChannels/{channelId} {
+        allow read, write: if isFirmMember(firmId);
+        
+        match /messages/{messageId} {
+          allow read, write: if isFirmMember(firmId);
+        }
       }
 
       // BILLING

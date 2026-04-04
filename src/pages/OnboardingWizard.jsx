@@ -129,6 +129,7 @@ export default function OnboardingWizard() {
     employees: [
       { name: user?.displayName || '', email: user?.email || '', role: 'managing-partner', practiceAreas: [], supervisingPartnerId: null, agentName: '' },
     ],
+    selectedAgents: AGENTS.filter(a => a.recommended || a.free).map(a => a.id),
     files: [],
     security: SECURITY_OPTIONS.reduce((acc, opt) => ({ ...acc, [opt.id]: opt.default }), {}),
     services: EXTERNAL_SERVICES.reduce((acc, svc) => ({ ...acc, [svc.id]: svc.default }), {}),
@@ -184,9 +185,6 @@ export default function OnboardingWizard() {
              (data.lastName?.trim().length || 0) > 0 &&
              (data.email?.includes('@') || false);
     }
-    if (step === 1) {
-      return data.files.length > 0;
-    }
     return true;
   };
 
@@ -196,10 +194,8 @@ export default function OnboardingWizard() {
     setError('');
     try {
       let currentFirmId = user?.firmId || firmId;
-      if (!currentFirmId) {
-        currentFirmId = await completeOnboarding(user.uid, data);
-        setFirmId(currentFirmId);
-      }
+      currentFirmId = await completeOnboarding(user.uid, data, currentFirmId);
+      setFirmId(currentFirmId);
       // Fetch Stripe clientSecret for inline checkout
       if (!clientSecret) {
         const response = await fetch('https://createinlinesubscription-2sejsgollq-uc.a.run.app', {
@@ -237,20 +233,17 @@ export default function OnboardingWizard() {
     setError('');
     try {
       let currentFirmId = user?.firmId || firmId;
-      if (!currentFirmId) {
-        currentFirmId = await completeOnboarding(user.uid, data);
-        setFirmId(currentFirmId);
-      } else {
-        // Fallback for users stuck in loop who already have a firmId
-        const { updateDoc, doc } = await import('firebase/firestore');
-        const { db } = await import('../lib/firebase');
-        await updateDoc(doc(db, 'users', user.uid), { onboardingComplete: true });
-      }
+      currentFirmId = await completeOnboarding(user.uid, data, currentFirmId);
+      setFirmId(currentFirmId);
+      
+      const { updateDoc, doc } = await import('firebase/firestore');
+      const { db } = await import('../lib/firebase');
+      await updateDoc(doc(db, 'users', user.uid), { onboardingComplete: true });
       navigate('/dashboard');
     } catch (err) {
       console.error('Skip error:', err);
-      // Even if provisioning fails, let them into the dashboard
-      navigate('/dashboard');
+      // Instead of navigating away and swallowing the exception, expose it!
+      setError(err.message || 'Provisioning failed. See console.');
     } finally {
       setLaunching(false);
     }
@@ -288,46 +281,14 @@ export default function OnboardingWizard() {
       <div className="onboarding-body">
         <div className="onboarding-container">
           {/* Progress */}
-          <div className="onboarding-progress">
-            <div className="onboarding-steps-bar">
-              {STEP_LABELS.map((label, i) => (
-                <div key={i} className={`onboarding-step-indicator ${i < step ? 'completed' : ''} ${i === step ? 'active' : ''}`}>
-                  <div className="onboarding-step-dot">
-                    {i < step ? <Check size={14} /> : i + 1}
-                  </div>
-                  {i < STEP_LABELS.length - 1 && <div className="onboarding-step-line" />}
-                </div>
-              ))}
-            </div>
-            <div className="onboarding-step-labels">
-              {STEP_LABELS.map((label, i) => (
-                <span key={i} className={`onboarding-step-label ${i === step ? 'active' : ''} ${i < step ? 'completed' : ''}`}>
-                  {label}
-                </span>
-              ))}
-            </div>
-          </div>
+          {/* Progress hidden - Streamlined 1-step flow */}
 
           {/* AI Concierge — Below steps, vertically aligned with card */}
           <AIConcierge step={step} data={data} />
 
           {/* Step Content */}
           <div className="onboarding-step-card" key={step}>
-            {step === 0 && <StepFirmProfile data={data} updateData={updateData} togglePracticeArea={togglePracticeArea} />}
-            {step === 1 && <StepKnowledgeBase data={data} updateData={updateData} />}
-            {step === 2 && <StepSecurity data={data} toggleSecurity={toggleSecurity} toggleService={toggleService} />}
-            {step === 3 && (
-              <StepReview 
-                data={data} 
-                launching={launching} 
-                clientSecret={clientSecret} 
-                firmId={firmId || user?.firmId}
-                onPaymentSuccess={handlePaymentSuccess}
-                setError={setError}
-                onSkip={handleSkip}
-                onProvision={provisionFirm}
-              />
-            )}
+            <StepFirmProfile data={data} updateData={updateData} togglePracticeArea={togglePracticeArea} setData={setData} />
 
             {error && (
               <div style={{ margin: '0 0 16px', padding: '10px 14px', background: 'var(--db-danger-subtle)', border: '1px solid var(--db-danger-subtle)', borderRadius: '8px', fontSize: '0.8125rem', color: 'var(--db-danger)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -335,40 +296,23 @@ export default function OnboardingWizard() {
               </div>
             )}
 
-            {step === 3 ? (
-              <div style={{ marginTop: '32px', borderTop: '1px solid var(--db-border)', paddingTop: '24px' }}>
-                <button className="db-btn db-btn-secondary" onClick={back} disabled={launching}>
-                  <ArrowLeft size={14} /> Back to Security
+            <div className="onboarding-actions">
+              <div></div>
+              <div className="onboarding-actions-right">
+                <button 
+                  className="db-btn db-btn-primary" 
+                  onClick={handleSkip} 
+                  disabled={launching || !isStepValid()}
+                  style={{ opacity: isStepValid() ? 1 : 0.5, cursor: isStepValid() ? 'pointer' : 'not-allowed' }}
+                >
+                  {launching ? (
+                    <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'auth-spin 0.6s linear infinite', display: 'inline-block' }} />
+                  ) : (
+                    <>Launch Firm Workspace <ArrowRight size={14} /></>
+                  )}
                 </button>
               </div>
-            ) : (
-              <div className="onboarding-actions">
-                <div>
-                  {step > 0 && (
-                    <button className="db-btn db-btn-secondary" onClick={back} disabled={launching}>
-                      <ArrowLeft size={14} /> Back
-                    </button>
-                  )}
-                </div>
-                <div className="onboarding-actions-right">
-                  {step === 2 && (
-                    <button className="ob-skip-btn" onClick={next} disabled={launching}>Skip for now</button>
-                  )}
-                  <button 
-                    className="db-btn db-btn-primary" 
-                    onClick={next} 
-                    disabled={launching || !isStepValid()}
-                    style={{ opacity: isStepValid() ? 1 : 0.5, cursor: isStepValid() ? 'pointer' : 'not-allowed' }}
-                  >
-                    {launching ? (
-                      <span style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'auth-spin 0.6s linear infinite', display: 'inline-block' }} />
-                    ) : (
-                      <>Continue <ArrowRight size={14} /></>
-                    )}
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
@@ -377,9 +321,11 @@ export default function OnboardingWizard() {
 }
 
 /* Step 1: Firm Profile — with Google Places Autocomplete */
-function StepFirmProfile({ data, updateData, togglePracticeArea }) {
+function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
+  const [isScraping, setIsScraping] = useState(false);
+  const [scrapeComplete, setScrapeComplete] = useState(false);
 
   const STATE_MAP = {
     'Alabama': 'Alabama', 'Alaska': 'Alaska', 'Arizona': 'Arizona', 'Arkansas': 'Arkansas',
@@ -425,6 +371,38 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
           name: websiteName, size: 'Website Crawl', status: 'done',
           role: 'company-wide', category: 'Digital Footprint'
         }]);
+
+        // Auto-scrape practice areas from website
+        setIsScraping(true);
+        setScrapeComplete(false);
+        fetch('http://localhost:8000/api/scrape-practice-areas', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: place.website })
+        })
+        .then(res => res.json())
+        .then(result => {
+          if (result.practice_areas && result.practice_areas.length > 0) {
+            setData(prev => ({
+              ...prev,
+              practiceAreas: [...new Set([...prev.practiceAreas, ...result.practice_areas])]
+            }));
+          }
+          if (result.content) {
+            setData(prev => ({
+              ...prev,
+              files: prev.files.map(f => 
+                f.name === websiteName 
+                  ? { ...f, content: result.content, size: (result.content.length / 1024).toFixed(1) + ' KB' } 
+                  : f
+              )
+            }));
+          }
+        }).catch(err => console.error('Practice area auto-detect failed:', err))
+          .finally(() => {
+            setIsScraping(false);
+            setScrapeComplete(true);
+          });
       }
 
       const stateComponent = place.address_components?.find(c =>
@@ -485,7 +463,24 @@ function StepFirmProfile({ data, updateData, togglePracticeArea }) {
           </div>
           <div>{data.firmAddress}</div>
           {data.firmPhone && <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={10} /> {data.firmPhone}</div>}
-          {data.firmWebsite && <div style={{ marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}><Globe size={10} /> {data.firmWebsite}</div>}
+          {data.firmWebsite && (
+            <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(0,0,0,0.03)', borderRadius: '6px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Globe size={12} color="var(--db-text-muted)" />
+                <span style={{ fontSize: '0.8125rem' }}>{data.firmWebsite}</span>
+              </div>
+              {isScraping && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.6875rem', color: '#2563eb', fontWeight: 600, background: 'rgba(37,99,235,0.1)', padding: '2px 8px', borderRadius: '10px' }}>
+                  <Loader2 size={10} style={{ animation: 'auth-spin 1s linear infinite' }} /> Indexing digital footprint & populating practice areas...
+                </div>
+              )}
+              {scrapeComplete && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.6875rem', color: 'var(--db-nvidia-green)', fontWeight: 600, background: 'rgba(118,185,0,0.1)', padding: '2px 8px', borderRadius: '10px', animation: 'fadeIn 0.4s ease' }}>
+                  <Check size={10} /> Footprint Captured {data.practiceAreas.length > 0 ? '& Practice Areas Detected' : ''}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

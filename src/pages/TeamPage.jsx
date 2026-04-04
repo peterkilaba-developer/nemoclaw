@@ -164,7 +164,7 @@ export default function TeamPage() {
           const Icon = ROLE_ICONS[emp.role] || Briefcase;
           const color = ROLE_COLORS[agentType] || '#6b7280';
           const subAgentCount = AGENT_SUB_AGENTS[agentType]?.length || 0;
-          const matchedAgent = personalAgents.find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
+          const matchedAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
           const agentName = matchedAgent?.agentName || emp.agentName || `${emp.name}'s AI Chief of Staff`;
           return <EmployeeCard key={emp.id || `p-${i}`} emp={emp} roleConfig={roleConfig} agentType={agentType} Icon={Icon} color={color} subAgentCount={subAgentCount} matchedAgent={matchedAgent} agentName={agentName} onEdit={setEditingEmployee} />;
         })}
@@ -207,7 +207,7 @@ export default function TeamPage() {
           const Icon = ROLE_ICONS[emp.role] || Briefcase;
           const color = ROLE_COLORS[agentType] || '#6b7280';
           const subAgentCount = AGENT_SUB_AGENTS[agentType]?.length || 0;
-          const matchedAgent = personalAgents.find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
+          const matchedAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === emp.email || a.humanEmail === emp.email);
           const agentName = matchedAgent?.agentName || emp.agentName || `${emp.name}'s AI Chief of Staff`;
           return <EmployeeCard key={emp.id || `b-${i}`} emp={emp} roleConfig={roleConfig} agentType={agentType} Icon={Icon} color={color} subAgentCount={subAgentCount} matchedAgent={matchedAgent} agentName={agentName} onEdit={setEditingEmployee} />;
         })}
