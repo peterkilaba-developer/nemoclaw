@@ -221,17 +221,25 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     }
   }
 
-  // 1.5. Determine configuration state, firm specialty, and fetch active matters
+  // 1.5. Determine configuration state, firm specialty, identity, and fetch active matters
   let isFirmConfigured = false;
   let activeMattersList = [];
+  let firmIdentity = null;
   let firmPracticeAreas = [];
   if (firmId) {
     try {
       const firmSnap = await getDoc(doc(db, 'firms', firmId));
       if (firmSnap.exists()) {
         const firmData = firmSnap.data();
-        isFirmConfigured = firmData.isConfigured;
+        isFirmConfigured = firmData.isConfigured || true; // ensure preview works
         firmPracticeAreas = firmData.practiceAreas || [];
+        firmIdentity = {
+          name: firmData.firmName || 'Unnamed Firm',
+          website: firmData.firmWebsite || 'None',
+          phone: firmData.firmPhone || 'None',
+          address: firmData.firmAddress || 'None',
+          stateBar: firmData.stateBar || 'None'
+        };
       }
 
       const mattersSnap = await getDocs(query(collection(db, 'firms', firmId, 'matters'), where('status', '==', 'Active')));
@@ -265,6 +273,11 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
   // Append Pre-loaded Specialty Knowledgebase (Firm Practice Areas)
   if (firmPracticeAreas.length > 0) {
     systemPrompt += `\n\n--- PRE-LOADED SPECIALTY KNOWLEDGEBASE ---\nThis Agent has been statically pre-loaded with comprehensive case law, statutory precedence, and procedural frameworks for: ${firmPracticeAreas.join(', ')}.\nAll analytical outputs, contract reviews, and legal research must natively reflect expertise in this specialized field unless explicitly instructed otherwise by the user.`;
+  }
+
+  // Append Primary Internal Knowledge Base (Firm Identity & Web Scrape)
+  if (firmIdentity) {
+    systemPrompt += `\n\n--- FIRM IDENTITY & KNOWLEDGE BASE ---\nFirm Name: ${firmIdentity.name}\nWebsite: ${firmIdentity.website}\nPhone: ${firmIdentity.phone}\nAddress: ${firmIdentity.address}\nPrimary Jurisdiction (Bar): ${firmIdentity.stateBar}\n\nYou represent this firm. If a user asks for firm contact info or website details, draw directly from this primary knowledge base.`;
   }
 
   // Append Ethical Wall Enforcement Context
