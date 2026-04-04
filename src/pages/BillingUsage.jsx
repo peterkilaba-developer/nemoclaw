@@ -229,6 +229,7 @@ function BillingUsageContent() {
   };
 
   const isTrialPlan = !safeFirm?.plan || safeFirm.plan === 'trial';
+  const isUnpaidTrial = isTrialPlan && !safeFirm.stripePaymentMethodId;
   const founderDays = getFounderDaysRemaining(safeFirm?.trialEndsAt);
   const inFounderWindow = isInFounderWindow(safeFirm?.trialEndsAt);
   const totals = calculateMonthlyTotal(extraSeats, autonomousRoles, inFounderWindow);
@@ -513,90 +514,116 @@ function BillingUsageContent() {
         /* SUBSCRIPTION LAYOUT */
         <div className="db-two-col">
           <div className="db-col-main" style={{ flex: '1.5' }}>
-            <div className="db-card">
-              <div className="db-card-header">
-                <div>
-                  <h3 className="db-card-title">Manage Firm Subscription</h3>
-                  <p className="db-card-desc">You are currently on the {isTrialPlan ? 'Founding Alpha' : 'Born Agentic'} plan with a Lifelong Price-Lock.</p>
+            {isUnpaidTrial ? (
+              <div className="db-card" style={{ padding: '40px', textAlign: 'center', background: 'rgba(118, 185, 0, 0.03)', border: '1px dashed rgba(118, 185, 0, 0.3)' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(118, 185, 0, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                  <Crown size={32} color="var(--db-nvidia-green)" />
                 </div>
-                <div className="db-plan-badge">
-                  <ShieldCheck size={14} /> Founder Price-Locked
-                </div>
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--db-text-primary)' }}>Activate Agentic OS Core</h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--db-text-secondary)', maxWidth: '420px', margin: '12px auto 32px', lineHeight: 1.6 }}>
+                  Your firm is currently operating on an unbilled trial. Activate your subscription now to process payments, bill clients, and permanently lock in the Founding Alpha $297/mo rate before the window closes.
+                </p>
+                <button 
+                  className="db-btn-primary" 
+                  onClick={handleCheckout} 
+                  disabled={checkoutLoading}
+                  style={{ fontSize: '0.9375rem', padding: '12px 32px', margin: '0 auto' }}
+                >
+                  {checkoutLoading ? 'Redirecting to Stripe...' : 'Activate $297/mo Price-Lock'}
+                </button>
+                {checkoutError && (
+                  <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '16px' }}>{checkoutError}</div>
+                )}
               </div>
-
-              <div style={{ marginTop: '32px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '0.875rem', fontWeight: 700 }}>Your Subscription Tally</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>${totals.total.toFixed(2)} / month total</div>
-                </div>
-
-                <div style={{ display: 'grid', gap: '12px' }}>
-                  <div className="db-billing-line">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div className="db-billing-icon" style={{ padding: '4px' }}>
-                        <img src="/logos/claw-128-transparent.png" alt="NemoC" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Agentic OS Core</div>
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>1 Agentic AI Seat + Core Security Sandbox</div>
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 700 }}>$297.00</div>
+            ) : (
+              <div className="db-card">
+                <div className="db-card-header">
+                  <div>
+                    <h3 className="db-card-title">Manage Firm Subscription</h3>
+                    <p className="db-card-desc">You are currently on the {isTrialPlan ? 'Founding Alpha' : 'Born Agentic'} plan with a Lifelong Price-Lock.</p>
                   </div>
-
-                  <div className="db-billing-line" style={{ opacity: extraSeats > 0 ? 1 : 0.5 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div className="db-billing-icon"><Users size={16} /></div>
-                      <div>
-                        <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Additional Human Seats</div>
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{extraSeats} extra staff invited</div>
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 700 }}>${totals.seats.toFixed(2)}</div>
-                  </div>
-                  <div className="db-billing-line" style={{ opacity: autonomousRoles > 0 ? 1 : 0.5 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div className="db-billing-icon"><Bot size={16} /></div>
-                      <div>
-                        <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Standalone Autonomous Agents</div>
-                        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{autonomousRoles} Autonomously Agentic licenses active</div>
-                      </div>
-                    </div>
-                    <div style={{ fontWeight: 700 }}>${totals.autonomous.toFixed(2)}</div>
+                  <div className="db-plan-badge">
+                    <ShieldCheck size={14} /> Founder Price-Locked
                   </div>
                 </div>
-              </div>
 
-              <div style={{ marginTop: '40px', padding: '24px', borderRadius: '12px', background: 'rgba(118, 185, 0, 0.05)', border: '1px solid rgba(118, 185, 0, 0.2)' }}>
-                <div style={{ display: 'flex', gap: '16px' }}>
-                   <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--db-nvidia-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                     <Zap size={24} color="#000" />
-                   </div>
-                   <div>
-                     <h4 style={{ fontSize: '0.9375rem', fontWeight: 800 }}>Founder's Price-Lock Active</h4>
-                     <p style={{ fontSize: '0.75rem', color: 'var(--db-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
-                       You have successfully secured the $297/mo rate for your firm's lifetime. 
-                       This covers your foundational AI Chief of Staff (Managing Partner Agent) mapped to your primary role. 
-                       To unlock distinct Business-of-Law autonomous agents (Billing, Receptionist, Operations), you must add subsequent human seats or purchase standalone agentic licenses.
-                     </p>
-                   </div>
+                <div style={{ marginTop: '32px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 700 }}>Your Subscription Tally</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>${totals.total.toFixed(2)} / month total</div>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: '12px' }}>
+                    <div className="db-billing-line">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="db-billing-icon" style={{ padding: '4px' }}>
+                          <img src="/logos/claw-128-transparent.png" alt="NemoC" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Agentic OS Core</div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>1 Agentic AI Seat + Core Security Sandbox</div>
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700 }}>$297.00</div>
+                    </div>
+
+                    <div className="db-billing-line" style={{ opacity: extraSeats > 0 ? 1 : 0.5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="db-billing-icon"><Users size={16} /></div>
+                        <div>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Additional Human Seats</div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{extraSeats} extra staff invited</div>
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700 }}>${totals.seats.toFixed(2)}</div>
+                    </div>
+                    <div className="db-billing-line" style={{ opacity: autonomousRoles > 0 ? 1 : 0.5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div className="db-billing-icon"><Bot size={16} /></div>
+                        <div>
+                          <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Standalone Autonomous Agents</div>
+                          <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{autonomousRoles} Autonomously Agentic licenses active</div>
+                        </div>
+                      </div>
+                      <div style={{ fontWeight: 700 }}>${totals.autonomous.toFixed(2)}</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
 
-            </div>
+                <div style={{ marginTop: '40px', padding: '24px', borderRadius: '12px', background: 'rgba(118, 185, 0, 0.05)', border: '1px solid rgba(118, 185, 0, 0.2)' }}>
+                  <div style={{ display: 'flex', gap: '16px' }}>
+                     <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--db-nvidia-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                       <Zap size={24} color="#000" />
+                     </div>
+                     <div>
+                       <h4 style={{ fontSize: '0.9375rem', fontWeight: 800 }}>Founder's Price-Lock Active</h4>
+                       <p style={{ fontSize: '0.75rem', color: 'var(--db-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
+                         You have successfully secured the $297/mo rate for your firm's lifetime. 
+                         This covers your foundational AI Chief of Staff (Managing Partner Agent) mapped to your primary role. 
+                         To unlock distinct Business-of-Law autonomous agents (Billing, Receptionist, Operations), you must add subsequent human seats or purchase standalone agentic licenses.
+                       </p>
+                     </div>
+                  </div>
+                </div>
+
+              </div>
+            )}
           </div>
 
           <div className="db-col-side" style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '16px' }}>
             
             <button 
               className="db-btn-primary" 
-              onClick={() => setShowUpdateCardModal(prev => !prev)}
+              onClick={() => {
+                if (isUnpaidTrial) handleCheckout();
+                else setShowUpdateCardModal(prev => !prev);
+              }}
               style={{ width: '100%', justifyContent: 'center' }}
             >
-              <CardIcon size={16} /> Manage Billing & Cards
+              <CardIcon size={16} /> {isUnpaidTrial ? 'Setup Payment Method' : 'Manage Billing & Cards'}
             </button>
 
-            {showUpdateCardModal && (
+            {showUpdateCardModal && !isUnpaidTrial && (
               <div style={{ border: '1px solid var(--db-border-light)', borderRadius: '12px', background: 'var(--db-surface)', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--db-border-light)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
@@ -623,7 +650,7 @@ function BillingUsageContent() {
               </div>
             )}
 
-            {!showUpdateCardModal && safeFirm.stripePaymentMethodId && (
+            {!isUnpaidTrial && !showUpdateCardModal && safeFirm.stripePaymentMethodId && (
               <div className="db-card" id="payment-method-card">
                 <h3 className="db-card-title">Payment Method</h3>
                 <p className="db-card-desc">Card on file for automated overhead.</p>
@@ -644,7 +671,7 @@ function BillingUsageContent() {
               </div>
             )}
 
-            {!showUpdateCardModal && !safeFirm.stripePaymentMethodId && (
+            {!isUnpaidTrial && !showUpdateCardModal && !safeFirm.stripePaymentMethodId && (
               <div className="db-card" id="payment-method-card">
                 <h3 className="db-card-title">Payment Method</h3>
                 <div style={{ 
@@ -663,13 +690,15 @@ function BillingUsageContent() {
               </div>
             )}
 
-            <button 
-              className="db-btn-outline"
-              onClick={() => setShowCancelModal(true)}
-              style={{ width: '100%', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', justifyContent: 'center' }}
-            >
-              <ShieldAlert size={16} /> Cancel Subscription
-            </button>
+            {!isUnpaidTrial && (
+              <button 
+                className="db-btn-outline"
+                onClick={() => setShowCancelModal(true)}
+                style={{ width: '100%', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', justifyContent: 'center' }}
+              >
+                <ShieldAlert size={16} /> Cancel Subscription
+              </button>
+            )}
 
               <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--db-border)' }}>
                 <h3 className="db-card-title" style={{ fontSize: '0.8125rem' }}>NemoC Billing History</h3>
