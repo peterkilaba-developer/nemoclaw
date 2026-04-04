@@ -14,26 +14,30 @@ service cloud.firestore {
     function isAdminUser() {
       return isAuthenticated() && (
         request.auth.token.admin == true ||
-        request.auth.token.email == 'marcus@nemoclaw.com'
+        request.auth.token.email == 'marcus@nemoclaw.com' ||
+        request.auth.token.email == 'peterkilaba@nemoc-law.ai'
       );
     }
 
     // Source of truth: user's /users/{uid} profile must carry the firmId,
     // OR the firm document itself must name this UID as owner.
     function isFirmMember(firmId) {
-      return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firmId == firmId ||
-        get(/databases/$(database)/documents/firms/$(firmId)).data.ownerId == request.auth.uid ||
-        get(/databases/$(database)/documents/firms/$(firmId)).data.ownerUid == request.auth.uid
+      return isAdminUser() || (
+        isAuthenticated() && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.firmId == firmId ||
+          get(/databases/$(database)/documents/firms/$(firmId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/firms/$(firmId)).data.ownerUid == request.auth.uid
+        )
       );
     }
 
     // Firm owner only — ownerId/ownerUid match. Role-based bypass removed (was a bug).
     function isFirmOwner(firmId) {
-      let firm = get(/databases/$(database)/documents/firms/$(firmId)).data;
-      return isAuthenticated() && (
-        firm.ownerId == request.auth.uid ||
-        firm.ownerUid == request.auth.uid
+      return isAdminUser() || (
+        isAuthenticated() && (
+          get(/databases/$(database)/documents/firms/$(firmId)).data.ownerId == request.auth.uid ||
+          get(/databases/$(database)/documents/firms/$(firmId)).data.ownerUid == request.auth.uid
+        )
       );
     }
 
