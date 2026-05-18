@@ -7,6 +7,7 @@ import {
   Briefcase,
   CheckCircle,
   ChevronRight,
+  Circle,
   Clock,
   DollarSign,
   FileText,
@@ -20,8 +21,11 @@ import {
   Plus,
   Scale,
   Search,
+  Send,
   Settings,
   ShieldCheck,
+  Sparkles,
+  Upload,
   Users,
   X,
 } from 'lucide-react';
@@ -41,6 +45,190 @@ function getFirmName(firm) {
 function getMatterIdFromPath(pathname) {
   const match = pathname.match(/^\/dashboard\/matters\/([^/]+)/);
   return match?.[1] || null;
+}
+
+const COMMAND_LAYER_ITEMS = [
+  { id: 'timeline', label: 'Thread', Icon: MessageSquare },
+  { id: 'work', label: 'Work', Icon: CheckCircle },
+  { id: 'documents', label: 'Docs', Icon: FileText },
+  { id: 'billing', label: 'Billing', Icon: DollarSign },
+  { id: 'client', label: 'Client', Icon: Users },
+];
+
+const DEFAULT_WORKFLOW = ['Intake', 'Conflict', 'Engagement', 'Discovery', 'Resolution', 'Close'];
+
+function compactDate(value, fallback = 'Today') {
+  if (!value) return fallback;
+  if (typeof value === 'string') return value;
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return fallback;
+}
+
+function getRiskTone(matter) {
+  const status = String(matter?.status || matter?.risk || '').toLowerCase();
+  if (status.includes('urgent') || status.includes('high') || status.includes('trial')) return 'danger';
+  if (status.includes('medium') || status.includes('pending')) return 'warn';
+  return 'calm';
+}
+
+function getRiskLabel(tone) {
+  if (tone === 'danger') return 'High';
+  if (tone === 'warn') return 'Medium';
+  return 'Low';
+}
+
+function buildCommandMatter(matter, currentPage, firm, user, counts = {}) {
+  const firmName = getFirmName(firm);
+  if (!matter) {
+    return {
+      id: 'firm-command',
+      title: currentPage === 'AI Chief of Staff' ? 'Practice Command Center' : currentPage,
+      shortTitle: 'Firm command',
+      client: user?.displayName || 'Firm leadership',
+      practice: (firm?.practiceAreas || [])[0] || 'All practice areas',
+      forum: firmName,
+      stage: currentPage,
+      status: 'Active',
+      risk: 'Low',
+      riskTone: 'calm',
+      deadline: 'Today',
+      nextAction: 'Review practice priorities',
+      value: 'Firm-wide',
+      agent: 'NemoC Practice OS',
+      summary: `Command workspace for ${firmName}: matters, deadlines, client posture, documents, billing, and agent activity in one thread.`,
+      workflow: ['Intake', 'Conflict', 'Matters', 'Documents', 'Billing', 'Review'],
+      activeStep: 2,
+      metrics: [
+        { label: 'Matters', value: String(counts.matters || 0) },
+        { label: 'Agents', value: String(counts.agents || 0) },
+        { label: 'Mode', value: 'Command' },
+      ],
+      prompts: ['Review open priorities', 'Prepare matter intake checklist', 'Summarize firm risk'],
+      layers: {
+        timeline: [
+          { title: 'Practice command initialized', meta: 'Ready now', state: 'done' },
+          { title: 'Matter intake monitoring', meta: 'Listening across channels', state: 'pending' },
+          { title: 'Attorney review queue', meta: 'Protected by ethical wall', state: 'pending' },
+        ],
+        work: [
+          { title: 'Review active matters', owner: 'Partner', time: 'Firm-wide', state: 'Queued' },
+          { title: 'Confirm practice-area knowledge base', owner: 'NemoC', time: 'Ready', state: 'In progress' },
+          { title: 'Audit command workflows', owner: 'Operations', time: 'Today', state: 'Needs review' },
+        ],
+        documents: [
+          { title: 'Firm knowledge base', type: 'KB', status: 'Ready' },
+          { title: 'Intake templates', type: 'Workflow', status: 'Queued' },
+          { title: 'Audit trail', type: 'Security', status: 'Active' },
+        ],
+        billing: [
+          { title: 'Subscription posture', amount: 'Active', status: 'Monitored' },
+          { title: 'Unbilled WIP review', amount: '$0.00', status: 'Ready' },
+          { title: 'Trust controls', amount: 'Protected', status: 'Active' },
+        ],
+        client: [
+          { title: 'Client portal layer', meta: 'Available', state: 'Ready' },
+          { title: 'Receptionist intake', meta: 'Website-ready', state: 'Queued' },
+          { title: 'Privilege warning', meta: 'Attorney review required', state: 'Restricted' },
+        ],
+      },
+    };
+  }
+
+  const practice = getMatterType(matter);
+  const stage = matter.stage || matter.status || 'Active';
+  const nextAction = matter.nextAction || matter.nextStep || matter.action || 'Review matter posture';
+  const deadline = compactDate(matter.deadline || matter.nextDeadline || matter.trialDate || matter.updatedAt, 'Next review');
+  const riskTone = getRiskTone(matter);
+  const title = matter.title || 'Untitled matter';
+  const shortTitle = matter.shortTitle || title;
+  return {
+    id: matter.id,
+    title,
+    shortTitle,
+    client: matter.client || matter.clientName || 'Client',
+    practice,
+    forum: matter.court || matter.forum || firmName,
+    stage,
+    status: matter.status || 'Active',
+    risk: matter.risk || getRiskLabel(riskTone),
+    riskTone,
+    deadline,
+    nextAction,
+    value: matter.value || matter.feeStructure || 'Matter value',
+    agent: matter.agent || `${practice} pod`,
+    summary: matter.summary || matter.description || `${practice} matter in ${stage}. NemoC is watching deadlines, documents, client posture, work, and billing in one command thread.`,
+    workflow: Array.isArray(matter.workflow) && matter.workflow.length ? matter.workflow : DEFAULT_WORKFLOW,
+    activeStep: Math.min(3, DEFAULT_WORKFLOW.length - 1),
+    metrics: [
+      { label: 'Open tasks', value: String(matter.openTasks || matter.tasks?.length || 0) },
+      { label: 'Documents', value: String(matter.documents?.length || 0) },
+      { label: 'Value', value: matter.value || (matter.rate ? `$${matter.rate}` : 'Tracked') },
+    ],
+    prompts: matter.prompts || [
+      `Summarize ${practice.toLowerCase()} posture`,
+      `Draft ${nextAction.toLowerCase()}`,
+      'Prepare client update',
+    ],
+    layers: {
+      timeline: [
+        { title: nextAction, meta: `Due ${deadline}`, state: riskTone === 'danger' ? 'urgent' : 'pending' },
+        { title: 'Matter status review', meta: stage, state: 'pending' },
+        { title: 'Ethical wall check', meta: 'Active', state: 'done' },
+      ],
+      work: [
+        { title: nextAction, owner: 'Attorney', time: '1.0h', state: 'In progress' },
+        { title: 'Update matter notes', owner: 'Associate', time: '0.5h', state: 'Queued' },
+        { title: 'Partner posture review', owner: 'Partner', time: '0.3h', state: 'Needs review' },
+      ],
+      documents: [
+        { title: `${title} workspace file`, type: 'Matter file', status: 'Current' },
+        { title: 'Client intake packet', type: 'Intake', status: 'Indexed' },
+        { title: 'Attorney work product', type: 'Protected', status: 'Review' },
+      ],
+      billing: [
+        { title: 'Matter billing posture', amount: matter.feeStructure || 'Hourly', status: 'Tracked' },
+        { title: 'Unbilled work review', amount: '$0.00', status: 'Ready' },
+        { title: 'Trust balance check', amount: 'Protected', status: 'Active' },
+      ],
+      client: [
+        { title: 'Client portal', meta: matter.portalProvisioned ? 'Provisioned' : 'Ready to provision', state: 'Open' },
+        { title: 'Client update', meta: 'Attorney review required', state: 'Restricted' },
+        { title: 'Intake facts', meta: matter.client || 'Client', state: 'Current' },
+      ],
+    },
+  };
+}
+
+function buildInitialMessages(commandMatter) {
+  return [
+    {
+      id: `${commandMatter.id}-intro`,
+      role: 'assistant',
+      label: 'NemoC Practice OS',
+      content: 'I pulled the active matter context, deadlines, open work, client posture, documents, and billing signals into one command thread.',
+    },
+    {
+      id: `${commandMatter.id}-pod`,
+      role: 'assistant',
+      label: commandMatter.agent,
+      content: `${commandMatter.shortTitle} is in ${commandMatter.stage}. ${commandMatter.nextAction} is the next pressure point, with privilege, billing, and client communication checks attached.`,
+    },
+  ];
+}
+
+function buildAssistantReply(matter, activeLayer, text) {
+  const layer = COMMAND_LAYER_ITEMS.find(item => item.id === activeLayer)?.label || 'matter';
+  const firstTask = matter.layers[activeLayer]?.[0]?.title || matter.nextAction;
+  return `For ${matter.shortTitle}, I would handle ${firstTask.toLowerCase()} first. I will keep the ${layer.toLowerCase()} layer tied to ${matter.practice}, ${matter.stage.toLowerCase()}, and the ${matter.deadline} deadline. Your note was: "${text}".`;
+}
+
+function getStateIcon(state) {
+  const normalized = String(state || '').toLowerCase();
+  if (['done', 'complete', 'paid', 'captured', 'recognized', 'current', 'ready', 'active'].includes(normalized)) return CheckCircle;
+  if (['urgent', 'restricted', 'partner only', 'protected'].includes(normalized)) return ShieldCheck;
+  return Circle;
 }
 
 function buildPageSummary(currentPage, activeMatter, firm) {
@@ -74,6 +262,9 @@ export default function CommandDashboardLayout({
   const [showSearch, setShowSearch] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isInspectorOpen, setIsInspectorOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 880);
+  const [activeLayer, setActiveLayer] = useState('timeline');
+  const [composer, setComposer] = useState('');
+  const [threadLog, setThreadLog] = useState({ matterId: null, messages: [] });
 
   useEffect(() => {
     if (!firmId) return undefined;
@@ -89,6 +280,17 @@ export default function CommandDashboardLayout({
   const activeMatterId = getMatterIdFromPath(location.pathname);
   const activeMatter = matters.find(matter => matter.id === activeMatterId) || null;
   const pageSummary = buildPageSummary(currentPage, activeMatter, firm);
+  const activeAgentsCount = agents?.activeAgents?.length || 0;
+  const commandMatter = useMemo(() => buildCommandMatter(
+    activeMatter || (location.pathname === '/dashboard' ? matters[0] : null),
+    currentPage,
+    firm,
+    user,
+    { matters: matters.length, agents: activeAgentsCount }
+  ), [activeAgentsCount, activeMatter, currentPage, firm, location.pathname, matters, user]);
+  const shouldRenderCommandCanvas = location.pathname === '/dashboard' || Boolean(activeMatter);
+  const activeLayerData = commandMatter.layers[activeLayer] || commandMatter.layers.timeline;
+  const threadMessages = threadLog.matterId === commandMatter.id ? threadLog.messages : buildInitialMessages(commandMatter);
 
   const visibleMatters = useMemo(() => {
     const normalizedQuery = matterQuery.trim().toLowerCase();
@@ -129,7 +331,34 @@ export default function CommandDashboardLayout({
     setSearchQuery('');
   };
 
-  const activeAgentsCount = agents?.activeAgents?.length || 0;
+  const handlePromptSelect = (prompt) => {
+    setComposer(prompt);
+  };
+
+  const handleSendCommand = () => {
+    const text = composer.trim();
+    if (!text) return;
+    const baseMessages = threadLog.matterId === commandMatter.id ? threadLog.messages : buildInitialMessages(commandMatter);
+    setThreadLog({
+      matterId: commandMatter.id,
+      messages: [
+        ...baseMessages,
+        {
+          id: `user-${Date.now()}`,
+          role: 'user',
+          label: user?.displayName || 'Managing attorney',
+          content: text,
+        },
+        {
+          id: `assistant-${Date.now()}`,
+          role: 'assistant',
+          label: commandMatter.agent,
+          content: buildAssistantReply(commandMatter, activeLayer, text),
+        },
+      ],
+    });
+    setComposer('');
+  };
 
   return (
     <main className="command-dashboard">
@@ -247,7 +476,7 @@ export default function CommandDashboardLayout({
             <button
               key={matter.id}
               type="button"
-              className={matter.id === activeMatterId ? 'is-selected' : ''}
+              className={matter.id === (activeMatterId || commandMatter.id) ? 'is-selected' : ''}
               title={matter.title || 'Untitled matter'}
               onClick={() => { navigate(`/dashboard/matters/${matter.id}`); setIsSidebarOpen(false); }}
             >
@@ -278,123 +507,303 @@ export default function CommandDashboardLayout({
       </aside>
 
           <section className="command-main">
-        <section className="command-workspace">
-          <div className="command-hero">
-            <div>
-              <div className="command-eyebrow">
-                <MessageSquare size={15} />
-                <span>Dashboard / {currentPage}</span>
+            <section className={`command-workspace ${shouldRenderCommandCanvas ? 'is-command-canvas' : ''}`}>
+              {shouldRenderCommandCanvas ? (
+                <>
+                  <div className="command-matter-hero">
+                    <div className="command-matter-hero-top">
+                      <div>
+                        <div className="command-eyebrow">
+                          <Briefcase size={15} />
+                          <span>{commandMatter.practice}</span>
+                        </div>
+                        <h1>{commandMatter.title}</h1>
+                        <p>{commandMatter.summary}</p>
+                      </div>
+                      <button type="button" className="command-context-toggle" onClick={() => setIsInspectorOpen(value => !value)}>
+                        <Layers size={17} />
+                        <span>{isInspectorOpen ? 'Hide context' : 'Show context'}</span>
+                      </button>
+                    </div>
+
+                    <div className="command-meta-grid">
+                      <article>
+                        <span>Client</span>
+                        <strong>{commandMatter.client}</strong>
+                      </article>
+                      <article>
+                        <span>Stage</span>
+                        <strong>{commandMatter.stage}</strong>
+                      </article>
+                      <article>
+                        <span>Next</span>
+                        <strong>{commandMatter.nextAction}</strong>
+                      </article>
+                      <article>
+                        <span>Deadline</span>
+                        <strong>{commandMatter.deadline}</strong>
+                      </article>
+                    </div>
+                  </div>
+
+                  <div className="command-workflow-strip" aria-label="Matter workflow">
+                    {commandMatter.workflow.map((step, index) => (
+                      <div className={`command-workflow-step ${index <= commandMatter.activeStep ? 'is-complete' : ''}`} key={step}>
+                        <span>{index + 1}</span>
+                        <strong>{step}</strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="command-layer-tabs" aria-label="Matter layers">
+                    {COMMAND_LAYER_ITEMS.map(layer => (
+                      <button
+                        className={`command-layer-tab ${activeLayer === layer.id ? 'is-active' : ''}`}
+                        type="button"
+                        key={layer.id}
+                        onClick={() => setActiveLayer(layer.id)}
+                      >
+                        <layer.Icon size={16} />
+                        <span>{layer.label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="command-thread-board">
+                    <div className="command-message-stack" aria-live="polite">
+                      {threadMessages.map(message => (
+                        <article className={`command-thread-message ${message.role}`} key={message.id}>
+                          <div className="command-message-avatar">
+                            {message.role === 'assistant' ? <Bot size={17} /> : <Users size={17} />}
+                          </div>
+                          <div>
+                            <span>{message.label}</span>
+                            <p>{message.content}</p>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <div className="command-layer-board" aria-label="Selected matter layer">
+                      <div className="command-layer-board-head">
+                        <div>
+                          <span>{COMMAND_LAYER_ITEMS.find(layer => layer.id === activeLayer)?.label}</span>
+                          <strong>{commandMatter.nextAction}</strong>
+                        </div>
+                        <button type="button" aria-label="More actions">
+                          <MoreHorizontal size={18} />
+                        </button>
+                      </div>
+
+                      <div className="command-layer-card-grid">
+                        {activeLayerData.map(item => {
+                          const StateIcon = getStateIcon(item.state || item.status);
+                          return (
+                            <article className="command-layer-card" key={`${activeLayer}-${item.title}`}>
+                              <StateIcon size={18} />
+                              <div>
+                                <strong>{item.title}</strong>
+                                <span>{item.meta || item.owner || item.type || item.amount}</span>
+                              </div>
+                              <em>{item.state || item.status}</em>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="command-prompt-row" aria-label="Suggested commands">
+                    {commandMatter.prompts.map(prompt => (
+                      <button type="button" key={prompt} onClick={() => handlePromptSelect(prompt)}>
+                        <Sparkles size={15} />
+                        <span>{prompt}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="command-composer">
+                    <button type="button" aria-label="Attach file">
+                      <Upload size={18} />
+                    </button>
+                    <textarea
+                      value={composer}
+                      onChange={event => setComposer(event.target.value)}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          handleSendCommand();
+                        }
+                      }}
+                      placeholder={`Message ${commandMatter.agent}`}
+                      aria-label="Matter command"
+                    />
+                    <button className="command-send-button" type="button" onClick={handleSendCommand} aria-label="Send command">
+                      <Send size={18} />
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="command-hero">
+                    <div>
+                      <div className="command-eyebrow">
+                        <MessageSquare size={15} />
+                        <span>Dashboard / {currentPage}</span>
+                      </div>
+                      <h1>{activeMatter?.title || currentPage}</h1>
+                      <p>{pageSummary}</p>
+                    </div>
+                    <button type="button" className="command-context-toggle" onClick={() => setIsInspectorOpen(value => !value)}>
+                      <Layers size={17} />
+                      <span>{isInspectorOpen ? 'Hide context' : 'Show context'}</span>
+                    </button>
+                  </div>
+
+                  <div className="command-meta-grid">
+                    <article>
+                      <span>Firm</span>
+                      <strong>{getFirmName(firm)}</strong>
+                    </article>
+                    <article>
+                      <span>Matters</span>
+                      <strong>{matters.length}</strong>
+                    </article>
+                    <article>
+                      <span>Agents</span>
+                      <strong>{activeAgentsCount}</strong>
+                    </article>
+                    <article>
+                      <span>Mode</span>
+                      <strong>Command</strong>
+                    </article>
+                  </div>
+
+                  <div className="command-route-surface">
+                    <Outlet />
+                  </div>
+                </>
+              )}
+            </section>
+          </section>
+
+          <aside className={`command-inspector ${isInspectorOpen ? 'is-open' : ''}`}>
+            <div className="command-inspector-head">
+              <div>
+                <span>{shouldRenderCommandCanvas ? commandMatter.status : (activeMatter ? activeMatter.status || 'Active' : 'Live context')}</span>
+                <h2>{shouldRenderCommandCanvas ? commandMatter.shortTitle : (activeMatter?.title || getFirmName(firm))}</h2>
               </div>
-              <h1>{activeMatter?.title || currentPage}</h1>
-              <p>{pageSummary}</p>
+              <button type="button" onClick={() => setIsInspectorOpen(false)} aria-label="Close context">
+                <X size={18} />
+              </button>
             </div>
-            <button type="button" className="command-context-toggle" onClick={() => setIsInspectorOpen(value => !value)}>
-              <Layers size={17} />
-              <span>{isInspectorOpen ? 'Hide context' : 'Show context'}</span>
+
+            {shouldRenderCommandCanvas ? (
+              <>
+                <section className="command-risk-panel">
+                  <div className={`command-risk-badge ${commandMatter.riskTone}`}>
+                    <ShieldCheck size={16} />
+                    <span>{commandMatter.risk} risk</span>
+                  </div>
+                  <p>{commandMatter.forum}</p>
+                </section>
+
+                <div className="command-metric-grid">
+                  {commandMatter.metrics.map(metric => (
+                    <article key={metric.label}>
+                      <span>{metric.label}</span>
+                      <strong>{metric.value}</strong>
+                    </article>
+                  ))}
+                </div>
+
+                <section className="command-context-card">
+                  <div className="command-section-title">
+                    <Clock size={16} />
+                    <span>Pressure points</span>
+                  </div>
+                  {commandMatter.layers.timeline.map(item => (
+                    <div className="command-compact-row" key={item.title}>
+                      <span className={`command-risk-dot ${item.state === 'urgent' ? 'danger' : 'calm'}`} />
+                      <div>
+                        <strong>{item.title}</strong>
+                        <small>{item.meta}</small>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+              </>
+            ) : (
+              <>
+                <section className="command-context-card">
+                  <div className="command-section-title">
+                    <Briefcase size={16} />
+                    <span>{activeMatter ? 'Matter posture' : 'Workspace posture'}</span>
+                  </div>
+                  <div className="command-context-lines">
+                    <p><strong>Client</strong><span>{activeMatter?.client || user?.displayName || 'Firm user'}</span></p>
+                    <p><strong>Practice</strong><span>{activeMatter ? getMatterType(activeMatter) : 'All practice areas'}</span></p>
+                    <p><strong>Stage</strong><span>{activeMatter?.stage || activeMatter?.status || currentPage}</span></p>
+                  </div>
+                </section>
+
+                <section className="command-context-card">
+                  <div className="command-section-title">
+                    <Clock size={16} />
+                    <span>Quick layers</span>
+                  </div>
+                  <div className="command-layer-links">
+                    <button type="button" onClick={() => navigate(activeMatter ? `/dashboard/matters/${activeMatter.id}` : '/dashboard/matters')}>
+                      <MessageSquare size={15} />
+                      <span>Workspace</span>
+                    </button>
+                    <button type="button" onClick={() => navigate('/dashboard/matters')}>
+                      <Briefcase size={15} />
+                      <span>Matters</span>
+                    </button>
+                    <button type="button" onClick={() => navigate('/dashboard/client-portal')}>
+                      <Users size={15} />
+                      <span>Client</span>
+                    </button>
+                    <button type="button" onClick={() => navigate('/dashboard/billing')}>
+                      <DollarSign size={15} />
+                      <span>Billing</span>
+                    </button>
+                  </div>
+                </section>
+              </>
+            )}
+
+            <section className="command-context-card">
+              <div className="command-section-title">
+                <Gavel size={16} />
+                <span>Authority</span>
+              </div>
+              <div className="command-authority-list">
+                <span><Lock size={14} /> Attorney review required</span>
+                <span><ShieldCheck size={14} /> Privilege protected</span>
+                <span><CheckCircle size={14} /> Audit trail active</span>
+              </div>
+            </section>
+
+            <section className="command-context-card">
+              <div className="command-section-title">
+                <Bot size={16} />
+                <span>Assigned pod</span>
+              </div>
+              <div className="command-pod-list">
+                <span>Partner Agent</span>
+                <span>Associate Agent</span>
+                <span>Paralegal Agent</span>
+                <span>Billing Agent</span>
+              </div>
+            </section>
+
+            <button className="command-inspector-action" type="button" onClick={() => navigate('/dashboard/security')}>
+              <FileText size={16} />
+              <span>Open audit trail</span>
+              <MoreHorizontal size={16} />
             </button>
-          </div>
-
-          <div className="command-meta-grid">
-            <article>
-              <span>Firm</span>
-              <strong>{getFirmName(firm)}</strong>
-            </article>
-            <article>
-              <span>Matters</span>
-              <strong>{matters.length}</strong>
-            </article>
-            <article>
-              <span>Agents</span>
-              <strong>{activeAgentsCount}</strong>
-            </article>
-            <article>
-              <span>Mode</span>
-              <strong>Command</strong>
-            </article>
-          </div>
-
-          <div className="command-route-surface">
-            <Outlet />
-          </div>
-        </section>
-      </section>
-
-      <aside className={`command-inspector ${isInspectorOpen ? 'is-open' : ''}`}>
-        <div className="command-inspector-head">
-          <span>{activeMatter ? activeMatter.status || 'Active' : 'Live context'}</span>
-          <h2>{activeMatter?.title || getFirmName(firm)}</h2>
-          <button type="button" onClick={() => setIsInspectorOpen(false)} aria-label="Close context">
-            <X size={18} />
-          </button>
-        </div>
-
-        <section className="command-context-card">
-          <div className="command-section-title">
-            <Briefcase size={16} />
-            <span>{activeMatter ? 'Matter posture' : 'Workspace posture'}</span>
-          </div>
-          <div className="command-context-lines">
-            <p><strong>Client</strong><span>{activeMatter?.client || user?.displayName || 'Firm user'}</span></p>
-            <p><strong>Practice</strong><span>{activeMatter ? getMatterType(activeMatter) : 'All practice areas'}</span></p>
-            <p><strong>Stage</strong><span>{activeMatter?.stage || activeMatter?.status || currentPage}</span></p>
-          </div>
-        </section>
-
-        <section className="command-context-card">
-          <div className="command-section-title">
-            <Clock size={16} />
-            <span>Quick layers</span>
-          </div>
-          <div className="command-layer-links">
-            <button type="button" onClick={() => navigate(activeMatter ? `/dashboard/matters/${activeMatter.id}` : '/dashboard/matters')}>
-              <MessageSquare size={15} />
-              <span>Workspace</span>
-            </button>
-            <button type="button" onClick={() => navigate('/dashboard/matters')}>
-              <Briefcase size={15} />
-              <span>Matters</span>
-            </button>
-            <button type="button" onClick={() => navigate('/dashboard/client-portal')}>
-              <Users size={15} />
-              <span>Client</span>
-            </button>
-            <button type="button" onClick={() => navigate('/dashboard/billing')}>
-              <DollarSign size={15} />
-              <span>Billing</span>
-            </button>
-          </div>
-        </section>
-
-        <section className="command-context-card">
-          <div className="command-section-title">
-            <Gavel size={16} />
-            <span>Authority</span>
-          </div>
-          <div className="command-authority-list">
-            <span><Lock size={14} /> Attorney review</span>
-            <span><ShieldCheck size={14} /> Privilege protected</span>
-            <span><CheckCircle size={14} /> Audit active</span>
-          </div>
-        </section>
-
-        <section className="command-context-card">
-          <div className="command-section-title">
-            <Bot size={16} />
-            <span>Agent pod</span>
-          </div>
-          <div className="command-pod-list">
-            <span>Partner</span>
-            <span>Associate</span>
-            <span>Paralegal</span>
-            <span>Billing</span>
-          </div>
-        </section>
-
-        <button className="command-inspector-action" type="button" onClick={() => navigate('/dashboard/security')}>
-          <FileText size={16} />
-          <span>Open audit trail</span>
-          <MoreHorizontal size={16} />
-        </button>
           </aside>
         </div>
       </div>
