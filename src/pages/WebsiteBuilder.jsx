@@ -134,6 +134,43 @@ function buildAnalysisReport({ url, domain, liveData = null, error = '', autoSee
   };
 }
 
+function normalizeReceptionistCapabilities(capabilities = []) {
+  const supported = new Set(['text', 'voice', 'scheduling', 'documents']);
+  const normalized = capabilities
+    .map(item => String(item).toLowerCase())
+    .map(item => {
+      if (item.includes('voice')) return 'voice';
+      if (item.includes('schedul') || item.includes('appointment')) return 'scheduling';
+      if (item.includes('document') || item.includes('upload')) return 'documents';
+      if (item.includes('chat') || item.includes('text') || item.includes('message')) return 'text';
+      return item;
+    })
+    .filter(item => supported.has(item));
+
+  return [...new Set(normalized.length ? normalized : ['text', 'voice', 'scheduling', 'documents'])];
+}
+
+function buildReceptionistAgent(content, seed = {}) {
+  const seededAgent = seed.chatAgent || seed.receptionist || {};
+  const firmName = content.firmName || seed.firmName || 'this firm';
+  const practiceNames = content.practiceAreaNames || seed.practiceAreas || [];
+  const primaryPractice = practiceNames[0] || 'legal services';
+  const secondaryPractice = practiceNames[1] ? ` and ${practiceNames[1]}` : '';
+
+  return {
+    enabled: seededAgent.enabled !== false,
+    name: seededAgent.name || `${firmName} Reception`,
+    role: seededAgent.role || 'AI receptionist',
+    greeting: seededAgent.greeting || `Hello, this is ${firmName}. I can help with ${primaryPractice}${secondaryPractice}, intake, scheduling, or connecting you with the firm.`,
+    primaryColor: seededAgent.primaryColor || content.colors?.primary || '#1a365d',
+    capabilities: normalizeReceptionistCapabilities(seededAgent.capabilities || []),
+    avatar: seededAgent.avatar || 'bot',
+    position: seededAgent.position || 'right',
+    voiceEnabled: seededAgent.voiceEnabled !== false,
+    chatEnabled: seededAgent.chatEnabled !== false,
+  };
+}
+
 export default function WebsiteBuilder() {
   const [url, setUrl] = useState('');
   const [analyzing, setAnalyzing] = useState(false);
@@ -192,15 +229,7 @@ export default function WebsiteBuilder() {
       practiceAreas: content.practiceAreaNames || [],
       practiceAreasWithDesc: practiceAreasWithDesc || [],
       colors: { ...content.colors },
-      chatAgent: {
-        enabled: true,
-        name: `${content.firmName || 'NemoC'} AI`,
-        greeting: `Hello! I'm the AI assistant for ${content.firmName || 'this firm'}. I can answer questions about our services, schedule consultations, or connect you with an attorney.`,
-        primaryColor: (content.colors && content.colors.primary) || '#1a365d',
-        capabilities: ['Text-to-Legal-Advice', 'Intake Scheduling', 'Conflict Checks', 'Case Status'],
-        avatar: 'bot',
-        position: 'right',
-      },
+      chatAgent: buildReceptionistAgent(content, seed || {}),
     };
 
     setConfig(builtConfig);
@@ -208,7 +237,7 @@ export default function WebsiteBuilder() {
   }, []);
 
   // ═══ PERSISTENCE: Only analyze first visit, restore from cache after ═══
-  const { firm } = useFirm();
+  const { firm, websiteRedesign } = useFirm();
   const hasAutoSeeded = useRef(false);
 
   // Save built site to localStorage whenever config + report change
@@ -222,7 +251,6 @@ export default function WebsiteBuilder() {
 
   useEffect(() => {
     if (hasAutoSeeded.current || report) return;
-    hasAutoSeeded.current = true;
 
     // ── Priority 0: Restore cached built site ──
     try {
@@ -230,6 +258,7 @@ export default function WebsiteBuilder() {
       if (cached) {
         const { config: cachedConfig, report: cachedReport, domain: cachedDomain } = JSON.parse(cached);
         if (cachedConfig && cachedReport) {
+          hasAutoSeeded.current = true;
           setConfig(cachedConfig);
           setReport(cachedReport);
           setDomain(cachedDomain);
@@ -247,6 +276,14 @@ export default function WebsiteBuilder() {
     } catch (_e) { /* ignore */ }
 
     // ── Priority 2: Firm context from Firestore ──
+    if (!seed && websiteRedesign?.seed) {
+      seed = {
+        ...websiteRedesign.seed,
+        website: websiteRedesign.sourceUrl || websiteRedesign.seed.website,
+        chatAgent: websiteRedesign.chatReceptionist || websiteRedesign.seed.chatAgent,
+      };
+    }
+
     if (!seed && firm?.firmWebsite) {
       seed = {
         firmName: firm.firmName,
@@ -254,10 +291,12 @@ export default function WebsiteBuilder() {
         city: '',
         stateBar: firm.stateBar || '',
         website: firm.firmWebsite,
+        practiceAreas: firm.practiceAreas || [],
       };
     }
 
     if (!seed) return;
+    hasAutoSeeded.current = true;
 
     // Determine domain
     const siteUrl = seed.website || '';
@@ -353,18 +392,13 @@ export default function WebsiteBuilder() {
             attorneys: content.attorneys.map(a => ({ name: a.name, title: a.title, initials: a.initials, bio: a.bio || '' })),
             practiceAreas: content.practiceAreaNames, practiceAreasWithDesc,
             colors: { ...content.colors },
-            chatAgent: {
-              name: `${content.firmName} AI`,
-              greeting: `Hello! I'm the AI assistant for ${content.firmName}. I can answer questions about our ${content.practiceAreaNames[0]} and ${content.practiceAreaNames[1]} services, schedule consultations, or connect you with an attorney.`,
-              primaryColor: content.colors.primary,
-              capabilities: ['Chat', 'Schedule', 'FAQ'],
-            },
+            chatAgent: buildReceptionistAgent(content, seed),
           };
           localStorage.setItem('nemoc_built_site', JSON.stringify({ config: builtConfig, report: analysisReport, domain: d, savedAt: Date.now() }));
         } catch (_e) { /* ignore */ }
       }, 100);
     })();
-  }, [firm, initConfig, report]);
+  }, [firm, websiteRedesign, initConfig, report]);
 
   const updateConfig = (key, value) => { setConfig(prev => ({ ...prev, [key]: value })); setSaved(false); };
   const updateColors = (colors) => {

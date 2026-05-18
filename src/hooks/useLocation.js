@@ -32,8 +32,8 @@ export function useLocation() {
         sessionStorage.setItem('nemocLocation', JSON.stringify(locData));
         setLocation({ ...locData, loading: false });
 
-      } catch (err) {
-        console.warn('Geolocation failed, falling back to defaults:', err);
+      } catch (_err) {
+        console.info('Geolocation unavailable; using default regional copy.');
         setLocation({
           loading: false,
           isUS: true,

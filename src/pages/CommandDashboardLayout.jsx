@@ -73,7 +73,7 @@ export default function CommandDashboardLayout({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isInspectorOpen, setIsInspectorOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 1020);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 880);
 
   useEffect(() => {
     if (!firmId) return undefined;
@@ -132,7 +132,7 @@ export default function CommandDashboardLayout({
   const activeAgentsCount = agents?.activeAgents?.length || 0;
 
   return (
-    <div className="command-dashboard">
+    <main className="command-dashboard">
       {showSearch && (
         <div className="command-search-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setShowSearch(false); }}>
           <div className="command-search-dialog">
@@ -161,7 +161,36 @@ export default function CommandDashboardLayout({
         </div>
       )}
 
-      <aside className={`command-sidebar ${isSidebarOpen ? 'is-open' : ''}`}>
+      <div className={`command-window ${isInspectorOpen ? 'has-inspector' : 'no-inspector'}`}>
+        <header className="command-titlebar">
+          <div className="command-traffic" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <button className="command-mobile-menu" type="button" onClick={() => setIsSidebarOpen(true)} aria-label="Open navigation">
+            <Menu size={19} />
+          </button>
+          <div className="command-app-title">
+            <Scale size={16} />
+            <span>NemoC LAW AI</span>
+          </div>
+          <div className="command-title-actions">
+            <DashboardModeToggle value={interfaceMode} onChange={onInterfaceModeChange} className="command-mode-toggle" />
+            <button type="button" onClick={() => setShowSearch(true)} title="Search" aria-label="Search">
+              <Search size={17} />
+            </button>
+            <button type="button" onClick={() => navigate('/dashboard/security')} title="Notifications" aria-label="Notifications">
+              <Bell size={17} />
+            </button>
+            <button type="button" onClick={() => navigate('/dashboard/settings')} title="Settings" aria-label="Settings">
+              <Settings size={17} />
+            </button>
+          </div>
+        </header>
+
+        <div className="command-shell">
+          <aside className={`command-sidebar ${isSidebarOpen ? 'is-open' : ''}`}>
         <div className="command-mobile-head">
           <span>Workspace</span>
           <button type="button" onClick={() => setIsSidebarOpen(false)} aria-label="Close navigation">
@@ -169,7 +198,7 @@ export default function CommandDashboardLayout({
           </button>
         </div>
 
-        <button className="command-firm-chip" type="button" onClick={() => { navigate('/dashboard'); setIsSidebarOpen(false); }}>
+        <button className="command-firm-chip" type="button" onClick={() => { navigate('/dashboard'); setIsSidebarOpen(false); }} title={getFirmName(firm)}>
           <img src="/logos/claw-48-transparent.png" alt="" />
           <span>
             <strong>{getFirmName(firm)}</strong>
@@ -177,14 +206,14 @@ export default function CommandDashboardLayout({
           </span>
         </button>
 
-        <button className="command-new-button" type="button" onClick={() => { navigate('/dashboard/matters'); setIsSidebarOpen(false); }}>
+        <button className="command-new-button" type="button" onClick={() => { navigate('/dashboard/matters'); setIsSidebarOpen(false); }} title="New matter command">
           <Plus size={17} />
           <span>New matter command</span>
         </button>
 
         <nav className="command-nav" aria-label="Command dashboard navigation">
           {mainNavItems.map(item => (
-            <NavLink key={item.path} to={item.path} end={item.exact} className={({ isActive }) => isActive ? 'is-active' : ''} onClick={() => setIsSidebarOpen(false)}>
+            <NavLink key={item.path} to={item.path} end={item.exact} className={({ isActive }) => isActive ? 'is-active' : ''} onClick={() => setIsSidebarOpen(false)} title={item.label}>
               <item.Icon size={17} />
               <span>{item.label}</span>
               {item.badge && <em>{item.path === '/dashboard/agents' ? (activeAgentsCount || item.badge) : item.badge}</em>}
@@ -195,7 +224,7 @@ export default function CommandDashboardLayout({
         {manageNavItems.length > 0 && (
           <nav className="command-nav command-manage-nav" aria-label="Command dashboard management">
             {manageNavItems.map(item => (
-              <NavLink key={item.path} to={item.path} className={({ isActive }) => isActive ? 'is-active' : ''} onClick={() => setIsSidebarOpen(false)}>
+              <NavLink key={item.path} to={item.path} className={({ isActive }) => isActive ? 'is-active' : ''} onClick={() => setIsSidebarOpen(false)} title={item.label}>
                 <item.Icon size={17} />
                 <span>{item.label}</span>
               </NavLink>
@@ -219,6 +248,7 @@ export default function CommandDashboardLayout({
               key={matter.id}
               type="button"
               className={matter.id === activeMatterId ? 'is-selected' : ''}
+              title={matter.title || 'Untitled matter'}
               onClick={() => { navigate(`/dashboard/matters/${matter.id}`); setIsSidebarOpen(false); }}
             >
               <span className={`command-risk-dot ${matter.status === 'Closed' ? 'muted' : 'active'}`} />
@@ -247,34 +277,7 @@ export default function CommandDashboardLayout({
         </div>
       </aside>
 
-      <main className="command-main">
-        <header className="command-titlebar">
-          <div className="command-traffic" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <button className="command-mobile-menu" type="button" onClick={() => setIsSidebarOpen(true)} aria-label="Open navigation">
-            <Menu size={19} />
-          </button>
-          <div className="command-app-title">
-            <Scale size={16} />
-            <span>NemoC LAW AI</span>
-          </div>
-          <div className="command-title-actions">
-            <DashboardModeToggle value={interfaceMode} onChange={onInterfaceModeChange} className="command-mode-toggle" />
-            <button type="button" onClick={() => setShowSearch(true)} title="Search">
-              <Search size={17} />
-            </button>
-            <button type="button" onClick={() => navigate('/dashboard/security')} title="Notifications">
-              <Bell size={17} />
-            </button>
-            <button type="button" onClick={() => navigate('/dashboard/settings')} title="Settings">
-              <Settings size={17} />
-            </button>
-          </div>
-        </header>
-
+          <section className="command-main">
         <section className="command-workspace">
           <div className="command-hero">
             <div>
@@ -314,7 +317,7 @@ export default function CommandDashboardLayout({
             <Outlet />
           </div>
         </section>
-      </main>
+      </section>
 
       <aside className={`command-inspector ${isInspectorOpen ? 'is-open' : ''}`}>
         <div className="command-inspector-head">
@@ -392,7 +395,9 @@ export default function CommandDashboardLayout({
           <span>Open audit trail</span>
           <MoreHorizontal size={16} />
         </button>
-      </aside>
-    </div>
+          </aside>
+        </div>
+      </div>
+    </main>
   );
 }

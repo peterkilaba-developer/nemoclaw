@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { completeOnboarding } from '../lib/firestore';
+import { scrapeFirmWebsite } from '../lib/prospectService';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS } from '../lib/agentHierarchy';
@@ -54,6 +55,111 @@ const PRACTICE_AREA_GROUPS = [
 
 // Flat list for backward compat
 const PRACTICE_AREAS = PRACTICE_AREA_GROUPS.flatMap(g => g.areas);
+
+const PRACTICE_AREA_ALIASES = [
+  { area: 'Personal Injury', terms: ['personal injury', 'car accident', 'auto accident', 'truck accident', 'slip and fall', 'injury claim'] },
+  { area: 'Wrongful Death', terms: ['wrongful death'] },
+  { area: 'Medical Malpractice', terms: ['medical malpractice', 'medical negligence'] },
+  { area: 'Nursing Home Abuse', terms: ['nursing home abuse', 'elder abuse'] },
+  { area: 'Workers\' Compensation', terms: ['workers compensation', 'workers comp', 'work injury', 'workplace injury'] },
+  { area: 'Criminal Defense', terms: ['criminal defense', 'criminal law', 'defense lawyer', 'felony', 'misdemeanor'] },
+  { area: 'DUI / DWI', terms: ['dui', 'dwi', 'drunk driving', 'impaired driving'] },
+  { area: 'Family Law', terms: ['family law', 'custody', 'child support', 'spousal support'] },
+  { area: 'Divorce & Separation', terms: ['divorce', 'separation', 'dissolution'] },
+  { area: 'Child Custody & Support', terms: ['child custody', 'child support'] },
+  { area: 'Immigration', terms: ['immigration', 'visa', 'green card', 'deportation', 'asylum'] },
+  { area: 'Estate Planning & Probate', terms: ['estate planning', 'probate', 'estate administration'] },
+  { area: 'Trusts & Wills', terms: ['trusts', 'wills', 'will contest', 'living trust'] },
+  { area: 'Bankruptcy (Personal)', terms: ['personal bankruptcy', 'chapter 7', 'chapter 13', 'debt relief'] },
+  { area: 'Bankruptcy (Business)', terms: ['business bankruptcy', 'chapter 11', 'reorganization'] },
+  { area: 'Employment (Employee Side)', terms: ['employee rights', 'wrongful termination', 'workplace discrimination', 'unpaid wages'] },
+  { area: 'Employment (Employer Side)', terms: ['employment defense', 'employer counsel', 'labor and employment'] },
+  { area: 'Business Formation & LLC', terms: ['business formation', 'llc formation', 'startup counsel'] },
+  { area: 'Contracts & Agreements', terms: ['contract law', 'contracts', 'agreements'] },
+  { area: 'Commercial Litigation', terms: ['commercial litigation', 'business litigation'] },
+  { area: 'Corporate / M&A', terms: ['corporate law', 'mergers and acquisitions', 'm&a'] },
+  { area: 'Real Estate (Residential)', terms: ['residential real estate', 'home closing'] },
+  { area: 'Real Estate (Commercial)', terms: ['commercial real estate'] },
+  { area: 'Landlord-Tenant (Tenant Side)', terms: ['tenant rights', 'eviction defense'] },
+  { area: 'Landlord-Tenant (Landlord Side)', terms: ['landlord tenant', 'landlord representation', 'evictions'] },
+  { area: 'Intellectual Property / Patent', terms: ['intellectual property', 'patent', 'trademark', 'copyright'] },
+  { area: 'Tax (Individual)', terms: ['individual tax', 'irs tax', 'tax controversy'] },
+  { area: 'Tax (Business)', terms: ['business tax', 'corporate tax'] },
+  { area: 'Civil Rights', terms: ['civil rights', 'police misconduct', 'constitutional rights'] },
+  { area: 'Consumer Protection', terms: ['consumer protection', 'lemon law', 'fair debt'] },
+  { area: 'Insurance Claims', terms: ['insurance claim', 'bad faith insurance'] },
+  { area: 'Construction Law', terms: ['construction law', 'mechanic lien'] },
+  { area: 'Healthcare & HIPAA', terms: ['healthcare law', 'hipaa'] },
+  { area: 'Cybersecurity & Data Privacy', terms: ['data privacy', 'cybersecurity', 'privacy law'] },
+  { area: 'White Collar Crime', terms: ['white collar', 'fraud defense', 'government investigation'] },
+];
+
+function normalizePracticeText(value = '') {
+  return String(value)
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\b(law|lawyer|lawyers|attorney|attorneys|practice|practices|services|service)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalPracticeArea(value) {
+  const normalized = normalizePracticeText(value);
+  if (!normalized) return null;
+
+  const exact = PRACTICE_AREAS.find(area => normalizePracticeText(area) === normalized);
+  if (exact) return exact;
+
+  const contains = PRACTICE_AREAS.find(area => {
+    const areaText = normalizePracticeText(area);
+    return normalized.includes(areaText) || areaText.includes(normalized);
+  });
+  if (contains) return contains;
+
+  const alias = PRACTICE_AREA_ALIASES.find(item =>
+    item.terms.some(term => normalized.includes(normalizePracticeText(term)))
+  );
+  return alias?.area || null;
+}
+
+function normalizePracticeAreaMatches(values = []) {
+  return [...new Set(values.flatMap(value => {
+    if (!value) return [];
+    const direct = canonicalPracticeArea(value);
+    const aliases = PRACTICE_AREA_ALIASES
+      .filter(item => item.terms.some(term => normalizePracticeText(value).includes(normalizePracticeText(term))))
+      .map(item => item.area);
+    return direct ? [direct, ...aliases] : aliases;
+  }))];
+}
+
+function websiteDomain(website = '') {
+  try {
+    return new URL(website).hostname.replace(/^www\./, '');
+  } catch (_err) {
+    return String(website).replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] || 'website';
+  }
+}
+
+function buildWebsiteKnowledgeContent({ place, website, liveData, practiceAreas }) {
+  const attorneys = (liveData?.attorneys || []).map(a => [a.name, a.title].filter(Boolean).join(' - ')).filter(Boolean);
+  return [
+    `Firm Name: ${place.name || liveData?.firmName || ''}`,
+    `Google Place ID: ${place.place_id || ''}`,
+    `Website: ${website || ''}`,
+    `Address: ${place.formatted_address || liveData?.address || ''}`,
+    `Phone: ${place.formatted_phone_number || liveData?.phone || ''}`,
+    `Email: ${liveData?.email || ''}`,
+    `Detected Practice Areas: ${practiceAreas.join(', ') || 'None detected'}`,
+    `Website Title: ${liveData?.title || ''}`,
+    `Website Summary: ${liveData?.description || ''}`,
+    `Attorneys Detected: ${attorneys.join('; ') || 'None detected'}`,
+    `Pages Scraped: ${liveData?.pagesScraped || 0}`,
+    `Source: Google Places selection + NemoC website crawl`,
+    `Captured At: ${new Date().toISOString()}`,
+  ].join('\n');
+}
 
 const AGENT_NAME_SUGGESTIONS = [
   { name: 'Lexi', desc: 'Jurisdictional Logic' },
@@ -323,6 +429,8 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
   const autocompleteRef = useRef(null);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeComplete, setScrapeComplete] = useState(false);
+  const [detectedPracticeCount, setDetectedPracticeCount] = useState(0);
+  const [scrapeError, setScrapeError] = useState('');
 
   const STATE_MAP = {
     'Alabama': 'Alabama', 'Alaska': 'Alaska', 'Arizona': 'Arizona', 'Arkansas': 'Arkansas',
@@ -352,61 +460,174 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
       fields: ['name', 'formatted_address', 'address_components', 'place_id', 'formatted_phone_number', 'website', 'types'],
     });
 
-    ac.addListener('place_changed', () => {
+    ac.addListener('place_changed', async () => {
       const place = ac.getPlace();
       if (!place?.name) return;
-
-      updateData('firmName', place.name);
-      if (place.formatted_address) updateData('firmAddress', place.formatted_address);
-      if (place.place_id) updateData('placeId', place.place_id);
-      if (place.formatted_phone_number) updateData('firmPhone', place.formatted_phone_number);
-      if (place.website) {
-        updateData('firmWebsite', place.website);
-        let websiteName = place.website;
-        try { websiteName = new URL(place.website).hostname; } catch(_e) { /* intentionally ignored */ }
-        updateData('files', [{
-          name: websiteName, size: 'Website Crawl', status: 'done',
-          role: 'company-wide', category: 'Digital Footprint'
-        }]);
-
-        // Auto-scrape practice areas from website
-        setIsScraping(true);
-        setScrapeComplete(false);
-        fetch('http://localhost:8000/api/scrape-practice-areas', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: place.website })
-        })
-        .then(res => res.json())
-        .then(result => {
-          if (result.practice_areas && result.practice_areas.length > 0) {
-            setData(prev => ({
-              ...prev,
-              practiceAreas: [...new Set([...prev.practiceAreas, ...result.practice_areas])]
-            }));
-          }
-          if (result.content) {
-            setData(prev => ({
-              ...prev,
-              files: prev.files.map(f => 
-                f.name === websiteName 
-                  ? { ...f, content: result.content, size: (result.content.length / 1024).toFixed(1) + ' KB' } 
-                  : f
-              )
-            }));
-          }
-        }).catch(err => console.error('Practice area auto-detect failed:', err))
-          .finally(() => {
-            setIsScraping(false);
-            setScrapeComplete(true);
-          });
-      }
 
       const stateComponent = place.address_components?.find(c =>
         c.types.includes('administrative_area_level_1')
       );
-      if (stateComponent?.long_name && STATE_MAP[stateComponent.long_name]) {
-        updateData('stateBar', STATE_MAP[stateComponent.long_name]);
+      const stateBar = stateComponent?.long_name && STATE_MAP[stateComponent.long_name]
+        ? STATE_MAP[stateComponent.long_name]
+        : '';
+
+      const placeFields = {
+        firmName: place.name,
+        ...(place.formatted_address && { firmAddress: place.formatted_address }),
+        ...(place.place_id && { placeId: place.place_id }),
+        ...(place.formatted_phone_number && { firmPhone: place.formatted_phone_number }),
+        ...(place.website && { firmWebsite: place.website }),
+        ...(stateBar && { stateBar }),
+      };
+
+      setData(prev => ({ ...prev, ...placeFields }));
+      setDetectedPracticeCount(0);
+      setScrapeError('');
+      setScrapeComplete(false);
+
+      if (!place.website) return;
+
+      const website = place.website;
+      const domain = websiteDomain(website);
+      setIsScraping(true);
+
+      try {
+        const liveData = await scrapeFirmWebsite(website);
+        const detectedPracticeAreas = normalizePracticeAreaMatches([
+          ...(liveData?.practiceAreas || []),
+          liveData?.title,
+          liveData?.description,
+        ]);
+        const content = buildWebsiteKnowledgeContent({
+          place,
+          website,
+          liveData,
+          practiceAreas: detectedPracticeAreas,
+        });
+        const websiteSeed = {
+          firmName: liveData?.firmName || place.name,
+          website,
+          address: liveData?.address || place.formatted_address || '',
+          phone: liveData?.phone || place.formatted_phone_number || '',
+          email: liveData?.email || '',
+          description: liveData?.description || '',
+          title: liveData?.title || '',
+          stateBar: liveData?.state || stateBar || '',
+          practiceAreas: detectedPracticeAreas,
+          attorneys: liveData?.attorneys || [],
+          scrapedColors: liveData?.colors || null,
+          diagnostics: liveData?.diagnostics || null,
+          pagesScraped: liveData?.pagesScraped || 0,
+          chatAgent: {
+            enabled: true,
+            name: `${liveData?.firmName || place.name} Reception`,
+            role: 'AI receptionist',
+            greeting: `Hello, this is ${liveData?.firmName || place.name}. I can help with intake, scheduling, practice-area questions, or connect you with the firm.`,
+            capabilities: ['text', 'voice', 'scheduling', 'documents'],
+            voiceEnabled: true,
+            chatEnabled: true,
+          },
+          source: 'google_places_autocomplete',
+          capturedAt: new Date().toISOString(),
+        };
+        const kbFile = {
+          name: `${domain}_website_intelligence.txt`,
+          size: `${(content.length / 1024).toFixed(1)} KB`,
+          type: 'text/plain',
+          status: 'indexed',
+          role: 'company-wide',
+          category: 'Digital Footprint',
+          content,
+          source: 'google_places_website_crawl',
+          websiteUrl: website,
+          practiceAreas: detectedPracticeAreas,
+        };
+
+        try {
+          localStorage.removeItem('nemoc_built_site');
+          localStorage.setItem('nemoc_website_seed', JSON.stringify(websiteSeed));
+        } catch (_err) {
+          // Browser storage is a convenience for the builder; onboarding still persists to Firestore.
+        }
+
+        setData(prev => ({
+          ...prev,
+          ...placeFields,
+          firmName: websiteSeed.firmName,
+          ...(websiteSeed.phone && { firmPhone: websiteSeed.phone }),
+          ...(websiteSeed.address && { firmAddress: websiteSeed.address }),
+          ...(websiteSeed.stateBar && { stateBar: websiteSeed.stateBar }),
+          practiceAreas: [...new Set([...(prev.practiceAreas || []), ...detectedPracticeAreas])],
+          files: [
+            ...(prev.files || []).filter(file => file.source !== 'google_places_website_crawl'),
+            kbFile,
+          ],
+          websiteRedesign: {
+            status: 'ready_to_build',
+            source: 'google_places_autocomplete',
+            sourceUrl: website,
+            domain,
+            seed: websiteSeed,
+            chatReceptionist: websiteSeed.chatAgent,
+            voiceReceptionist: { enabled: true, provider: 'browser-speech-recognition' },
+            updatedAt: new Date().toISOString(),
+          },
+        }));
+        setDetectedPracticeCount(detectedPracticeAreas.length);
+      } catch (err) {
+        console.error('Practice area auto-detect failed:', err);
+        setScrapeError('Website crawl was unavailable. Firm details were captured from Google Places.');
+        setData(prev => ({
+          ...prev,
+          ...placeFields,
+          files: [
+            ...(prev.files || []).filter(file => file.source !== 'google_places_website_crawl'),
+            {
+              name: `${domain}_google_places_profile.txt`,
+              size: '1.0 KB',
+              type: 'text/plain',
+              status: 'indexed',
+              role: 'company-wide',
+              category: 'Digital Footprint',
+              source: 'google_places_website_crawl',
+              websiteUrl: website,
+              content: buildWebsiteKnowledgeContent({ place, website, liveData: null, practiceAreas: [] }),
+              practiceAreas: [],
+            },
+          ],
+          websiteRedesign: {
+            status: 'needs_crawl_retry',
+            source: 'google_places_autocomplete',
+            sourceUrl: website,
+            domain,
+            seed: {
+              firmName: place.name,
+              website,
+              address: place.formatted_address || '',
+              phone: place.formatted_phone_number || '',
+              stateBar,
+              practiceAreas: [],
+              chatAgent: {
+                enabled: true,
+                name: `${place.name} Reception`,
+                role: 'AI receptionist',
+                capabilities: ['text', 'voice', 'scheduling', 'documents'],
+                voiceEnabled: true,
+                chatEnabled: true,
+              },
+            },
+            chatReceptionist: {
+              enabled: true,
+              name: `${place.name} Reception`,
+              capabilities: ['text', 'voice', 'scheduling', 'documents'],
+            },
+            voiceReceptionist: { enabled: true, provider: 'browser-speech-recognition' },
+            updatedAt: new Date().toISOString(),
+          },
+        }));
+      } finally {
+        setIsScraping(false);
+        setScrapeComplete(true);
       }
     });
 
@@ -470,14 +691,19 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
               </div>
               {isScraping && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.6875rem', color: '#2563eb', fontWeight: 600, background: 'rgba(37,99,235,0.1)', padding: '2px 8px', borderRadius: '10px' }}>
-                  <Loader2 size={10} style={{ animation: 'auth-spin 1s linear infinite' }} /> Indexing digital footprint & populating practice areas...
+                  <Loader2 size={10} style={{ animation: 'auth-spin 1s linear infinite' }} /> Crawling website, filling practice areas, and queuing the receptionist site...
                 </div>
               )}
               {scrapeComplete && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.6875rem', color: 'var(--db-nvidia-green)', fontWeight: 600, background: 'rgba(118,185,0,0.1)', padding: '2px 8px', borderRadius: '10px', animation: 'fadeIn 0.4s ease' }}>
-                  <Check size={10} /> Footprint Captured {data.practiceAreas.length > 0 ? '& Practice Areas Detected' : ''}
+                  <Check size={10} /> {detectedPracticeCount > 0 ? `${detectedPracticeCount} Practice Areas Detected` : 'Website Redesign Queued'} + Chat/Voice Receptionist
                 </div>
               )}
+            </div>
+          )}
+          {scrapeError && (
+            <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--db-warning)', display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <AlertCircle size={12} /> {scrapeError}
             </div>
           )}
         </div>

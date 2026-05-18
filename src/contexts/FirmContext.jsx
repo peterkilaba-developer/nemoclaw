@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { getFirm, getAgentConfig, getSecurityConfig, getKnowledgeBase } from '../lib/firestore';
+import { getFirm, getAgentConfig, getSecurityConfig, getKnowledgeBase, getWebsiteRedesignConfig } from '../lib/firestore';
 import { getEmployees, getAgents, getSuperAgent, addEmployee, updateEmployee } from '../lib/agentHierarchy';
 import { collection, query, where, limit, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -19,6 +19,7 @@ export function FirmProvider({ children }) {
   const [agents, setAgents] = useState({ activeAgents: [] });
   const [security, setSecurity] = useState({ policies: {}, approvedServices: {} });
   const [knowledgeBase, setKnowledgeBase] = useState({ files: [] });
+  const [websiteRedesign, setWebsiteRedesign] = useState(null);
   // NEW — Agent hierarchy state
   const [employees, setEmployees] = useState([]);
   const [personalAgents, setPersonalAgents] = useState([]);
@@ -68,11 +69,12 @@ export function FirmProvider({ children }) {
 
     async function loadFirmData() {
       try {
-        const [firmData, agentData, secData, kbData, empData, agData, saData] = await Promise.all([
+        const [firmData, agentData, secData, kbData, webData, empData, agData, saData] = await Promise.all([
           getFirm(user.firmId),
           getAgentConfig(user.firmId),
           getSecurityConfig(user.firmId),
           getKnowledgeBase(user.firmId),
+          getWebsiteRedesignConfig(user.firmId).catch(() => null),
           getEmployees(user.firmId).catch(() => []),
           getAgents(user.firmId).catch(() => []),
           getSuperAgent(user.firmId).catch(() => null),
@@ -83,6 +85,7 @@ export function FirmProvider({ children }) {
           setAgents(agentData);
           setSecurity(secData);
           setKnowledgeBase(kbData);
+          setWebsiteRedesign(webData);
           setEmployees(empData);
           setPersonalAgents(agData);
           setSuperAgent(saData);
@@ -101,11 +104,12 @@ export function FirmProvider({ children }) {
   const refreshFirm = useCallback(async () => {
     if (!user?.firmId) return;
     setLoading(true);
-    const [firmData, agentData, secData, kbData, empData, agData, saData] = await Promise.all([
+    const [firmData, agentData, secData, kbData, webData, empData, agData, saData] = await Promise.all([
       getFirm(user.firmId),
       getAgentConfig(user.firmId),
       getSecurityConfig(user.firmId),
       getKnowledgeBase(user.firmId),
+      getWebsiteRedesignConfig(user.firmId).catch(() => null),
       getEmployees(user.firmId).catch(() => []),
       getAgents(user.firmId).catch(() => []),
       getSuperAgent(user.firmId).catch(() => null),
@@ -114,6 +118,7 @@ export function FirmProvider({ children }) {
     setAgents(agentData);
     setSecurity(secData);
     setKnowledgeBase(kbData);
+    setWebsiteRedesign(webData);
     setEmployees(empData);
     setPersonalAgents(agData);
     setSuperAgent(saData);
@@ -139,7 +144,7 @@ export function FirmProvider({ children }) {
 
   return (
     <FirmContext.Provider value={{
-      firm, agents, security, knowledgeBase,
+      firm, agents, security, knowledgeBase, websiteRedesign,
       employees, personalAgents, superAgent,
       firmId: user?.firmId || firm?.id || null,
       loading, refreshFirm, addTeamMember, updateTeamMember,

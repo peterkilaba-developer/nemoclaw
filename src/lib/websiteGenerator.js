@@ -181,7 +181,7 @@ h1{font-size:clamp(2.2rem,5vw,4rem);line-height:1.05;margin-bottom:20px}
   </div>
 </footer>
 
-${config.chatAgent?.enabled ? generateContactWidget(config.chatAgent, { firmName, phone, email }) : ''}
+${config.chatAgent?.enabled ? generateContactWidget(config.chatAgent, { firmName, phone, email }, practiceCards) : ''}
 </body>
 </html>`;
 }
@@ -299,29 +299,130 @@ function renderContact(item) {
     : `<div class="contact-item">${inner}</div>`;
 }
 
-function generateContactWidget(agent = {}, contact = {}) {
+function generateContactWidget(agent = {}, contact = {}, practiceCards = []) {
   const name = text(agent.name || 'Contact Assistant');
   const primaryColor = validHex(agent.primaryColor) || '#1f2937';
   const pos = agent.position === 'left' ? 'left:24px' : 'right:24px';
+  const capabilities = Array.isArray(agent.capabilities) ? agent.capabilities.map(item => String(item).toLowerCase()) : [];
+  const hasText = capabilities.length === 0 || capabilities.includes('text') || capabilities.some(item => item.includes('chat'));
+  const hasVoice = agent.voiceEnabled !== false && (capabilities.includes('voice') || capabilities.some(item => item.includes('voice')));
+  const hasScheduling = capabilities.includes('scheduling') || capabilities.some(item => item.includes('schedul'));
+  const practiceNames = practiceCards.map(area => text(area.name)).filter(Boolean).slice(0, 6);
   const phoneLink = contact.phone ? `<a href="tel:${escapeAttr(contact.phone.replace(/[^+\d]/g, ''))}">Call ${escapeHtml(contact.phone)}</a>` : '';
   const emailLink = contact.email ? `<a href="mailto:${escapeAttr(contact.email)}">Email ${escapeHtml(contact.firmName)}</a>` : '';
+  const greeting = text(agent.greeting || `Hello, this is ${contact.firmName}. How can I help?`);
+  const widgetId = `reception-${Math.random().toString(36).slice(2, 8)}`;
 
   return `
 <style>
-.contact-widget{position:fixed;bottom:24px;${pos};z-index:50;width:min(320px,calc(100vw - 48px));background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.18);overflow:hidden}
-.contact-widget h3{background:${primaryColor};color:#fff;padding:14px 16px;font-size:.95rem}
-.contact-widget div{padding:14px 16px;color:#64748b;font-size:.86rem}
-.contact-widget a{display:block;margin-top:10px;color:${primaryColor};font-weight:800}
+.contact-widget{position:fixed;bottom:24px;${pos};z-index:50;width:min(360px,calc(100vw - 48px));background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.18);overflow:hidden}
+.contact-widget header{background:${primaryColor};color:#fff;padding:14px 16px}
+.contact-widget h3{font-size:.95rem;margin:0}
+.contact-widget small{display:block;margin-top:3px;opacity:.76}
+.reception-body{padding:14px 16px;color:#64748b;font-size:.86rem}
+.reception-messages{display:grid;gap:8px;max-height:170px;overflow:auto;margin-bottom:12px}
+.reception-msg{padding:9px 11px;border-radius:10px;background:#f8fafc;color:#334155}
+.reception-msg.user{background:${primaryColor};color:#fff;margin-left:30px}
+.reception-quick{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.reception-quick button,.reception-actions button{border:1px solid #e2e8f0;background:#fff;border-radius:999px;padding:7px 10px;color:${primaryColor};font-weight:800;cursor:pointer;font-size:.72rem}
+.reception-form{display:flex;gap:6px}
+.reception-form input{flex:1;border:1px solid #e2e8f0;border-radius:8px;padding:9px 10px;font-size:.82rem}
+.reception-form button{border:0;border-radius:8px;padding:0 11px;background:${primaryColor};color:#fff;font-weight:800;cursor:pointer}
+.reception-actions{display:flex;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap}
+.reception-actions a{color:${primaryColor};font-weight:800}
 </style>
-<aside class="contact-widget">
-  <h3>${escapeHtml(name)}</h3>
-  <div>
-    This contact widget uses verified contact details only.
-    ${phoneLink}
-    ${emailLink}
-    ${!phoneLink && !emailLink ? '<p>No verified delivery method is connected yet.</p>' : ''}
+<aside class="contact-widget" id="${escapeAttr(widgetId)}">
+  <header>
+    <h3>${escapeHtml(name)}</h3>
+    <small>${hasVoice ? 'Chat and voice receptionist online' : 'Chat receptionist online'}</small>
+  </header>
+  <div class="reception-body">
+    <div class="reception-messages" data-reception-messages>
+      <div class="reception-msg">${escapeHtml(greeting)}</div>
+    </div>
+    <div class="reception-quick">
+      ${practiceNames.length ? '<button type="button" data-reception-prompt="practice">Practice areas</button>' : ''}
+      ${hasScheduling ? '<button type="button" data-reception-prompt="schedule">Schedule consult</button>' : ''}
+      ${phoneLink ? '<button type="button" data-reception-prompt="call">Call firm</button>' : ''}
+    </div>
+    ${hasText ? `
+    <form class="reception-form" data-reception-form>
+      <input aria-label="Message receptionist" placeholder="Ask the receptionist..." />
+      <button type="submit">Send</button>
+      ${hasVoice ? '<button type="button" data-reception-voice aria-label="Use voice">Mic</button>' : ''}
+    </form>` : ''}
+    <div class="reception-actions">
+      ${phoneLink}
+      ${emailLink}
+      ${!phoneLink && !emailLink ? '<span>No verified delivery method is connected yet.</span>' : ''}
+    </div>
   </div>
-</aside>`;
+</aside>
+<script>
+(function(){
+  var widget = document.getElementById(${JSON.stringify(widgetId)});
+  if (!widget) return;
+  var messages = widget.querySelector('[data-reception-messages]');
+  var form = widget.querySelector('[data-reception-form]');
+  var input = form && form.querySelector('input');
+  var practices = ${JSON.stringify(practiceNames)};
+  var phone = ${JSON.stringify(contact.phone || '')};
+  function add(text, kind) {
+    var node = document.createElement('div');
+    node.className = 'reception-msg' + (kind === 'user' ? ' user' : '');
+    node.textContent = text;
+    messages.appendChild(node);
+    messages.scrollTop = messages.scrollHeight;
+  }
+  function reply(prompt) {
+    var lower = String(prompt || '').toLowerCase();
+    if (lower === 'practice' || lower.includes('practice')) {
+      add(practices.length ? 'We can help with: ' + practices.join(', ') + '. Tell me what issue you are facing and I will prepare intake notes.' : 'Practice areas are still being verified. Tell me what legal issue you are facing and the firm can route it.');
+      return;
+    }
+    if (lower === 'schedule' || lower.includes('appointment') || lower.includes('consult')) {
+      add('I can collect your name, contact information, and matter type for a consultation request. A connected calendar or intake endpoint is required before this form can submit live leads.');
+      return;
+    }
+    if (lower === 'call' || lower.includes('phone')) {
+      add(phone ? 'You can call the firm at ' + phone + '.' : 'No verified phone number is connected yet.');
+      return;
+    }
+    add('Thanks. I can help collect intake details, explain verified practice areas, or connect you with the firm. Please avoid sharing confidential details until an attorney-client relationship is confirmed.');
+  }
+  widget.querySelectorAll('[data-reception-prompt]').forEach(function(button){
+    button.addEventListener('click', function(){ reply(button.getAttribute('data-reception-prompt')); });
+  });
+  if (form) {
+    form.addEventListener('submit', function(event){
+      event.preventDefault();
+      var value = input.value.trim();
+      if (!value) return;
+      add(value, 'user');
+      input.value = '';
+      reply(value);
+    });
+  }
+  var voiceButton = widget.querySelector('[data-reception-voice]');
+  if (voiceButton) {
+    voiceButton.addEventListener('click', function(){
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        reply('voice unavailable');
+        return;
+      }
+      var recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';
+      recognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript;
+        add(transcript, 'user');
+        reply(transcript);
+      };
+      recognition.start();
+    });
+  }
+})();
+</script>`;
 }
 
 function initialsFromName(name = '') {

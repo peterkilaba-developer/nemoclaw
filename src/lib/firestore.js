@@ -141,6 +141,33 @@ export async function getKnowledgeBase(firmId) {
   return { files: snap.docs.map(doc => ({ id: doc.id, ...doc.data() })) };
 }
 
+export async function saveWebsiteRedesignConfig(firmId, websiteRedesign = {}) {
+  if (!websiteRedesign?.sourceUrl && !websiteRedesign?.seed?.website) return;
+
+  const ref = doc(db, 'firms', firmId, 'config', 'websiteRedesign');
+  await setDoc(ref, {
+    status: websiteRedesign.status || 'ready_to_build',
+    source: websiteRedesign.source || 'onboarding',
+    sourceUrl: websiteRedesign.sourceUrl || websiteRedesign.seed?.website || '',
+    domain: websiteRedesign.domain || '',
+    seed: websiteRedesign.seed || {},
+    chatReceptionist: websiteRedesign.chatReceptionist || websiteRedesign.seed?.chatAgent || {
+      enabled: true,
+      capabilities: ['text', 'voice', 'scheduling', 'documents'],
+    },
+    voiceReceptionist: websiteRedesign.voiceReceptionist || {
+      enabled: true,
+      provider: 'browser-speech-recognition',
+    },
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+export async function getWebsiteRedesignConfig(firmId) {
+  const snap = await getDoc(doc(db, 'firms', firmId, 'config', 'websiteRedesign'));
+  return snap.exists() ? snap.data() : null;
+}
+
 // ═══════════════════════════════════════════════
 //  USER PROFILE
 // ═══════════════════════════════════════════════
@@ -195,18 +222,28 @@ export async function completeOnboarding(userId, onboardingData, existingFirmId 
         fileSize: f.size || '0 KB',
         fileType: 'text/plain',
         content: f.content || null,
+        source: f.source || 'manual_upload',
+        category: f.category || '',
+        role: f.role || '',
+        websiteUrl: f.websiteUrl || '',
+        practiceAreas: f.practiceAreas || [],
         uploadedBy: 'NemoClaw Auto-Scraper',
         uploadedAt: serverTimestamp(),
       }, { merge: true });
     }
   }
 
-  // 5. Save employee roster & create agent hierarchy for staff
+  // 5. Save website redesign and receptionist seed for the Website Builder agent
+  if (onboardingData.websiteRedesign) {
+    await saveWebsiteRedesignConfig(firmId, onboardingData.websiteRedesign);
+  }
+
+  // 6. Save employee roster & create agent hierarchy for staff
   if (onboardingData.employees && onboardingData.employees.length > 0) {
     await saveRosterAndCreateAgents(firmId, onboardingData.employees);
   }
 
-  // 6. Provision the OWNER with their proper legal role + personal agent
+  // 7. Provision the OWNER with their proper legal role + personal agent
   try {
     // Read user profile for name/email
     const userSnap = await getDoc(doc(db, 'users', userId));
@@ -257,7 +294,7 @@ export async function completeOnboarding(userId, onboardingData, existingFirmId 
     console.error('Owner agent provisioning error:', err);
   }
 
-  // 7. Provision the SUPER AGENT (firm-wide intelligence layer)
+  // 8. Provision the SUPER AGENT (firm-wide intelligence layer)
   try {
     const superAgentRef = doc(db, 'firms', firmId, 'superAgent', 'config');
     await setDoc(superAgentRef, {
