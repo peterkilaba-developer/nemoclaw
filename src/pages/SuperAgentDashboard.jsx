@@ -1,29 +1,70 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useFirm } from '../contexts/FirmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getAuditLog } from '../lib/agentAPI';
 import {
-  Crown, Users, Shield, TrendingUp, AlertTriangle, Eye, 
-  Scale, BarChart3, FileText, Clock, CheckCircle, XOctagon,
-  RefreshCw, ChevronDown, Activity, Lock, Zap,
+  Crown, Users, Shield, AlertTriangle, Eye, 
+  Scale, BarChart3, CheckCircle, XOctagon,
+  RefreshCw, Lock, Zap,
 } from 'lucide-react';
+
+const AUDIT_TYPE_LABELS = {
+  agent_interaction: 'Agent Interaction',
+  'agent.message': 'Agent Interaction',
+  'agent.sub_dispatch': 'Sub-Agent Dispatch',
+  'agent.error': 'Agent Error',
+  'data.conflict_check': 'Conflict Check',
+  'matter.engagement_generated': 'Engagement Generated',
+  'matter.engagement_signed': 'Engagement Signed',
+  'matter.closed': 'Matter Closed',
+  'signature.requested': 'Signature Requested',
+  'signature.signed': 'Signature Signed',
+  'security.ethical_wall_violation': 'Conflict Review Required',
+};
+
+function getAuditDate(value) {
+  const date = value?.toDate?.() || (value ? new Date(value) : null);
+  return date && !Number.isNaN(date.getTime()) ? date : null;
+}
+
+function labelAuditType(type) {
+  if (!type) return 'Audit Event';
+  return AUDIT_TYPE_LABELS[type] || type
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function getAuditActor(entry) {
+  return entry.employeeName
+    || entry.employeeEmail
+    || entry.signerName
+    || entry.clearedBy
+    || entry.agentId
+    || 'System';
+}
+
+function getAuditDetail(entry) {
+  return entry.userMessage
+    || entry.agentResponse
+    || entry.reason
+    || entry.notes
+    || entry.resource
+    || entry.action
+    || 'Audit event recorded.';
+}
 
 export default function SuperAgentDashboard() {
   const { user } = useAuth();
-  const { firm, employees, personalAgents: agents } = useFirm();
+  const { firm, _employees, personalAgents: agents } = useFirm();
   const [auditLog, setAuditLog] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const firmId = firm?.id || user?.firmId;
 
   const myAgent = agents?.find(a => a.employeeEmail === user?.email);
   const hasAccess = myAgent?.superAgentAccess;
 
-  useEffect(() => {
-    loadData();
-  }, [firmId]);
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const log = await getAuditLog(firmId, 100);
@@ -32,7 +73,12 @@ export default function SuperAgentDashboard() {
       console.warn('Audit log load failed:', err.message);
     }
     setLoading(false);
-  }
+  }, [firmId]);
+
+  useEffect(() => {
+    const initialLoad = setTimeout(loadData, 0);
+    return () => clearTimeout(initialLoad);
+  }, [loadData]);
 
   // Compute firm-wide metrics
   const personalCount = agents?.filter(a => !a.isAutonomous)?.length || 0;
@@ -48,8 +94,8 @@ export default function SuperAgentDashboard() {
   // Audit metrics
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayLogs = auditLog.filter(l => {
-    const ts = l.timestamp?.toDate?.() || new Date(l.timestamp);
-    return ts >= todayStart;
+    const ts = getAuditDate(l.timestamp);
+    return ts ? ts >= todayStart : false;
   });
   const piiRedactions = auditLog.filter(l => l.piiRedactions?.length > 0).length;
   const subAgentDispatches = auditLog.reduce((sum, l) => sum + (l.subAgentsUsed?.length || 0), 0);
@@ -99,7 +145,7 @@ export default function SuperAgentDashboard() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '1px solid var(--db-border)' }}>
-        {tabs.map(tab => (
+        {(tabs || []).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -161,15 +207,17 @@ export default function SuperAgentDashboard() {
                 ) : (() => {
                   // Build per-agent breakdown from audit log
                   const byAgent = {};
-                  auditLog.forEach(l => {
-                    const key = l.employeeName || 'Unknown';
+                  auditLog
+                    .filter(l => l.userMessage || l.agentResponse || l.type === 'agent_interaction' || l.type === 'agent.message')
+                    .forEach(l => {
+                    const key = l.employeeName || l.employeeEmail || l.agentId || 'System';
                     if (!byAgent[key]) byAgent[key] = { name: key, type: l.agentType || '—', count: 0, pii: 0, dispatches: 0 };
                     byAgent[key].count++;
                     byAgent[key].pii += l.piiRedactions?.length || 0;
                     byAgent[key].dispatches += l.subAgentsUsed?.length || 0;
                   });
                   const rows = Object.values(byAgent).sort((a, b) => b.count - a.count);
-                  return rows.map((row, i) => (
+                  return (rows || []).map((row, i) => (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < rows.length - 1 ? '1px solid var(--db-border)' : 'none' }}>
                       <div>
                         <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{row.name}</div>
@@ -399,28 +447,37 @@ export default function SuperAgentDashboard() {
             </div>
           ) : (
             <div className="db-feed">
-              {auditLog.slice(0, 50).map((entry, i) => {
-                const ts = entry.timestamp?.toDate?.() || new Date(entry.timestamp);
+              {(auditLog || []).slice(0, 50).map((entry, i) => {
+                const ts = getAuditDate(entry.timestamp);
+                const typeLabel = labelAuditType(entry.type);
+                const actor = getAuditActor(entry);
+                const detail = getAuditDetail(entry);
+                const failed = entry.granted === false || entry.type?.includes?.('error') || entry.type?.includes?.('violation');
                 return (
                   <div key={entry.id || i} className="db-feed-item">
-                    <div className={`db-feed-dot ${entry.piiRedactions?.length > 0 ? 'yellow' : 'green'}`} />
+                    <div className={`db-feed-dot ${failed || entry.piiRedactions?.length > 0 ? 'yellow' : 'green'}`} />
                     <div className="db-feed-content">
-                      <div className="db-feed-title">{entry.employeeName || 'Agent'} — {entry.agentType}</div>
+                      <div className="db-feed-title">{typeLabel} - {actor}</div>
                       <div className="db-feed-desc" style={{ fontFamily: 'var(--db-font-mono)', fontSize: '0.75rem' }}>
-                        "{entry.userMessage?.slice(0, 80)}..."
+                        {String(detail).slice(0, 140)}
                       </div>
+                      {entry.resource && (
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-secondary)', marginTop: '4px' }}>
+                          Resource: {entry.resource}
+                        </div>
+                      )}
                       {entry.subAgentsUsed?.length > 0 && (
                         <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-secondary)', marginTop: '4px' }}>
-                          Dispatched: {entry.subAgentsUsed.map(s => s.name).join(', ')}
+                          Dispatched: {(entry.subAgentsUsed || []).map(s => s.name).join(', ')}
                         </div>
                       )}
                       {entry.piiRedactions?.length > 0 && (
                         <div style={{ fontSize: '0.6875rem', color: '#f59e0b', marginTop: '2px' }}>
-                          ⚠️ PII redacted: {entry.piiRedactions.map(r => `${r.type} (${r.count}×)`).join(', ')}
+                          ⚠️ PII redacted: {(entry.piiRedactions || []).map(r => `${r.type} (${r.count}×)`).join(', ')}
                         </div>
                       )}
                     </div>
-                    <div className="db-feed-time">{ts.toLocaleString()}</div>
+                    <div className="db-feed-time">{ts ? ts.toLocaleString() : 'Pending'}</div>
                   </div>
                 );
               })}

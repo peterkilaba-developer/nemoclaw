@@ -1,4 +1,4 @@
-import { Lock, Globe, Brain, ShieldCheck, User, Zap, Monitor, ClipboardList, BarChart3, AlertTriangle, Database, Server, Cpu, Globe2, Shield, Eye, FileText, Layout } from 'lucide-react';
+import { Brain, ClipboardList, Eye, FileText, Globe, Lock, Shield, ShieldCheck, Zap } from 'lucide-react';
 import './Security.css';
 
 const layers = [
@@ -25,7 +25,7 @@ export default function Security() {
         <div className="security-header">
           <span className="section-label">Firm-Grade Security Moat</span>
           <h2 className="section-title">
-            Institutional Security for <span className="text-nvidia">Professional Privilege.</span>
+            Enterprise Security for <span className="text-nvidia">Professional Privilege.</span>
           </h2>
           <p className="section-subtitle">
             While others risk client data with public AI tools, your agents run inside an NVIDIA NemoClaw sandbox.{' '}

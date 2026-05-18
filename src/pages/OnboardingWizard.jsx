@@ -1,20 +1,19 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, FileText, UserCheck, PenTool, FolderSearch, Scale, Mic,
   DollarSign, ScanSearch, Clock, ShieldCheck, Lock, ClipboardList,
-  Gavel, MapPin, FileCheck, Rocket, Upload, File, Lightbulb, Infinity, Check,
-  Plus, Trash2, Briefcase, Phone, Bot, Crown, CreditCard, ArrowLeft, ArrowRight,
-  ChevronLeft, ChevronRight, AlertCircle, Globe, Users, Zap, Loader2
+  Gavel, MapPin, FileCheck, Upload, File, Lightbulb, Infinity as InfinityIcon, Check,
+  Plus, Trash2, Briefcase, Phone, Bot, Crown, ArrowRight, ChevronRight, AlertCircle, Globe, Users, Zap, Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { completeOnboarding } from '../lib/firestore';
-import { createCheckoutSession } from '../lib/firebase';
+import { db } from '../lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
 import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS } from '../lib/agentHierarchy';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../styles/onboarding.css';
-
 const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
 
 const PRACTICE_AREA_GROUPS = [
@@ -153,7 +152,7 @@ export default function OnboardingWizard() {
     }));
   };
 
-  const toggleAgent = (id) => {
+  const _toggleAgent = (id) => {
     setData(prev => ({
       ...prev,
       selectedAgents: prev.selectedAgents.includes(id)
@@ -162,14 +161,14 @@ export default function OnboardingWizard() {
     }));
   };
 
-  const toggleSecurity = (id) => {
+  const _toggleSecurity = (id) => {
     setData(prev => ({
       ...prev,
       security: { ...prev.security, [id]: !prev.security[id] },
     }));
   };
 
-  const toggleService = (id) => {
+  const _toggleService = (id) => {
     if (id === 'nvidia') return;
     setData(prev => ({
       ...prev,
@@ -226,6 +225,8 @@ export default function OnboardingWizard() {
     if (step === 3 && !firmId && !user?.firmId) {
       provisionFirm();
     }
+    // The provisioner intentionally runs only when the user first reaches review.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
   const handleSkip = async () => {
@@ -236,8 +237,6 @@ export default function OnboardingWizard() {
       currentFirmId = await completeOnboarding(user.uid, data, currentFirmId);
       setFirmId(currentFirmId);
       
-      const { updateDoc, doc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
       await updateDoc(doc(db, 'users', user.uid), { onboardingComplete: true });
       navigate('/dashboard');
     } catch (err) {
@@ -249,10 +248,8 @@ export default function OnboardingWizard() {
     }
   };
 
-  const handlePaymentSuccess = async () => {
+  const _handlePaymentSuccess = async () => {
     try {
-      const { updateDoc, doc } = await import('firebase/firestore');
-      const { db } = await import('../lib/firebase');
       await updateDoc(doc(db, 'users', user.uid), { onboardingComplete: true });
     } catch (e) {
       console.error('Failed to set onboarding complete flag during payment callback:', e);
@@ -261,8 +258,8 @@ export default function OnboardingWizard() {
   };
 
   const totalSteps = STEP_LABELS.length - 1;
-  const next = () => step < totalSteps ? setStep(step + 1) : null;
-  const back = () => step > 0 && setStep(step - 1);
+  const _next = () => step < totalSteps ? setStep(step + 1) : null;
+  const _back = () => step > 0 && setStep(step - 1);
 
   return (
     <div className="onboarding-layout">
@@ -366,7 +363,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
       if (place.website) {
         updateData('firmWebsite', place.website);
         let websiteName = place.website;
-        try { websiteName = new URL(place.website).hostname; } catch(e) {}
+        try { websiteName = new URL(place.website).hostname; } catch(_e) { /* intentionally ignored */ }
         updateData('files', [{
           name: websiteName, size: 'Website Crawl', status: 'done',
           role: 'company-wide', category: 'Digital Footprint'
@@ -414,6 +411,8 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
     });
 
     autocompleteRef.current = ac;
+    // Google Places Autocomplete binds an external widget once for this input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const FIRM_SIZE_OPTIONS = [
@@ -918,7 +917,7 @@ function StepAgentSelection({ data, toggleAgent }) {
             {data.firmSize === '10+' ? (
               <><AlertCircle size={14} /> Token usage billed at cost for 10+ firms</>
             ) : (
-              <><Infinity size={14} /> Unlimited tokens included</>
+              <><InfinityIcon size={14} /> Unlimited tokens included</>
             )}
           </span>
         )}
@@ -1127,6 +1126,19 @@ function StepReview({ data, launching, clientSecret, firmId, onPaymentSuccess, s
  * AI CONCIERGE — NEMO THE BORN AGENTIC SDR
  * Clownfish avatar with typewriter animation, law jokes, and humorous self-awareness.
  */
+const LAW_JOKES = [
+  "Why did the lawyer bring a ladder to court? Because the case was on a higher level.",
+  "What's the difference between a good lawyer and a great lawyer? A good lawyer knows the law. A great lawyer knows the judge.",
+  "How many lawyers does it take to change a light bulb? Three - one to climb the ladder, one to shake it, and one to sue the ladder company.",
+  "What do you call a smiling, courteous person at a bar association convention? The caterer.",
+  "Why don't sharks attack lawyers? Professional courtesy.",
+  "A paralegal walks into a bar. The Bar Association says that's unauthorized practice.",
+  "What's the difference between a jellyfish and a lawyer? One is a spineless, toxic creature. The other one lives in the ocean.",
+  "I used to be a lawyer, but I couldn't pass the bar. So I became a fish. Better hours, same amount of objections.",
+];
+
+const DEFAULT_LAW_JOKE = LAW_JOKES[Math.floor(Math.random() * LAW_JOKES.length)];
+
 function AIConcierge({ step, data }) {
   const [displayText, setDisplayText] = useState('');
   const [avatarSrc, setAvatarSrc] = useState('/logos/claw-128-transparent.png');
@@ -1135,50 +1147,45 @@ function AIConcierge({ step, data }) {
   const charIndex = useRef(0);
   const timerRef = useRef(null);
 
-  const LAW_JOKES = [
-    "Why did the lawyer bring a ladder to court? Because the case was on a higher level.",
-    "What's the difference between a good lawyer and a great lawyer? A good lawyer knows the law. A great lawyer knows the judge.",
-    "How many lawyers does it take to change a light bulb? Three — one to climb the ladder, one to shake it, and one to sue the ladder company.",
-    "What do you call a smiling, courteous person at a bar association convention? The caterer.",
-    "Why don't sharks attack lawyers? Professional courtesy.",
-    "A paralegal walks into a bar. The Bar Association says that's unauthorized practice.",
-    "What's the difference between a jellyfish and a lawyer? One is a spineless, toxic creature. The other one lives in the ocean.",
-    "I used to be a lawyer, but I couldn't pass the bar. So I became a fish. Better hours, same amount of objections.",
-  ];
-
   const firstName = data.firstName || 'Counselor';
 
-  const messages = [
+  const messages = useMemo(() => [
     `Hey ${firstName}! I'm Nemo — yes, the clownfish. I know, I know… a clownfish running an Agentic OS for law firms. Trust me, I've heard every "Finding Nemo" joke in the book. Speaking of jokes — being a clownfish, I've got hundreds. But let's get your firm set up first, and I'll tell you my best law joke when we're done. Deal? Start with your name below, then search for your firm.`,
     `${data.practiceAreas?.length > 0 ? `${data.practiceAreas.slice(0, 2).join(' and ')} — excellent choices.` : 'Pick your practice areas so I can calibrate your knowledge base.'} Now upload a retainer template or motion brief — I'll learn your firm's drafting style faster than any summer associate. And unlike that associate, I don't need coffee breaks or a parking spot.`,
     `Security time — and yes, I see the irony. My species literally hides inside anemones for protection. But I've enabled AES-256 encryption, PII auto-redaction, and full ABA-compliant audit trails. Your client data is safer with me than a clownfish in the Great Barrier Reef. (That's actually very safe — we have a symbiotic relationship with anemones. Google it.)`,
     `${firstName}, we're at the finish line! Your firm qualifies for the $297/mo Founder Price-Lock. Once you launch, I'll provision your Managing Partner agent and start indexing. As promised — here's your law joke. You've earned it. 🐠`
-  ];
+  ], [data.practiceAreas, firstName]);
 
-  const currentJoke = LAW_JOKES[Math.floor(Math.random() * LAW_JOKES.length)];
+  const currentJoke = DEFAULT_LAW_JOKE;
 
   // Typewriter effect
   useEffect(() => {
     const fullText = messages[step] || messages[0];
-    charIndex.current = 0;
-    setDisplayText('');
-    setShowJoke(false);
     if (timerRef.current) clearInterval(timerRef.current);
 
-    timerRef.current = setInterval(() => {
-      charIndex.current++;
-      if (charIndex.current >= fullText.length) {
-        setDisplayText(fullText);
-        clearInterval(timerRef.current);
-        // Show joke on final step after typing completes
-        if (step === 3) setTimeout(() => setShowJoke(true), 400);
-      } else {
-        setDisplayText(fullText.slice(0, charIndex.current));
-      }
-    }, 18);
+    const startTyping = setTimeout(() => {
+      charIndex.current = 0;
+      setDisplayText('');
+      setShowJoke(false);
 
-    return () => clearInterval(timerRef.current);
-  }, [step, data.practiceAreas?.length, data.firstName]);
+      timerRef.current = setInterval(() => {
+        charIndex.current++;
+        if (charIndex.current >= fullText.length) {
+          setDisplayText(fullText);
+          clearInterval(timerRef.current);
+          // Show joke on final step after typing completes
+          if (step === 3) setTimeout(() => setShowJoke(true), 400);
+        } else {
+          setDisplayText(fullText.slice(0, charIndex.current));
+        }
+      }, 18);
+    }, 0);
+
+    return () => {
+      clearTimeout(startTyping);
+      clearInterval(timerRef.current);
+    };
+  }, [messages, step]);
 
   const handleAvatarChange = (e) => {
     const file = e.target.files?.[0];
@@ -1224,7 +1231,7 @@ function AIConcierge({ step, data }) {
 /*
  * Inline Payment Form Sub-component (CardElement Classic)
  */
-function InlinePaymentForm({ clientSecret, firmId, onSuccess, onError, launching, setLaunching, onProvision }) {
+function InlinePaymentForm({ clientSecret, firmId, onSuccess, onError, launching, _setLaunching, onProvision }) {
   const stripe = useStripe();
   const elements = useElements();
   const [btnText, setBtnText] = useState('Start Subscription');

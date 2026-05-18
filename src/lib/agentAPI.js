@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
-  AGENT_SUB_AGENTS, ACCESS_MATRIX, SUB_AGENT_CATALOG,
+  SUB_AGENT_CATALOG,
 } from './agentHierarchy';
 import { resolveFromLocalData } from './localResolver';
 
@@ -29,9 +29,24 @@ const NEMOCLAW_ENDPOINT = IS_DEV
   ? '/api/nvidia/v1/chat/completions'   // Vite proxy → integrate.api.nvidia.com
   : (import.meta.env.VITE_NEMOCLAW_ENDPOINT || '/api/nvidia/v1/chat/completions');
 
-const NEMOCLAW_API_KEY = import.meta.env.VITE_NVIDIA_API_KEY || '';
-
 const MODEL_ID = 'nvidia/llama-3.1-nemotron-70b-instruct';
+
+const FULL_MATTER_ACCESS_ROLES = new Set(['partner', 'managing-partner', 'solo-partner', 'income-partner']);
+const ASSIGNED_MATTER_ACCESS_ROLES = new Set(['associate', 'senior-associate', 'of-counsel', 'paralegal', 'law-clerk', 'intern', 'secretary', 'contractor']);
+
+function agentCanAccessAllMatters(agent) {
+  return FULL_MATTER_ACCESS_ROLES.has(agent?.agentType);
+}
+
+function agentIsAssignedToMatter(agent, matter = {}) {
+  const email = agent?.employeeEmail || agent?.humanEmail || '';
+  const uid = agent?.employeeId || agent?.humanId || '';
+  return (
+    (email && Array.isArray(matter.assignedTo) && matter.assignedTo.includes(email)) ||
+    (email && Array.isArray(matter.assignedEmails) && matter.assignedEmails.includes(email)) ||
+    (uid && Array.isArray(matter.assignedUserIds) && matter.assignedUserIds.includes(uid))
+  );
+}
 
 // ═══════════════════════════════════════════════
 //  PII REDACTION (client-side pre-filter)
@@ -178,45 +193,33 @@ STRICT RULES:
  * @returns {Object} { response, subAgentsUsed, auditId }
  */
 export async function sendAgentMessage(firmId, agentId, userMessage, conversationHistory = [], matterContext = null) {
-  // Demo/dev mode — if no firmId or agentId, use simulated responses
-  const isDemoMode = !firmId || !agentId;
+  const isOnboardingMode = !firmId || !agentId;
 
   let agent;
 
-  if (isDemoMode) {
-    // Use a default partner agent config for demo
+  if (isOnboardingMode) {
     agent = {
-      agentType: 'partner',
-      agentName: 'AI Chief of Staff',
-      employeeEmail: 'demo@nemoc-law.ai',
-      employeeName: 'Demo User',
-      availableSubAgents: AGENT_SUB_AGENTS['partner'] || [],
+      agentType: 'unconfigured',
+      agentName: 'Onboarding Assistant',
+      employeeEmail: '',
+      employeeName: '',
+      availableSubAgents: [],
     };
   } else {
     // 1. Load agent config from Firestore
     try {
       const agentSnap = await getDoc(doc(db, 'firms', firmId, 'agents', agentId));
       if (!agentSnap.exists()) {
-        // Fallback to demo mode if agent doc doesn't exist
-        agent = {
-          agentType: 'partner',
-          agentName: 'AI Chief of Staff',
-          employeeEmail: '',
-          employeeName: '',
-          availableSubAgents: AGENT_SUB_AGENTS['partner'] || [],
-        };
-      } else {
-        agent = agentSnap.data();
-        await updateDoc(doc(db, 'firms', firmId, 'agents', agentId), { lastActive: serverTimestamp() });
+        throw new Error(`Agent profile not found for ${agentId}.`);
       }
+      agent = agentSnap.data();
+      await updateDoc(doc(db, 'firms', firmId, 'agents', agentId), { lastActive: serverTimestamp() });
     } catch (err) {
-      console.warn('Could not load agent config, using demo mode:', err.message);
-      agent = {
-        agentType: 'partner',
-        agentName: 'AI Chief of Staff',
-        employeeEmail: '',
-        employeeName: '',
-        availableSubAgents: AGENT_SUB_AGENTS['partner'] || [],
+      console.error('Could not load verified agent config:', err.message);
+      return {
+        response: 'I cannot process this request because the verified agent profile is missing or unavailable. Ask a firm administrator to recreate or repair this agent before using legal workflows.',
+        subAgentsUsed: [],
+        auditId: null,
       };
     }
   }
@@ -231,7 +234,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
       const firmSnap = await getDoc(doc(db, 'firms', firmId));
       if (firmSnap.exists()) {
         const firmData = firmSnap.data();
-        isFirmConfigured = firmData.isConfigured || true; // ensure preview works
+        isFirmConfigured = Boolean(firmData.isConfigured || firmData.onboardingComplete || firmData.firmName);
         firmPracticeAreas = firmData.practiceAreas || [];
         firmIdentity = {
           name: firmData.firmName || 'Unnamed Firm',
@@ -242,11 +245,41 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
         };
       }
 
-      const mattersSnap = await getDocs(query(collection(db, 'firms', firmId, 'matters'), where('status', '==', 'Active')));
-      activeMattersList = mattersSnap.docs.map(d => d.data());
+      if (agentCanAccessAllMatters(agent)) {
+        const mattersSnap = await getDocs(query(collection(db, 'firms', firmId, 'matters'), where('status', '==', 'Active')));
+        activeMattersList = mattersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      } else if (ASSIGNED_MATTER_ACCESS_ROLES.has(agent.agentType) && (agent.employeeEmail || agent.humanEmail)) {
+        const assignedEmail = agent.employeeEmail || agent.humanEmail;
+        const mattersSnap = await getDocs(query(collection(db, 'firms', firmId, 'matters'), where('assignedTo', 'array-contains', assignedEmail)));
+        activeMattersList = mattersSnap.docs
+          .map(d => ({ id: d.id, ...d.data() }))
+          .filter(m => m.status === 'Active');
+      }
     } catch (e) {
       console.warn('Could not check firm config or matters:', e.message);
     }
+  }
+
+  if (matterContext && !agentCanAccessAllMatters(agent) && !agentIsAssignedToMatter(agent, matterContext)) {
+    try {
+      if (!isOnboardingMode) {
+        await addDoc(collection(db, 'firms', firmId, 'auditLog'), {
+          type: 'security.ethical_wall_violation',
+          severity: 'CRITICAL',
+          description: 'Agent attempted to process matter context without explicit assignment.',
+          agentId,
+          matterId: matterContext.id || null,
+          timestamp: serverTimestamp(),
+          immutable: true,
+        });
+      }
+    } catch (_e) { /* intentionally ignored */ }
+
+    return {
+      response: 'Ethical wall block: this agent is not assigned to the requested matter. Ask a partner or firm administrator to update the matter team before processing privileged work product.',
+      subAgentsUsed: [],
+      auditId: 'ETHICAL_WALL_BLOCK',
+    };
   }
 
   // 2. Get role-appropriate system prompt
@@ -272,7 +305,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 
   // Append Pre-loaded Specialty Knowledgebase (Firm Practice Areas)
   if (firmPracticeAreas.length > 0) {
-    systemPrompt += `\n\n--- PRE-LOADED SPECIALTY KNOWLEDGEBASE ---\nThis Agent has been statically pre-loaded with comprehensive case law, statutory precedence, and procedural frameworks for: ${firmPracticeAreas.join(', ')}.\nAll analytical outputs, contract reviews, and legal research must natively reflect expertise in this specialized field unless explicitly instructed otherwise by the user.`;
+    systemPrompt += `\n\n--- FIRM PRACTICE AREAS ---\nThe firm has configured these practice areas: ${firmPracticeAreas.join(', ')}.\nUse them only as firm context. Do not claim jurisdiction-specific expertise, case law, statutes, or procedural rules unless those sources are provided in the current request or connected firm data.`;
   }
 
   // Append Primary Internal Knowledge Base (Firm Identity & Web Scrape)
@@ -282,7 +315,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 
   // Append Ethical Wall Enforcement Context
   systemPrompt += `\n\n--- ETHICAL WALL ENFORCEMENT ---\nUser Role: ${agent.agentType?.toUpperCase()}`;
-  if (['partner', 'managing-partner', 'solo-partner'].includes(agent.agentType)) {
+  if (agentCanAccessAllMatters(agent)) {
     systemPrompt += `\nAccess Level: FULL FIRM VISIBILITY. You can access all client matters, financial records, and firm strategy data.`;
   } else if (['associate', 'paralegal', 'secretary'].includes(agent.agentType)) {
     systemPrompt += `\nAccess Level: ASSIGNED MATTERS ONLY. Do not process queries for matters the user is not explicitly assigned to. Firm financial data is strictly blocked.`;
@@ -312,7 +345,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
   if (checkPromptInjection(userMessage)) {
     console.warn('[NEMOCLAW SECURITY] Active adversarial prompt injection blocked.');
     try {
-      if (!isDemoMode) {
+      if (!isOnboardingMode) {
         await addDoc(collection(db, 'firms', firmId, 'auditLog'), {
           type: 'SECURITY_EVENT',
           severity: 'CRITICAL',
@@ -321,7 +354,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
           timestamp: serverTimestamp()
         });
       }
-    } catch(e) {}
+    } catch(_e) { /* intentionally ignored */ }
     
     return {
       response: "🛡️ **SECURITY VIOLATION DETECTED**: This request violates the Firm's structural operating protocols and has been unilaterally blocked by the NemoClaw architectural sandbox. A critical security audit has been logged.",
@@ -338,11 +371,11 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     const localAnswer = resolveFromLocalData(safeMessage);
     if (localAnswer) {
       // Log and return without calling inference
-      if (!isDemoMode) {
+      if (!isOnboardingMode) {
         try {
           await addDoc(collection(db, 'firms', firmId, 'agents', agentId || '_onboarding', 'messages'), { role: 'user', content: safeMessage, timestamp: serverTimestamp() });
           await addDoc(collection(db, 'firms', firmId, 'agents', agentId || '_onboarding', 'messages'), { role: 'assistant', content: localAnswer, subAgentsUsed: [], timestamp: serverTimestamp() });
-        } catch (e) { /* ignore */ }
+        } catch (_e) { /* ignore */ }
       }
       return { response: localAnswer, subAgentsUsed: [], auditId: null };
     }
@@ -374,9 +407,9 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     response = applyUPLGuard(response);
   }
 
-  // 7. Log to audit trail (skip in demo mode)
+  // 7. Log to audit trail when attached to a verified firm/agent.
   let auditId = null;
-  if (!isDemoMode) {
+  if (!isOnboardingMode) {
     try {
       auditId = await logToAuditTrail(firmId, agentId, {
         userMessage: safeMessage,
@@ -392,8 +425,8 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     }
   }
 
-  // 8. Save conversation to agent's message history (skip in demo mode)
-  if (!isDemoMode) {
+  // 8. Save conversation to agent's message history when attached to a verified firm/agent.
+  if (!isOnboardingMode) {
     try {
       await addDoc(collection(db, 'firms', firmId, 'agents', agentId, 'messages'), {
         role: 'user',
@@ -443,10 +476,6 @@ async function callInference(messages, agent, subAgentsUsed) {
     'Content-Type': 'application/json',
     'X-Routing-Profile': routeProfile 
   };
-  if (!IS_DEV) {
-    headers['Authorization'] = `Bearer ${NEMOCLAW_API_KEY}`;
-  }
-
   const res = await fetch(NEMOCLAW_ENDPOINT, {
     method: 'POST',
     headers,
@@ -468,20 +497,13 @@ async function callInference(messages, agent, subAgentsUsed) {
   }
 
   const data = await res.json();
-  return { content: data.choices?.[0]?.message?.content || 'No response generated.' };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Inference gateway returned no assistant content.');
+  }
+  return { content };
 }
 
-/**
- * Simulated response for dev/demo when no API key is set.
- */
-function simulateResponse(messages, agent) {
-  const agentName = agent.agentName || 'Your AI Agent';
-  const role = agent.agentType || 'associate';
-
-  return { 
-    content: `[DEV MODE] I am your ${role} agent (${agentName}). No real inference API key is configured. In a production environment, I would process your request using NVIDIA Nemotron 120B. Please configure VITE_NVIDIA_API_KEY to enable real intelligence.` 
-  };
-}
 
 // ═══════════════════════════════════════════════
 //  SUB-AGENT DETECTION

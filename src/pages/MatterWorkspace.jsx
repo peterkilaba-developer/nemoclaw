@@ -1,22 +1,30 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, query, orderBy, limit, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { sendAgentMessage } from '../lib/agentAPI';
-import { AGENT_SUB_AGENTS, SUB_AGENT_CATALOG } from '../lib/agentHierarchy';
-import {
-  Briefcase, ArrowLeft, Bot, MessageSquare, FileText, Upload,
-  Download, Send, Settings, UserPlus, Scale, AlertTriangle, CheckCircle, Clock, DollarSign,
-  Shield, ExternalLink
-} from 'lucide-react';
+import { ArrowLeft, Bot, Briefcase, CheckCircle, Clock, Download, ExternalLink, FileText, Scale, Send, Settings, Shield, Upload } from 'lucide-react';
+
+function createSecureToken() {
+  const bytes = new Uint8Array(24);
+  window.crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function sha256Hex(value) {
+  const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+
 
 export default function MatterWorkspace() {
   const { matterId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { firmId, personalAgents } = useFirm();
+  const { firmId, firm, personalAgents } = useFirm();
   
   const [matter, setMatter] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -24,6 +32,9 @@ export default function MatterWorkspace() {
   // Engagement / Portal State
   const [engagementStatus, setEngagementStatus] = useState('Drafting'); // Drafting, Sent, Signed
   const [portalProvisioned, setPortalProvisioned] = useState(false);
+  const [signatureLink, setSignatureLink] = useState('');
+  const [workflowError, setWorkflowError] = useState('');
+  const [actionPending, setActionPending] = useState('');
   
   // Chat state
   const [chatInput, setChatInput] = useState('');
@@ -40,37 +51,26 @@ export default function MatterWorkspace() {
 
   // Find agent config
   const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === user?.email);
-  const agentType = myAgent?.agentType || 'associate';
+  const _agentType = myAgent?.agentType || 'associate';
   const agentName = myAgent?.agentName || 'AI Chief of Staff';
   const agentId = myAgent?.id || null;
-
-  useEffect(() => {
-    if (firmId && matterId) {
-      loadMatter();
-      // In a real app, load matter-specific chat history here.
-      // For now, we start generic.
-      setMessages([{
-        id: 'system-init',
-        role: 'system',
-        content: `Workspace initialized. I am synchronized with this matter. How can I assist you with ${matter?.title || 'this case'}?`,
-        timestamp: new Date()
-      }]);
-    }
-  }, [firmId, matterId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  async function loadMatter() {
+  const loadMatter = useCallback(async () => {
+    if (!firmId || !matterId) return;
     try {
       const snap = await getDoc(doc(db, 'firms', firmId, 'matters', matterId));
       if (snap.exists()) {
         const data = snap.data();
         setMatter({ id: snap.id, ...data });
+        setEngagementStatus(data.engagementStatus || 'Drafting');
+        setPortalProvisioned(Boolean(data.portalProvisioned));
         
         // Update welcome message once matter loads
-        setMessages(prev => [
+        setMessages(_prev => [
             {
                 id: 'system-init',
                 role: 'system',
@@ -89,7 +89,164 @@ export default function MatterWorkspace() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [firmId, matterId]);
+
+  useEffect(() => {
+    loadMatter();
+  }, [loadMatter]);
+
+  const appendSystemMessage = useCallback((content) => {
+    setMessages(prev => [...prev, {
+      id: `sys-${Date.now()}`,
+      role: 'system',
+      content,
+      timestamp: new Date(),
+    }]);
+  }, []);
+
+  const matterRef = firmId && matterId ? doc(db, 'firms', firmId, 'matters', matterId) : null;
+  const isClosed = matter?.status === 'Closed';
+
+  const recordAudit = useCallback(async ({ type, action, reason, resource = `matters/${matterId}` }) => {
+    if (!firmId) return;
+    await addDoc(collection(db, 'firms', firmId, 'auditLog'), {
+      type,
+      resource,
+      action,
+      granted: true,
+      reason,
+      employeeEmail: user?.email || null,
+      timestamp: serverTimestamp(),
+      immutable: true,
+    });
+  }, [firmId, matterId, user?.email]);
+
+  const handleGenerateEngagement = useCallback(async () => {
+    if (!matterRef || isClosed) return;
+    setWorkflowError('');
+    setActionPending('engagement');
+    try {
+      await updateDoc(matterRef, {
+        engagementStatus: 'Sent',
+        engagementGeneratedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setEngagementStatus('Sent');
+      setMatter(prev => ({ ...prev, engagementStatus: 'Sent' }));
+      appendSystemMessage('Drafting Agent has generated the Engagement Letter. Sent to Partner for final approval & e-signature.');
+      await recordAudit({
+        type: 'matter.engagement_generated',
+        action: 'update',
+        reason: 'Engagement letter generated from matter workspace.',
+      });
+    } catch (err) {
+      setWorkflowError(err.message || 'Could not generate engagement letter.');
+    } finally {
+      setActionPending('');
+    }
+  }, [appendSystemMessage, isClosed, matterRef, recordAudit]);
+
+  const handlePartnerSign = useCallback(async () => {
+    if (!matterRef || isClosed) return;
+    setWorkflowError('');
+    setActionPending('partner-sign');
+    try {
+      await updateDoc(matterRef, {
+        engagementStatus: 'Signed',
+        portalProvisioned: true,
+        engagementSignedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setEngagementStatus('Signed');
+      setPortalProvisioned(true);
+      setMatter(prev => ({ ...prev, engagementStatus: 'Signed', portalProvisioned: true }));
+      appendSystemMessage('Engagement Letter Signed. Zero-Trust Client Portal has been provisioned automatically. Integration with IOLTA billing active.');
+      await recordAudit({
+        type: 'matter.engagement_signed',
+        action: 'sign',
+        reason: 'Partner approved engagement letter and provisioned client portal.',
+      });
+    } catch (err) {
+      setWorkflowError(err.message || 'Could not sign engagement letter.');
+    } finally {
+      setActionPending('');
+    }
+  }, [appendSystemMessage, isClosed, matterRef, recordAudit]);
+
+  const handleCreateSignatureRequest = useCallback(async () => {
+    if (!firmId || !matter || isClosed) return;
+    setWorkflowError('');
+    setActionPending('signature');
+    try {
+      const token = createSecureToken();
+      const tokenHash = await sha256Hex(token);
+      await addDoc(collection(db, 'firms', firmId, 'matters', matterId, 'signatureRequests'), {
+        documentName: 'Engagement and Closing Acknowledgment',
+        firmName: firm?.firmName || firm?.name || matter.firmName || 'Secure Law Firm Portal',
+        clientName: matter.client || 'Authorized Signatory',
+        matterTitle: matter.title,
+        documentText: `Engagement acknowledgment for ${matter.title}. This document confirms secure portal access, engagement review, and matter workflow readiness. Attorney review remains required for all legal advice and final work product.`,
+        status: 'pending',
+        tokenHash,
+        createdBy: user?.uid || null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+      const link = `${window.location.origin}/signature/${token}`;
+      setSignatureLink(link);
+      appendSystemMessage('Client signature request created. The public signer link is ready for secure delivery.');
+      await recordAudit({
+        type: 'signature.requested',
+        action: 'create',
+        reason: 'Client signature request created from matter workspace.',
+        resource: `matters/${matterId}/signatureRequests`,
+      });
+    } catch (err) {
+      setWorkflowError(err.message || 'Could not create signature request.');
+    } finally {
+      setActionPending('');
+    }
+  }, [appendSystemMessage, firm, firmId, isClosed, matter, matterId, recordAudit, user?.uid]);
+
+  const handleCloseMatter = useCallback(async () => {
+    if (!firmId || !matter || !matterRef || isClosed) return;
+    setWorkflowError('');
+    setActionPending('close');
+    const summary = 'Matter lifecycle completed: intake, conflict review, engagement, portal, signature, billing capture, and closure audit.';
+    try {
+      await updateDoc(matterRef, {
+        status: 'Closed',
+        stage: 'Completed',
+        closedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        closureReason: 'Matter marked complete from workspace.',
+        caseCompletionSummary: summary,
+      });
+      await addDoc(collection(db, 'firms', firmId, 'billableActivities'), {
+        agentRole: 'Billing Agent',
+        taskName: 'Matter lifecycle completion review',
+        matterId,
+        matterName: matter.title,
+        duration: '0.6h',
+        value: 210,
+        status: 'detected',
+        timestamp: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      });
+      await recordAudit({
+        type: 'matter.closed',
+        action: 'close',
+        reason: summary,
+      });
+      setMatter(prev => ({ ...prev, status: 'Closed', stage: 'Completed', caseCompletionSummary: summary }));
+      appendSystemMessage('Matter closed. Completion summary, billing activity, and immutable audit record have been saved.');
+    } catch (err) {
+      setWorkflowError(err.message || 'Could not close matter.');
+    } finally {
+      setActionPending('');
+    }
+  }, [appendSystemMessage, firmId, isClosed, matter, matterId, matterRef, recordAudit]);
 
   const handleSend = useCallback(async () => {
     const text = chatInput.trim();
@@ -116,10 +273,14 @@ export default function MatterWorkspace() {
 
       // We pass the matterContext specifically!
       const matterContext = {
+        id: matter.id,
         title: matter.title,
         client: matter.client,
         type: matter.type,
-        description: matter.description || 'No detailed background provided.'
+        description: matter.description || 'No detailed background provided.',
+        assignedTo: matter.assignedTo || [],
+        assignedEmails: matter.assignedEmails || [],
+        assignedUserIds: matter.assignedUserIds || [],
       };
 
       const result = await sendAgentMessage(firmId, agentId, text, history, matterContext);
@@ -136,7 +297,7 @@ export default function MatterWorkspace() {
       }
       
       // Auto-generate time capture
-      const generatedTime = ((endTime - startTime) / 1000).toFixed(1); // seconds
+      const _generatedTime = ((endTime - startTime) / 1000).toFixed(1); // seconds
       const billableEquivalent = (Math.max(0.1, result.response.length / 3000)).toFixed(1); // estimated human hours saved
       const totalAmount = (parseFloat(billableEquivalent) * 350).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
       
@@ -159,7 +320,7 @@ export default function MatterWorkspace() {
       setMessages(prev => [...prev, {
         id: `error-${Date.now()}`,
         role: 'system',
-        content: `⚠️ Error: ${err.message}.`,
+        content: `Warning: ${err.message}.`,
         timestamp: new Date(),
       }]);
     } finally {
@@ -305,17 +466,10 @@ export default function MatterWorkspace() {
                 <button 
                   className="db-btn db-btn-secondary db-btn-sm" 
                   style={{ width: '100%', fontSize: '0.75rem', background: 'var(--db-nvidia-green-subtle)', border: '1px solid var(--db-nvidia-green)', color: 'var(--db-nvidia-green)' }}
-                  onClick={() => {
-                    setEngagementStatus('Sent');
-                    setMessages(prev => [...prev, {
-                      id: `sys-${Date.now()}`,
-                      role: 'system',
-                      content: 'Drafting Agent has generated the Engagement Letter. Sent to Partner for final approval & e-signature.',
-                      timestamp: new Date()
-                    }]);
-                  }}
+                  onClick={handleGenerateEngagement}
+                  disabled={Boolean(actionPending) || isClosed}
                 >
-                  <Bot size={14} style={{ marginRight: '6px' }} /> Generate Engagement Letter
+                  <Bot size={14} style={{ marginRight: '6px' }} /> {actionPending === 'engagement' ? 'Generating...' : 'Generate Engagement Letter'}
                 </button>
               )}
 
@@ -323,18 +477,10 @@ export default function MatterWorkspace() {
                 <button 
                   className="db-btn db-btn-primary db-btn-sm" 
                   style={{ width: '100%', fontSize: '0.75rem' }}
-                  onClick={() => {
-                    setEngagementStatus('Signed');
-                    setPortalProvisioned(true);
-                    setMessages(prev => [...prev, {
-                      id: `sys-${Date.now()}`,
-                      role: 'system',
-                      content: 'Engagement Letter Signed. Zero-Trust Client Portal has been provisioned automatically. Integration with IOLTA billing active.',
-                      timestamp: new Date()
-                    }]);
-                  }}
+                  onClick={handlePartnerSign}
+                  disabled={Boolean(actionPending) || isClosed}
                 >
-                  <CheckCircle size={14} style={{ marginRight: '6px' }} /> Partner Review & E-Sign
+                  <CheckCircle size={14} style={{ marginRight: '6px' }} /> {actionPending === 'partner-sign' ? 'Signing...' : 'Partner Review & E-Sign'}
                 </button>
               )}
 
@@ -361,6 +507,51 @@ export default function MatterWorkspace() {
                 >
                   <ExternalLink size={14} style={{ marginRight: '6px' }} /> Access Portal
                 </button>
+              )}
+
+              {engagementStatus === 'Signed' && !isClosed && (
+                <button 
+                  className="db-btn db-btn-secondary db-btn-sm" 
+                  style={{ width: '100%', fontSize: '0.75rem' }}
+                  onClick={handleCreateSignatureRequest}
+                  disabled={Boolean(actionPending)}
+                >
+                  <FileText size={14} style={{ marginRight: '6px' }} /> {actionPending === 'signature' ? 'Creating Link...' : 'Create Client Signature Link'}
+                </button>
+              )}
+
+              {signatureLink && (
+                <a
+                  href={signatureLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ display: 'block', fontSize: '0.75rem', color: '#3b82f6', wordBreak: 'break-all' }}
+                >
+                  {signatureLink}
+                </a>
+              )}
+
+              {!isClosed && (
+                <button
+                  className="db-btn db-btn-secondary db-btn-sm"
+                  style={{ width: '100%', fontSize: '0.75rem', borderColor: '#16a34a', color: '#16a34a' }}
+                  onClick={handleCloseMatter}
+                  disabled={Boolean(actionPending)}
+                >
+                  <CheckCircle size={14} style={{ marginRight: '6px' }} /> {actionPending === 'close' ? 'Closing...' : 'Close Matter'}
+                </button>
+              )}
+
+              {isClosed && (
+                <div style={{ padding: '10px 12px', borderRadius: '6px', background: 'rgba(22,163,74,0.08)', color: '#16a34a', fontSize: '0.75rem', fontWeight: 700 }}>
+                  Matter closed and archived for audit.
+                </div>
+              )}
+
+              {workflowError && (
+                <div style={{ padding: '10px 12px', borderRadius: '6px', background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '0.75rem' }}>
+                  {workflowError}
+                </div>
               )}
             </div>
           </div>

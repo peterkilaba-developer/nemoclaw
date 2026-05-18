@@ -1,19 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
-  ShieldCheck, CheckCircle, XCircle, AlertTriangle, Search, FileText, UserCheck, Check, 
-  FolderOpen, Users, Mail, Bot, DollarSign, Clock, TrendingUp, Zap, 
-  ArrowRight, Lock, Timer, Crown, Plus, Minus as MinusIcon, ChevronRight,
-  ShieldAlert, ExternalLink, Download, CreditCard as CardIcon, History, AlertCircle, Info, HelpCircle
+  ShieldCheck, CheckCircle, XCircle, FileText, Check, Users, Bot, DollarSign, Clock, TrendingUp, Zap, Lock, Crown,
+  ShieldAlert, Download, CreditCard as CardIcon, AlertCircle, Info
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
-import { redirectToCheckout, redirectToPortal, PRICING, calculateMonthlyTotal, getFounderDaysRemaining, isInFounderWindow } from '../lib/stripeService';
+import { redirectToCheckout, redirectToPortal, calculateMonthlyTotal, getFounderDaysRemaining, isInFounderWindow } from '../lib/stripeService';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { collection, query, orderBy, getDocs, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-
 const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
 
 // Inline Card Update Form Component
@@ -60,7 +57,7 @@ function CardUpdateForm({ onSuccess, onCancel, firmId }) {
       }
       
       onSuccess();
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to update payment method. Please try again.');
     } finally {
       setLoading(false);
@@ -129,8 +126,8 @@ export default function BillingUsage() {
 
 function BillingUsageContent() {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  const _navigate = useNavigate();
+  const { _user } = useAuth();
   const { firm, refreshFirm, loading: firmLoading } = useFirm();
   const firmId = firm?.id;
   const [checkoutLoading, setCheckoutLoading] = useState(false);
@@ -142,12 +139,12 @@ function BillingUsageContent() {
   const [invoices, setInvoices] = useState([]);
   const [toast, setToast] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const [_portalLoading, setPortalLoading] = useState(false);
   
   // Client Billing Logic
   const [billableActivities, setBillableActivities] = useState([]);
   const [clientInvoices, setClientInvoices] = useState([]);
-  const [loadingClientData, setLoadingClientData] = useState(true);
+  const [_loadingClientData, setLoadingClientData] = useState(true);
   const [view, setView] = useState('revenue'); // 'revenue' or 'subscription'
 
   // Success/Cancel state from URL
@@ -246,11 +243,11 @@ function BillingUsageContent() {
     }
   };
 
-  const handleManageBilling = async () => {
+  const _handleManageBilling = async () => {
     setPortalLoading(true);
     try {
       await redirectToPortal(firmId);
-    } catch (err) {
+    } catch (_err) {
       showToast('error', 'Secure billing portal currently unavailable. AI operations team notified.');
     } finally {
       setPortalLoading(false);
@@ -706,7 +703,7 @@ function BillingUsageContent() {
                   {loadingInvoices ? (
                     <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>Fetching logs...</div>
                   ) : invoices.length > 0 ? (
-                    invoices.map((inv, i) => (
+                    (invoices || []).map((inv, i) => (
                       <div key={inv.id || i} className="db-feed-item">
                         <div className="db-feed-content">
                           <div className="db-feed-title">{inv.date} — {inv.description || 'Agentic OS Subscription'}</div>

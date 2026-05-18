@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { 
-  Sparkles, FileText, Send, Eye, Clock, CheckCircle2, 
-  AlertCircle, ChevronRight, BarChart3, Filter, MessageSquare,
+  Sparkles, FileText, Send, Eye, Clock, CheckCircle2, BarChart3, MessageSquare,
   Globe, Share2, MoreVertical, RefreshCw, Layers
 } from 'lucide-react';
 import { getMarketingDrafts } from '../../lib/internalAgentAPI';
-
 const TYPE_CONFIG = {
   blog: { icon: FileText, color: '#3b82f6', label: 'Blog Post' },
   linkedin: { icon: MessageSquare, color: '#0077b5', label: 'LinkedIn' },

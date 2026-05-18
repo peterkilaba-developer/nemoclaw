@@ -46,15 +46,19 @@ from dotenv import load_dotenv
 #  ENVIRONMENT BOOTSTRAP
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Try to load local .env, then fall back to root workspace .env
 load_dotenv()
+root_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(root_env_path):
+    load_dotenv(root_env_path)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 NVIDIA_API_KEY = (
     os.environ.get("NVIDIA_API_KEY")
-    or os.environ.get("OPENAI_API_KEY")
     or os.environ.get("VITE_NVIDIA_API_KEY")
+    or os.environ.get("OPENAI_API_KEY")
     or ""
 )
 
@@ -246,7 +250,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://nemoc-law.ai",
+        "https://www.nemoc-law.ai",
+        "https://nemoc-law-ai.web.app",
+        "https://nemoc-law-ai.firebaseapp.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -335,7 +346,7 @@ async def call_anthropic(request: InferenceRequest) -> dict:
             messages.append({"role": "assistant" if m.role == "assistant" else "user", "content": m.content})
     
     payload = {
-        "model": "claude-3-5-sonnet-20240620",
+        "model": "claude-3-5-sonnet-20241022",
         "max_tokens": request.max_tokens or 4096,
         "temperature": request.temperature,
         "system": system_text.strip(),
@@ -385,7 +396,7 @@ async def call_gemini(request: InferenceRequest) -> dict:
         payload["systemInstruction"] = system_instruction
 
     try:
-        url = f"/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
+        url = f"/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
         response = await gemini_client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
@@ -403,7 +414,7 @@ async def call_openai(request: InferenceRequest) -> dict:
         return {"error": "OPENAI_API_KEY not set"}
     
     payload = {
-        "model": "gpt-4o",
+        "model": "gpt-4o-mini",
         "messages": [{"role": m.role, "content": m.content} for m in request.messages],
         "max_tokens": request.max_tokens,
         "temperature": request.temperature,

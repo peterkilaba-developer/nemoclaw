@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Target, Zap, Rocket, Users, TrendingUp, Sparkles, Loader, Shield, CheckCircle2, Clock, Activity, Radio, Terminal } from 'lucide-react';
 import { sendInternalAgentMessage } from '../../lib/internalAgentAPI';
 import { db } from '../../lib/firebase';
 import { collection, addDoc, getDocs, query, orderBy, limit, serverTimestamp, updateDoc, doc, where } from 'firebase/firestore';
+import { getProspects, runSDRBlitz } from '../../lib/prospectService';
+import { getEnrichmentStatus } from '../../lib/enrichmentService';
+import { Activity, CheckCircle2, Loader, Radio, Shield, Sparkles, Terminal, TrendingUp } from 'lucide-react';
 
 export default function CorporateStrategy() {
   const [briefing, setBriefing] = useState('');
@@ -77,8 +79,6 @@ export default function CorporateStrategy() {
       // ── Gather REAL metrics from Firestore ──
       let liveContext = {};
       try {
-        const { getProspects } = await import('../../lib/prospectService');
-        const { getEnrichmentStatus } = await import('../../lib/enrichmentService');
         const prospects = await getProspects();
         const enrichStatus = getEnrichmentStatus();
 
@@ -96,7 +96,7 @@ export default function CorporateStrategy() {
         try {
           const wSnap = await getDocs(query(collection(db, 'waitlist'), limit(200)));
           waitlistCount = wSnap.size;
-        } catch (e) { /* ignore */ }
+        } catch (_e) { /* ignore */ }
 
         liveContext = {
           prospects: {
@@ -121,7 +121,7 @@ export default function CorporateStrategy() {
             hunterIO: enrichStatus.hunter.configured ? 'ACTIVE — email enrichment online' : 'NOT CONFIGURED',
             apolloIO: enrichStatus.apollo.configured ? 'ACTIVE — org enrichment online' : 'NOT CONFIGURED',
             sendgrid: 'NOT DEPLOYED — Cloud Function needed. Emails queue in Firestore but never send.',
-            blandAI: import.meta.env.VITE_BLAND_API_KEY ? 'ACTIVE — voice outreach' : 'NOT CONFIGURED — no API key',
+            blandAI: 'BACKEND-MANAGED - voice outreach proxy',
             stripe: 'CONFIGURED — checkout session endpoint exists but production keys may need verification',
           },
           sdrCapabilities: {
@@ -135,7 +135,6 @@ export default function CorporateStrategy() {
             'Bland AI voice key empty — voice outreach disabled',
             'No HubSpot, DocuSign, or ad platform integrations exist',
             'No conversion tracking or reply rate analytics',
-            'Pulsator writes mock heartbeats to audit log (noise)',
           ],
         };
       } catch (e) {
@@ -198,9 +197,6 @@ RULES:
     if (!briefing) return;
     setIsExecuting(true);
     setExecutionLog([]);
-
-    // Import the real SDR blitz function
-    const { runSDRBlitz } = await import('../../lib/prospectService');
 
     // Step 1: Broadcast directive
     const step1 = { id: '1', agent: 'cea', msg: 'Broadcasting mission directive to all department heads. SDR Blitz is GO.' };
@@ -271,6 +267,8 @@ RULES:
   useEffect(() => {
     loadLastPlan();
     loadAuditTrail();
+    // Strategic dashboard bootstrap should run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Auto-open console if mission was already executed
@@ -614,4 +612,3 @@ function ConstraintItem({ label, value, color }) {
     </div>
   );
 }
-

@@ -34,8 +34,8 @@
 }
 
 .pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  justify-content: center;
   gap: 24px;
   margin-bottom: 40px;
   align-items: start;
@@ -47,6 +47,8 @@
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  width: 100%;
+  max-width: 440px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -335,10 +337,8 @@
 
 @media (max-width: 900px) {
   .pricing-grid {
-    grid-template-columns: 1fr;
-    max-width: 440px;
-    margin-left: auto;
-    margin-right: auto;
+    flex-direction: column;
+    align-items: center;
   }
 
   .pricing-comparison {

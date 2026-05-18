@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import './AudioPlayer.css';
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react';
 
 const AUDIO_SRC = '/nemoc-law-ai-deep-dive.mp3';
 
@@ -18,21 +18,39 @@ export default function AudioPlayer() {
     const onMeta = () => setDuration(a.duration);
     const onTime = () => setCurrent(a.currentTime);
     const onEnd = () => setPlaying(false);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+
     a.addEventListener('loadedmetadata', onMeta);
     a.addEventListener('timeupdate', onTime);
     a.addEventListener('ended', onEnd);
+    a.addEventListener('play', onPlay);
+    a.addEventListener('pause', onPause);
+
     return () => {
       a.removeEventListener('loadedmetadata', onMeta);
       a.removeEventListener('timeupdate', onTime);
       a.removeEventListener('ended', onEnd);
+      a.removeEventListener('play', onPlay);
+      a.removeEventListener('pause', onPause);
     };
   }, []);
 
   const toggle = () => {
     const a = audioRef.current;
     if (!a) return;
-    if (playing) { a.pause(); } else { a.play(); }
-    setPlaying(!playing);
+    
+    if (a.paused) {
+      const playPromise = a.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.error("Audio playback error:", error);
+          setPlaying(false);
+        });
+      }
+    } else {
+      a.pause();
+    }
   };
 
   const seek = (e) => {
@@ -54,7 +72,7 @@ export default function AudioPlayer() {
 
   return (
     <div className={`audio-player ${playing ? 'is-playing' : ''}`}>
-      <audio ref={audioRef} src={AUDIO_SRC} preload="metadata" />
+      <audio ref={audioRef} src={AUDIO_SRC} preload="none" />
 
       {/* Play / Pause Button */}
       <button className="ap-play-btn" onClick={toggle} type="button" aria-label={playing ? 'Pause' : 'Play'}>

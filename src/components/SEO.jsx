@@ -10,7 +10,7 @@ const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
  */
 export default function SEO({
   title,
-  description = "Your firm's private AI workforce. 10 AI agents that 10x your team or fill roles you haven't hired yet. Secured by NVIDIA NemoClaw. Zero data leak guarantee.",
+  description = "We built an Agentic AI Operating System and secured an entire law firm inside it. Experience the ultimate HITL OS powered by NVIDIA NemoClaw with a zero data leak guarantee. Pricing at $297/mo.",
   path = '',
   ogImage = DEFAULT_OG_IMAGE,
   ogType = 'website',
@@ -19,7 +19,7 @@ export default function SEO({
 }) {
   const fullTitle = title
     ? `${title} | ${SITE_NAME}`
-    : `${SITE_NAME} — Your Firm's Private AI Workforce | Secured by NVIDIA NemoClaw`;
+    : `${SITE_NAME} — Agentic HITL OS | Secured by NVIDIA NemoClaw`;
   const canonicalUrl = `${SITE_URL}${path}`;
 
   return (
@@ -67,7 +67,7 @@ export const structuredDataTemplates = {
     name: 'NemoC Law AI',
     url: SITE_URL,
     logo: `${SITE_URL}/logos/wordmark.svg`,
-    description: "The first Agentic-as-a-Service (AgaaS) platform for law firms. Private AI workforce secured by NVIDIA NemoClaw.",
+    description: "The first Agentic-as-a-Service (AgaaS) platform for law firms. An Agentic HITL OS secured by NVIDIA NemoClaw.",
     foundingDate: '2026',
     sameAs: [],
     contactPoint: {
@@ -83,7 +83,7 @@ export const structuredDataTemplates = {
     name: 'NemoC Law AI',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
-    description: "Private AI workforce for law firms. 10 AI agents that 10x your team or fill roles you haven't hired yet.",
+    description: "We built an Agentic AI Operating System and secured an entire law firm inside it.",
     offers: {
       '@type': 'AggregateOffer',
       lowPrice: '297',

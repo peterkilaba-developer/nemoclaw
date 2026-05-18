@@ -1,17 +1,14 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Globe, Search, Loader, CheckCircle2, AlertTriangle,
-  Smartphone, Monitor, Zap, Shield, BarChart3, Palette,
-  Eye, ShoppingCart, Download, RefreshCw, Tablet,
+  Smartphone, Monitor, Zap, Shield, BarChart3, Palette, ShoppingCart, Download, RefreshCw, Tablet,
   User, Image, MessageSquare, Save, Bot, ToggleLeft, ToggleRight,
-  Settings2, ChevronDown, ChevronUp, PanelLeftClose, PanelLeft,
-  MapPin, Plus, Lightbulb, ArrowRight, Trash2
+  Settings2, ChevronDown, ChevronUp, PanelLeftClose, Plus, ArrowRight, Trash2
 } from 'lucide-react';
 import { generateCustomWebsite } from '../lib/websiteGenerator';
 import { generateFirmContent } from '../lib/firmContentEngine';
 import { scrapeFirmWebsite } from '../lib/prospectService';
 import { useFirm } from '../contexts/FirmContext';
-
 const ANALYSIS_STEPS = [
   { label: 'Crawling website pages', icon: Search },
   { label: 'Analyzing design & layout', icon: Palette },
@@ -74,6 +71,68 @@ const labelStyle = {
   display: 'block', fontSize: '0.75rem', fontWeight: 600,
   color: 'var(--db-text-secondary)', marginBottom: '4px',
 };
+
+function buildScoresFromDiagnostics(liveData) {
+  const diagnostics = liveData?.diagnostics;
+  if (!diagnostics) return null;
+
+  const seoSignals = [diagnostics.hasSchemaMarkup, diagnostics.hasPracticeAreaPages, (liveData.practiceAreas || []).length > 0];
+  const conversionSignals = [diagnostics.hasContactForm, diagnostics.hasReviews, diagnostics.hasChatWidget, !!liveData.phone, !!liveData.email];
+  const contentSignals = [(liveData.attorneys || []).length > 0, (liveData.practiceAreas || []).length > 0, !!liveData.description, !!liveData.address];
+
+  const scoreFromSignals = (signals) => Math.round((signals.filter(Boolean).length / signals.length) * 100);
+
+  return {
+    mobile: diagnostics.hasViewport ? 100 : 35,
+    seo: scoreFromSignals(seoSignals),
+    security: diagnostics.hasSsl ? 100 : 25,
+    conversion: scoreFromSignals(conversionSignals),
+    content: scoreFromSignals(contentSignals),
+  };
+}
+
+function buildIssuesFromLiveData(liveData, error = '') {
+  if (error) {
+    return [{ severity: 'warning', text: `Live crawl failed: ${error}` }];
+  }
+
+  const diagnostics = liveData?.diagnostics;
+  if (!diagnostics) return [];
+
+  const issues = [];
+  if (!diagnostics.hasViewport) issues.push({ severity: 'critical', text: 'No responsive viewport meta tag detected in crawled HTML' });
+  if (!diagnostics.hasSsl) issues.push({ severity: 'critical', text: 'Crawled URL did not use HTTPS' });
+  if (!diagnostics.hasSchemaMarkup) issues.push({ severity: 'warning', text: 'No structured data markup detected' });
+  if (!diagnostics.hasPracticeAreaPages) issues.push({ severity: 'warning', text: 'No dedicated practice area links detected' });
+  if (!diagnostics.hasContactForm) issues.push({ severity: 'info', text: 'No contact form detected in crawled pages' });
+  if (!diagnostics.hasReviews) issues.push({ severity: 'info', text: 'No reviews or testimonials section detected' });
+  if (!liveData?.phone) issues.push({ severity: 'warning', text: 'No phone number detected in crawled pages' });
+  if (!liveData?.email) issues.push({ severity: 'info', text: 'No public email detected in crawled pages' });
+  if (!(liveData?.attorneys || []).length) issues.push({ severity: 'info', text: 'No attorney roster detected in crawled pages' });
+
+  return issues;
+}
+
+function buildImprovementsFromIssues(issues) {
+  if (!issues.length) return ['Preserve verified firm content and keep monitoring site diagnostics'];
+  return issues.map((issue) => issue.text.replace(/^No /, 'Add ').replace(/ detected.*$/, ''));
+}
+
+function buildAnalysisReport({ url, domain, liveData = null, error = '', autoSeeded = false }) {
+  const issues = buildIssuesFromLiveData(liveData, error);
+  return {
+    url,
+    domain,
+    autoSeeded,
+    scores: buildScoresFromDiagnostics(liveData),
+    issues,
+    improvements: buildImprovementsFromIssues(issues),
+    pagesScraped: liveData?.pagesScraped || 0,
+    dataSource: liveData ? 'live_crawl' : 'firm_profile',
+    analysisUnavailable: !liveData,
+    scrapedAt: liveData?.scrapedAt || null,
+  };
+}
 
 export default function WebsiteBuilder() {
   const [url, setUrl] = useState('');
@@ -158,7 +217,7 @@ export default function WebsiteBuilder() {
       localStorage.setItem('nemoc_built_site', JSON.stringify({
         config: cfg, report: rpt, domain: d, savedAt: Date.now(),
       }));
-    } catch (e) { /* quota exceeded, ignore */ }
+    } catch (_e) { /* quota exceeded, ignore */ }
   }, []);
 
   useEffect(() => {
@@ -178,14 +237,14 @@ export default function WebsiteBuilder() {
           return; // Skip analysis — use cached
         }
       }
-    } catch (e) { /* corrupted cache, continue */ }
+    } catch (_e) { /* corrupted cache, continue */ }
 
     // ── Priority 1: localStorage seed from frictionless onboarding ──
     let seed = null;
     try {
       const raw = localStorage.getItem('nemoc_website_seed');
       if (raw) seed = JSON.parse(raw);
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
 
     // ── Priority 2: Firm context from Firestore ──
     if (!seed && firm?.firmWebsite) {
@@ -213,58 +272,61 @@ export default function WebsiteBuilder() {
       console.log('🤖 Builder: Starting auto-seed analysis for', d);
       setAnalyzing(true);
       setCurrentStep(0);
+      let analysisReport = null;
 
       try {
         for (let i = 0; i < ANALYSIS_STEPS.length; i++) {
           setCurrentStep(i);
-          await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
+          await new Promise(r => setTimeout(r, 400));
+        }
+
+        let liveData = null;
+        let crawlError = '';
+        if (siteUrl) {
+          try {
+            liveData = await scrapeFirmWebsite(siteUrl);
+            seed = {
+              ...seed,
+              firmName: liveData.firmName || seed.firmName,
+              description: liveData.description || seed.description,
+              ...(liveData.practiceAreas?.length > 0 && { practiceAreas: liveData.practiceAreas }),
+              ...(liveData.attorneys?.length > 0 && { attorneys: liveData.attorneys }),
+              ...(liveData.colors && { scrapedColors: liveData.colors }),
+              ...(liveData.address && { address: liveData.address }),
+              ...(liveData.phone && { phone: liveData.phone }),
+              ...(liveData.email && { email: liveData.email }),
+              ...(liveData.city && { city: liveData.city }),
+              ...(liveData.state && { stateBar: liveData.state }),
+              ...(liveData.yearEstablished && { yearEstablished: liveData.yearEstablished }),
+            };
+          } catch (e) {
+            crawlError = e.message;
+          }
         }
 
         initConfig(d, seed);
 
-        const newReport = {
+        const newReport = buildAnalysisReport({
           url: siteUrl ? `https://${d}` : `https://${d}`,
           domain: d,
+          liveData,
+          error: crawlError,
           autoSeeded: true,
-          scores: {
-            design: Math.floor(28 + Math.random() * 25),
-            mobile: Math.floor(20 + Math.random() * 30),
-            seo: Math.floor(25 + Math.random() * 30),
-            speed: Math.floor(18 + Math.random() * 35),
-            security: Math.floor(35 + Math.random() * 25),
-            accessibility: Math.floor(22 + Math.random() * 30),
-          },
-          issues: [
-            { severity: 'critical', text: 'Not mobile-responsive \u2014 60% of legal searches happen on mobile' },
-            { severity: 'critical', text: 'Missing SSL certificate or HTTPS headers' },
-            { severity: 'warning', text: 'No structured data markup for local legal SEO' },
-            { severity: 'warning', text: 'Page load time exceeds 4 seconds' },
-            { severity: 'warning', text: 'Missing meta descriptions on practice area pages' },
-            { severity: 'info', text: 'No Google Business Profile integration detected' },
-            { severity: 'info', text: 'Contact form lacks CAPTCHA protection' },
-            { severity: 'info', text: 'Missing attorney bio schema markup' },
-          ],
-          improvements: [
-            'Modern, mobile-first responsive design', 'ADA-compliant accessibility (WCAG 2.1)', 'Legal-specific SEO optimization',
-            'Sub-2-second page load times', 'Integrated contact forms with CAPTCHA', 'Attorney bio pages with schema markup',
-            'Practice area landing pages', 'Client testimonial sections', 'Secure HTTPS with proper headers', 'Google Analytics & conversion tracking',
-          ],
-        };
+        });
 
+        analysisReport = newReport;
         setReport(newReport);
         console.log('✅ Builder: Auto-seed complete.');
       } catch (err) {
         console.error('❌ Builder: Auto-seed failed', err);
-        // Provision a fallback so we don't land on an empty splash
-        setReport({
-          url: siteUrl,
+        analysisReport = buildAnalysisReport({
+          url: siteUrl || `https://${d}`,
           domain: d,
-          isFallback: true,
-          scores: { design: 30, mobile: 20, seo: 25, speed: 15, security: 40, accessibility: 28 },
-          issues: [{ severity: 'warning', text: 'Intelligence engine connection interrupted' }],
-          improvements: ['Retry manual analysis for deeper insights'],
+          error: err.message,
+          autoSeeded: true,
         });
-        initConfig(d, null);
+        setReport(analysisReport);
+        initConfig(d, seed);
       } finally {
         setAnalyzing(false);
         setCurrentStep(-1);
@@ -273,7 +335,7 @@ export default function WebsiteBuilder() {
       // Persist for future visits — wait a tick for config state to settle
       setTimeout(() => {
         try {
-          const raw = localStorage.getItem('nemoc_built_site');
+          const _raw = localStorage.getItem('nemoc_built_site');
           // Config was set via initConfig which uses setConfig, so we need to grab it from the content engine directly
           const content = generateFirmContent(seed);
           const practiceAreasWithDesc = content.practiceAreas.map(area => {
@@ -298,11 +360,11 @@ export default function WebsiteBuilder() {
               capabilities: ['Chat', 'Schedule', 'FAQ'],
             },
           };
-          localStorage.setItem('nemoc_built_site', JSON.stringify({ config: builtConfig, report: newReport, domain: d, savedAt: Date.now() }));
-        } catch (e) { /* ignore */ }
+          localStorage.setItem('nemoc_built_site', JSON.stringify({ config: builtConfig, report: analysisReport, domain: d, savedAt: Date.now() }));
+        } catch (_e) { /* ignore */ }
       }, 100);
     })();
-  }, [firm, initConfig]);
+  }, [firm, initConfig, report]);
 
   const updateConfig = (key, value) => { setConfig(prev => ({ ...prev, [key]: value })); setSaved(false); };
   const updateColors = (colors) => {
@@ -342,7 +404,7 @@ export default function WebsiteBuilder() {
     try {
       localStorage.removeItem('nemoc_built_site');
       localStorage.removeItem('nemoc_website_seed');
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
 
     setAnalyzing(true);
     setReport(null);
@@ -352,7 +414,7 @@ export default function WebsiteBuilder() {
     try {
       for (let i = 0; i < ANALYSIS_STEPS.length; i++) {
         setCurrentStep(i);
-        await new Promise(r => setTimeout(r, 800 + Math.random() * 500));
+        await new Promise(r => setTimeout(r, 500));
       }
 
       const d = cleanUrl.replace(/https?:\/\//, '').split('/')[0];
@@ -360,9 +422,11 @@ export default function WebsiteBuilder() {
       const brandName = parts[0] === 'www' ? (parts[1] || parts[0]) : parts[0];
       
       let enrichedSeed = { firmName: brandName.replace(/[-_]/g, ' '), website: cleanUrl };
+      let liveData = null;
+      let crawlError = '';
       try {
-        const liveData = await scrapeFirmWebsite(cleanUrl);
-        if (liveData && !liveData.error && !liveData.simulated) {
+        liveData = await scrapeFirmWebsite(cleanUrl);
+        if (liveData && !liveData.error) {
           console.log(`🌐 DeepCrawl: Scraped ${liveData.pagesScraped || 1} pages, ${liveData.practiceAreas?.length || 0} practice areas, ${liveData.attorneys?.length || 0} attorneys`);
           enrichedSeed = {
             ...enrichedSeed,
@@ -388,46 +452,25 @@ export default function WebsiteBuilder() {
 
       initConfig(d, enrichedSeed);
 
-      const newReport = {
-        url: cleanUrl, domain: d,
-        scores: {
-          design: Math.floor(35 + Math.random() * 30),
-          mobile: Math.floor(25 + Math.random() * 35),
-          seo: Math.floor(30 + Math.random() * 35),
-          speed: Math.floor(20 + Math.random() * 40),
-          security: Math.floor(40 + Math.random() * 30),
-          accessibility: Math.floor(25 + Math.random() * 35),
-        },
-        issues: [
-          { severity: 'critical', text: 'Not mobile-responsive \u2014 60% of legal searches happen on mobile' },
-          { severity: 'critical', text: 'Missing SSL certificate or HTTPS headers' },
-          { severity: 'warning', text: 'No structured data markup for local legal SEO' },
-          { severity: 'warning', text: 'Page load time exceeds 4 seconds' },
-          { severity: 'warning', text: 'Missing meta descriptions on practice area pages' },
-          { severity: 'info', text: 'No Google Business Profile integration detected' },
-          { severity: 'info', text: 'Contact form lacks CAPTCHA protection' },
-          { severity: 'info', text: 'Missing attorney bio schema markup' },
-        ],
-        improvements: [
-          'Modern, mobile-first responsive design', 'ADA-compliant accessibility (WCAG 2.1)', 'Legal-specific SEO optimization',
-          'Sub-2-second page load times', 'Integrated contact forms with CAPTCHA', 'Attorney bio pages with schema markup',
-          'Practice area landing pages', 'Client testimonial sections', 'Secure HTTPS with proper headers', 'Google Analytics & conversion tracking',
-        ],
-      };
+      const newReport = buildAnalysisReport({
+        url: cleanUrl,
+        domain: d,
+        liveData,
+        error: crawlError || (!liveData ? 'Live crawl did not return data.' : ''),
+      });
 
       setReport(newReport);
     } catch (err) {
       console.error('Builder: Analysis crash', err);
-      alert('Analysis encountered an error. Proceeding with simulated data.');
       const d = cleanUrl.replace(/https?:\/\//, '').split('/')[0] || 'firm.ai';
       const fallbackReport = {
         url: cleanUrl, domain: d, isFallback: true,
-        scores: { design: 45, mobile: 30, seo: 40, speed: 35, security: 50, accessibility: 32 },
-        issues: [{ severity: 'warning', text: 'Scraper timeout — using estimated practice data' }],
-        improvements: ['Full mobile speed optimization', 'SEO metadata synchronization'],
+        scores: null,
+        issues: [{ severity: 'warning', text: `Live crawl failed: ${err.message}` }],
+        improvements: ['Resolve crawl error before relying on site audit results'],
       };
       setReport(fallbackReport);
-      initConfig(d, null);
+      initConfig(d, { firmName: d.replace(/[-_]/g, ' '), website: cleanUrl });
     } finally {
       setAnalyzing(false);
       setCurrentStep(-1);
@@ -438,7 +481,7 @@ export default function WebsiteBuilder() {
     try {
       localStorage.removeItem('nemoc_built_site');
       localStorage.removeItem('nemoc_website_seed');
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
     setReport(null);
     setConfig(null);
     setUrl('');
@@ -453,10 +496,13 @@ export default function WebsiteBuilder() {
     }
   }, [config, report, domain, persistBuiltSite]);
 
-  const overallScore = report?.scores
-    ? Math.round(Object.values(report.scores).reduce((a, b) => a + b, 0) / Object.keys(report.scores).length)
-    : 0;
-  const scoreColor = (s) => s >= 80 ? '#16a34a' : s >= 50 ? '#d97706' : '#dc2626';
+  const scoreValues = report?.scores
+    ? Object.values(report.scores).filter((value) => typeof value === 'number')
+    : [];
+  const overallScore = scoreValues.length
+    ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length)
+    : null;
+  const scoreColor = (s) => (s ?? 0) >= 80 ? '#16a34a' : (s ?? 0) >= 50 ? '#d97706' : '#dc2626';
 
   // Mobile: scale the content down so users see the full-width site at mobile dimensions
   const getIframeStyle = () => {
@@ -765,9 +811,9 @@ export default function WebsiteBuilder() {
                 </span>
                 <span style={{
                   padding: '2px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: 700,
-                  background: `${scoreColor(overallScore)}20`, color: scoreColor(overallScore),
+                  background: `${overallScore === null ? '#64748b' : scoreColor(overallScore)}20`, color: overallScore === null ? '#64748b' : scoreColor(overallScore),
                 }}>
-                  {overallScore}/100
+                  {overallScore === null ? 'No live score' : `${overallScore}/100`}
                 </span>
               </div>
               {reportCollapsed ? <ChevronDown size={16} color="var(--db-text-muted)" /> : <ChevronUp size={16} color="var(--db-text-muted)" />}
@@ -775,7 +821,7 @@ export default function WebsiteBuilder() {
             {!reportCollapsed && (
               <div style={{ padding: '0 20px 20px' }}>
                 <div className="db-stats-grid" style={{ marginBottom: '20px' }}>
-                  {report.scores && Object.entries(report.scores).map(([key, value]) => (
+                  {report.scores ? Object.entries(report.scores).map(([key, value]) => (
                     <div key={key} className="db-stat-card">
                       <div className="db-stat-label">{key.charAt(0).toUpperCase() + key.slice(1)}</div>
                       <div className="db-stat-value" style={{ color: scoreColor(value) }}>{value}</div>
@@ -783,7 +829,12 @@ export default function WebsiteBuilder() {
                         <div style={{ width: `${value}%`, height: '100%', background: scoreColor(value), borderRadius: '2px' }} />
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="db-stat-card">
+                      <div className="db-stat-label">Live Crawl</div>
+                      <div className="db-stat-value" style={{ color: '#64748b', fontSize: '0.875rem' }}>Unavailable</div>
+                    </div>
+                  )}
                 </div>
                 <div className="db-two-col">
                   <div>

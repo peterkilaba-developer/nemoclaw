@@ -4,10 +4,9 @@ import { Mail, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { isAdminUser } from '../components/AdminRoute';
 import '../styles/auth.css';
-
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { user, loading: authLoading, loginWithEmail, signupWithEmail, loginWithGoogle, loginWithApple } = useAuth();
+  const { user, loading: authLoading, loginWithEmail, signupWithEmail, loginWithGoogle } = useAuth();
   const [isSignup, setIsSignup] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -39,7 +38,7 @@ export default function LoginPage() {
         await signupWithEmail(form.email, form.password, form.name);
         // Navigation handled by useEffect
       } else {
-        const u = await loginWithEmail(form.email, form.password);
+        const _u = await loginWithEmail(form.email, form.password);
         // Navigation handled by useEffect
       }
     } catch (err) {
@@ -79,24 +78,7 @@ export default function LoginPage() {
     }
   };
 
-  const handleApple = async () => {
-    setError('');
-    setLoading(true);
-    try {
-      const u = await loginWithApple();
-      if (isAdminUser(u)) {
-        navigate('/admin');
-      } else {
-        navigate('/dashboard');
-      }
-    } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setError('Apple sign-in failed. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   return (
     <div className="auth-layout">
@@ -169,19 +151,7 @@ export default function LoginPage() {
             Continue with Google
           </button>
 
-          {/* Apple Sign-in */}
-          <button
-            type="button"
-            className="auth-google-btn"
-            onClick={handleApple}
-            disabled={loading}
-            style={{ marginTop: '8px' }}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
-              <path d="M13.71 5.04c-.08.06-1.5.87-1.5 2.66 0 2.08 1.82 2.81 1.87 2.83-.01.05-.29 1-.96 1.98-.59.87-1.2 1.73-2.15 1.73s-1.18-.55-2.27-.55c-1.06 0-1.43.57-2.31.57s-1.47-.8-2.15-1.78C3.36 11.16 2.7 9.2 2.7 7.35c0-2.97 1.93-4.54 3.83-4.54.99 0 1.82.65 2.44.65.6 0 1.53-.69 2.65-.69.43 0 1.96.04 2.97 1.47l.12.11zM11.24.81c.44-.52.75-1.25.75-1.98 0-.1-.01-.2-.02-.28-.72.03-1.57.48-2.08 1.07-.4.45-.78 1.18-.78 1.92 0 .11.02.22.03.26.05.01.13.02.21.02.65 0 1.45-.44 1.89-1.01z"/>
-            </svg>
-            Continue with Apple
-          </button>
+
 
           <div className="auth-divider">
             <span>or</span>

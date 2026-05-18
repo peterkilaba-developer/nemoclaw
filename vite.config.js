@@ -9,12 +9,11 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
-        // Proxy NVIDIA API calls through the local Python NeMo Guardrails Sandbox
-        // Uses VITE_PYTHON_PROXY_URL if set in .env to bridge local frontend to remote Codespace backend
+        // Proxy inference through the Firebase Function gateway so provider keys stay server-side.
         '/api/nvidia': {
-          target: env.VITE_PYTHON_PROXY_URL || 'http://127.0.0.1:8080',
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
           changeOrigin: true,
-          secure: false,
+          secure: true,
         },
         // Proxy Hunter.io API calls
         '/api/hunter': {

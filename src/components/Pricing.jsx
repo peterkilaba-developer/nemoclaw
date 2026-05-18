@@ -1,18 +1,20 @@
 import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Zap, ShieldCheck, Infinity, Check, Minus, TrendingUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { FirmContext } from '../contexts/FirmContext';
 import { redirectToCheckout } from '../lib/stripeService';
 import './Pricing.css';
 
+import { useLocation } from '../hooks/useLocation';
+import { Check, Infinity as InfinityIcon, Lock, Minus, ShieldCheck, TrendingUp, Zap } from 'lucide-react';
+
 const tiers = [
   {
     id: 'base',
-    name: 'Agentic OS',
+    name: 'Agentic HITL OS',
     price: '297',
     futurePrice: '997',
-    desc: 'The Agentic Operating System. Includes 1 Managing Partner agent.',
+    desc: 'The complete orchestration layer with uncompromised human-in-the-loop control.',
     features: [
       { text: '1 Managing Partner Agent included', included: true, highlight: true },
       { text: 'Unlimited Human Resources (Invites)', included: true },
@@ -20,53 +22,12 @@ const tiers = [
       { text: '100% NVIDIA NemoClaw Secure', included: true, highlight: true },
       { text: 'Access to Firm Dashboard', included: true },
       { text: '1-Year Audit Logs', included: true },
-      { text: 'Fully Autonomous Roles', included: false },
     ],
-    target: 'Any Size Firm',
-    roiPitch: 'Sign up with Managing Partner credentials. Your first agent is included.',
+    target: 'Full Firm Deployment',
+    roiPitch: 'Elevate your entire firm\'s operational capacity.',
     cta: 'Start Onboarding',
-    popular: false,
-  },
-  {
-    id: 'seat',
-    name: '10x Output Seat',
-    price: '149',
-    futurePrice: '497',
-    desc: 'Pair any Human Role in your firm with a dedicated Agentic Resource.',
-    features: [
-      { text: '1 Dedicated Agent per Human', included: true, highlight: true },
-      { text: 'Unlimited Inference Tokens', included: true, highlight: true },
-      { text: 'Personalized Drafting & Research', included: true },
-      { text: 'Increases KB limit to 500 MB', included: true },
-      { text: 'Agents learn your personal style', included: true },
-      { text: 'Auto-Time Capture Widget', included: true },
-      { text: 'Runs fully autonomously 24/7', included: false },
-    ],
-    target: 'Per Human Role',
-    roiPitch: 'Turn one associate into a partner-level producer.',
-    cta: 'Add to Plan',
     popular: true,
-  },
-  {
-    id: 'autonomous',
-    name: 'Autonomous Role',
-    price: '2,497',
-    futurePrice: '4,997',
-    desc: 'Deploy a fully autonomous agent to replace an entire firm role.',
-    features: [
-      { text: 'Runs 24/7 without human input', included: true, highlight: true },
-      { text: 'Unlimited Inference Tokens', included: true, highlight: true },
-      { text: 'Replaces Intake, Billing, or Paralegal', included: true },
-      { text: 'Custom 2 GB Knowledge Base limits', included: true },
-      { text: 'Direct integration with Clio/Slack', included: true },
-      { text: 'Advanced API access', included: true },
-      { text: 'Automated external client emails', included: true, highlight: true },
-    ],
-    target: 'Per Firm Role',
-    roiPitch: 'Replace a $60k/yr salary for $2,497/mo.',
-    cta: 'Deploy Role',
-    popular: false,
-  },
+  }
 ];
 
 const competitors = [
@@ -78,11 +39,12 @@ const competitors = [
 export default function Pricing() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const location = useLocation();
   const firmContext = useContext(FirmContext);
   const firmId = firmContext?.firmId;
   const firm = firmContext?.firm;
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [_error, setError] = useState('');
 
   const handleSubscribe = async (tier) => {
     if (!user) {
@@ -131,7 +93,7 @@ export default function Pricing() {
 
         <div className="pricing-guarantee" style={{ gap: '12px' }}>
           <span className="pricing-guarantee-icon"><Lock size={16} className="text-nvidia" /></span>
-          <span>Lifetime Price Lock Guarantee (First 100 Firms Per State) — Unlimited Tokens on Every Tier — Per-Firm, Not Per-User</span>
+          <span>Lifetime Price Lock Guarantee ({location.isUS || location.loading ? `First 100 Firms in ${location.state}` : `Coming soon to ${location.country}`}) — Unlimited Tokens on Every Tier — Per-Firm, Not Per-User</span>
         </div>
 
         <div className="pricing-grid">
@@ -146,7 +108,7 @@ export default function Pricing() {
                 <span className="pricing-target">{tier.target}</span>
                 <h3 className="pricing-name">{tier.name}</h3>
                 <div className="pricing-future-price">
-                  <span className="pricing-future-label">After 100 firms:</span>
+                  <span className="pricing-future-label">After 100 {location.isUS || location.loading ? location.state : location.country} firms:</span>
                   <span className="pricing-future-amount">${tier.futurePrice}/mo</span>
                 </div>
                 <div className="pricing-price">
@@ -156,7 +118,7 @@ export default function Pricing() {
                 </div>
                 <div className="pricing-founder-badge">
                   <Lock size={10} className="text-nvidia" />
-                  Founder Pricing — First 100 Firms Per State
+                  Founder Pricing — First 100 Firms in {location.isUS || location.loading ? location.state : location.country}
                 </div>
                 <p className="pricing-desc">{tier.desc}</p>
                 {tier.roiPitch && (
@@ -184,7 +146,7 @@ export default function Pricing() {
               >
                 {loading ? 'Processing...' : tier.cta}
               </button>
-              <p className="pricing-trial">Founder pricing · First 100 firms per state</p>
+              <p className="pricing-trial">Founder pricing · First 100 firms in {location.isUS || location.loading ? location.state : location.country}</p>
             </div>
           ))}
         </div>
@@ -214,7 +176,7 @@ export default function Pricing() {
         </div>
 
         <div className="pricing-footnote">
-          <p><Zap size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Powered by OpenClaw · <ShieldCheck size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Secured by <span className="text-nvidia">NVIDIA</span> <span className="text-nvidia">NemoClaw</span> · <Infinity size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Unlimited <span className="text-nvidia">Nemotron</span> Inference</p>
+          <p><Zap size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Powered by OpenClaw · <ShieldCheck size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Secured by <span className="text-nvidia">NVIDIA</span> <span className="text-nvidia">NemoClaw</span> · <InfinityIcon size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />Unlimited <span className="text-nvidia">Nemotron</span> Inference</p>
         </div>
       </div>
     </section>

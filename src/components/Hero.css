@@ -17,6 +17,24 @@
   z-index: 0;
 }
 
+.hero-video-container {
+  margin: 0 auto 40px;
+  width: 100%;
+  max-width: 800px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-md);
+  background: black;
+  opacity: 0;
+}
+
+.hero-video-inline {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
 .hero-grid {
   position: absolute;
   inset: 0;
@@ -97,6 +115,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
+  width: 100%;
   padding: 12px 24px;
   margin: 0 auto 40px;
   max-width: 680px;

@@ -17,48 +17,26 @@ import {
   createPortalSession as stripePortalFn 
 } from './firebase';
 
-// Current pricing model — modular, add-on based
-// Founder pricing: first 100 firms per state, must subscribe within 7 days
-// Standard pricing: 101st+ firm or missed 7-day window
+// Current pricing model — Single Tier Agentic HITL OS
 export const PRICING = {
   base: {
     id: 'base',
-    name: 'Agentic OS',
+    name: 'Agentic HITL OS',
     price: 297,
     futurePrice: 997,
-    desc: 'The Agentic Operating System. Includes 1 Managing Partner Agent.',
-    target: 'Any Size Firm',
+    desc: 'The complete firm orchestration layer.',
+    target: 'Full Firm Deployment',
     interval: 'month',
-  },
-  seat: {
-    id: 'seat',
-    name: '10x Output Seat',
-    price: 149,
-    futurePrice: 497,
-    desc: 'Pair any Human Role with a dedicated Agentic Resource.',
-    target: 'Per Human Role',
-    interval: 'month',
-  },
-  autonomous: {
-    id: 'autonomous',
-    name: 'Autonomous Role',
-    price: 2497,
-    futurePrice: 4997,
-    desc: 'Deploy a fully autonomous agent to replace an entire firm role.',
-    target: 'Per Firm Role',
-    interval: 'month',
-  },
+  }
 };
 
 /**
  * Calculate the total monthly cost for a firm's subscription.
  */
-export function calculateMonthlyTotal(extraSeats = 0, autonomousRoles = 0, isFounder = true) {
+export function calculateMonthlyTotal(_extraSeats = 0, _autonomousRoles = 0, isFounder = true) {
   const p = isFounder ? 'price' : 'futurePrice';
   const base = PRICING.base[p];
-  const seats = extraSeats * PRICING.seat[p];
-  const autonomous = autonomousRoles * PRICING.autonomous[p];
-  return { base, seats, autonomous, total: base + seats + autonomous };
+  return { base, seats: 0, autonomous: 0, total: base };
 }
 
 /**

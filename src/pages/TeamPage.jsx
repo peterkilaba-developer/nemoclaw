@@ -1,12 +1,10 @@
 import { useState, useRef } from 'react';
 import {
   Crown, Bot, Users, Briefcase, FileText, Phone, UserCheck,
-  DollarSign, ClipboardList, Zap, ArrowRight, Plus, Trash2,
-  ShieldCheck, X, Check, CheckCircle
+  DollarSign, ClipboardList, Plus, X, Check, CheckCircle
 } from 'lucide-react';
 import { useFirm } from '../contexts/FirmContext';
 import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS } from '../lib/agentHierarchy';
-
 const PARTNER_ROLES = ['partner', 'managing-partner', 'solo-partner'];
 
 const ROLE_ICONS = {
@@ -48,14 +46,14 @@ const AGENT_NAME_SUGGESTIONS = [
 ];
 
 export default function TeamPage() {
-  const { employees, personalAgents, superAgent, addTeamMember, updateTeamMember } = useFirm();
+  const { employees, personalAgents, _superAgent, addTeamMember, updateTeamMember } = useFirm();
   const safeEmployees = Array.isArray(employees) ? employees : [];
   const safeAgents = Array.isArray(personalAgents) ? personalAgents : [];
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
 
   const partners = safeEmployees.filter(e => PARTNER_ROLES.includes(e.role));
-  const managingPartners = safeEmployees.filter(e => ['managing-partner', 'solo-partner'].includes(e.role));
+  const _managingPartners = safeEmployees.filter(e => ['managing-partner', 'solo-partner'].includes(e.role));
   const practiceRoles = safeEmployees.filter(e => {
     const rc = EMPLOYEE_ROLES.find(r => r.value === e.role);
     return rc?.division === 'practice';
@@ -342,6 +340,7 @@ function EmployeeCard({ emp, roleConfig, agentType, Icon, color, subAgentCount, 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.75rem' }}>
               <span style={{ color: 'var(--db-text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Icon size={12} />
                 Personal Agent
               </span>
               <span style={{ fontWeight: 600, color: 'var(--db-text-primary)' }}>{agentName}</span>

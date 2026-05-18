@@ -19,7 +19,7 @@ export default function Footer() {
           <div className="footer-links-grid">
             <div className="footer-col">
               <h4>Platform</h4>
-              <a href="/#workforce">AI Workforce</a>
+              <a href="/#hitl-os">Platform</a>
               <a href="/#security">Security</a>
               <a href="/#pricing">Pricing</a>
               <a href="/login">Get Access</a>
@@ -35,6 +35,7 @@ export default function Footer() {
               <h4>Company</h4>
               <a href="/about">About</a>
               <a href="/blog">Blog</a>
+              <a href="/answers">Knowledge Base / FAQ</a>
               <a href="/careers">Careers</a>
               <a href="mailto:contact@nemoc-law.ai">Contact</a>
             </div>

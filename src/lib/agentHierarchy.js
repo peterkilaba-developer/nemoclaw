@@ -5,8 +5,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 import {
-  doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  collection, query, where, serverTimestamp, writeBatch,
+  doc, setDoc, getDoc, getDocs, updateDoc,
+  collection, serverTimestamp, writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
 

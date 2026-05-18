@@ -28,7 +28,7 @@ async function sendTestEmail() {
   const mailDoc = {
     to: recipientEmail,
     message: {
-      subject: '✅ NemoClaw AI — Email System Test',
+      subject: '✅ NemoC LAW AI — Email System Test',
       html: `
 <!DOCTYPE html>
 <html>
@@ -53,7 +53,7 @@ async function sendTestEmail() {
 <body>
   <div class="container">
     <div class="card">
-      <div class="logo">NemoClaw AI</div>
+      <div class="logo">NemoC LAW AI</div>
       <div class="tagline">Agentic as a Service for Lawyers</div>
 
       <h1>Email System <span>Verified</span> ✅</h1>
@@ -63,7 +63,7 @@ async function sendTestEmail() {
         <div class="success-text">Your email pipeline is working!</div>
       </div>
 
-      <p>This is a test email sent through the NemoClaw AI email infrastructure:</p>
+      <p>This is a test email sent through the NemoC LAW AI email infrastructure:</p>
 
       <p style="font-size:12px; color:rgba(255,255,255,0.4);">
         <strong style="color:rgba(255,255,255,0.6);">Pipeline:</strong><br/>
@@ -78,14 +78,14 @@ async function sendTestEmail() {
     </div>
 
     <div class="footer">
-      <p>NemoClaw AI · Agentic as a Service for Lawyers</p>
+      <p>NemoC LAW AI · Agentic as a Service for Lawyers</p>
       <p>Secured by NVIDIA NemoClaw</p>
       <p><a href="https://nemoc-law.ai">nemoc-law.ai</a></p>
     </div>
   </div>
 </body>
 </html>`,
-      text: `NemoClaw AI — Email System Test\n\nThis is a test email confirming your email pipeline is working.\n\nPipeline: Firestore → Cloud Function → SendGrid → ${recipientEmail}\n\nSent at: ${new Date().toISOString()}\nFrom: outreach@nemoc-law.ai`,
+      text: `NemoC LAW AI — Email System Test\n\nThis is a test email confirming your email pipeline is working.\n\nPipeline: Firestore → Cloud Function → SendGrid → ${recipientEmail}\n\nSent at: ${new Date().toISOString()}\nFrom: outreach@nemoc-law.ai`,
     },
     status: 'queued',
     type: 'test',

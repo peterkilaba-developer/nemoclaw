@@ -1,8 +1,8 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
-import { Bot, ArrowRight } from 'lucide-react';
 import './AgenticTeam.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
+import { ArrowRight, Bot } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════
    AGENTIC TEAM — Profile Cards with Avatars

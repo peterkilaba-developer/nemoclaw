@@ -15,8 +15,10 @@ service cloud.firestore {
       return isAuthenticated() && (
         request.auth.token.admin == true ||
         request.auth.token.email == 'marcus@nemoclaw.com' ||
+        request.auth.token.email == 'peterkilaba@gmail.com' ||
         request.auth.token.email == 'peterkilaba@nemoc-law.ai' ||
-        request.auth.token.email == 'peterkilaba@nemo-law.ai'
+        request.auth.token.email == 'peterkilaba@nemo-law.ai' ||
+        request.auth.token.email == 'partners@davislegal.com'
       );
     }
 
@@ -32,6 +34,71 @@ service cloud.firestore {
       );
     }
 
+    // Role-Based Access Control (RBAC) Helpers
+    function getUserAgentType() {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return ('agentType' in profile) ? profile.agentType : (('role' in profile) ? profile.role : null);
+    }
+
+    function isPracticeDivision() {
+      let role = getUserAgentType();
+      return role in ['partner', 'managing-partner', 'solo-partner', 'income-partner', 'of-counsel', 'associate', 'senior-associate', 'paralegal', 'law-clerk', 'intern', 'secretary', 'contractor'];
+    }
+
+    function isFinanceDivision() {
+      let role = getUserAgentType();
+      return role in ['billing', 'bookkeeper', 'operations', 'office-manager'];
+    }
+
+    function isPartnerRole() {
+      let role = getUserAgentType();
+      return role in ['partner', 'managing-partner', 'solo-partner', 'income-partner'];
+    }
+
+    function isIntakeDivision() {
+      let role = getUserAgentType();
+      return role in ['intake', 'receptionist', 'secretary', 'paralegal', 'partner', 'managing-partner', 'solo-partner'];
+    }
+
+    function isClientCommsUser() {
+      let role = getUserAgentType();
+      return role in ['intake', 'receptionist', 'secretary', 'paralegal', 'associate', 'senior-associate', 'of-counsel', 'partner', 'managing-partner', 'solo-partner'];
+    }
+
+    function isValidPublicWaitlistLead() {
+      return request.resource.data.keys().hasAll(['email', 'firmSize', 'practiceAreas', 'selectedTasks', 'location', 'leadScore', 'tier', 'status', 'source', 'createdAt', 'updatedAt']) &&
+        request.resource.data.keys().hasOnly(['email', 'firmSize', 'practiceAreas', 'selectedTasks', 'location', 'leadScore', 'tier', 'status', 'source', 'notes', 'followUpDate', 'contactedAt', 'convertedAt', 'createdAt', 'updatedAt']) &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 254 &&
+        request.resource.data.email.matches('^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$') &&
+        request.resource.data.firmSize is string &&
+        request.resource.data.firmSize.size() <= 32 &&
+        request.resource.data.location is string &&
+        request.resource.data.location.size() <= 128 &&
+        request.resource.data.practiceAreas is list &&
+        request.resource.data.practiceAreas.size() <= 20 &&
+        request.resource.data.selectedTasks is list &&
+        request.resource.data.selectedTasks.size() <= 20 &&
+        request.resource.data.leadScore is number &&
+        request.resource.data.leadScore >= 0 &&
+        request.resource.data.leadScore <= 100 &&
+        request.resource.data.tier in ['hot', 'warm', 'cold'] &&
+        request.resource.data.status == 'new' &&
+        request.resource.data.source == 'waitlist_form';
+    }
+
+    function hasMatterAssignment(data) {
+      return isAuthenticated() && (
+        (('assignedUserIds' in data) && request.auth.uid in data.assignedUserIds) ||
+        (('assignedTo' in data) && request.auth.token.email in data.assignedTo) ||
+        (('assignedEmails' in data) && request.auth.token.email in data.assignedEmails)
+      );
+    }
+
+    function canAccessMatterData(firmId, data) {
+      return isFirmOwner(firmId) ||
+        (isFirmMember(firmId) && isPracticeDivision() && (isPartnerRole() || hasMatterAssignment(data)));
+    }
     // Firm owner only — ownerId/ownerUid match. Role-based bypass removed (was a bug).
     function isFirmOwner(firmId) {
       return isAdminUser() || (
@@ -46,12 +113,30 @@ service cloud.firestore {
     //  INTERNAL TOPOLOGY (AgaaS / NemoC Admin Only)
     //  Previously: if true — WORLD PUBLIC. Fixed.
     // ═══════════════════════════════════════════════
-    match /_internalAgents/{agentId}         { allow read, write: if isAdminUser(); }
-    match /_internalAuditLog/{auditId}       { allow read, write: if isAdminUser(); }
-    match /_internalEscalations/{escId}      { allow read, write: if isAdminUser(); }
+    // Support local Daemon simulation by allowing writes with a system secret
+    function isSystemDaemon() {
+      return request.resource != null && request.resource.data.daemon == 'nemoclaw-system-daemon-xyz';
+    }
+
+    match /_internalAgents/{agentId}         { allow read: if isAdminUser(); allow write: if isAdminUser() || isSystemDaemon(); }
+    match /_internalAuditLog/{auditId}       { allow read: if isAdminUser(); allow write: if isAdminUser() || isSystemDaemon(); }
+    match /_internalEscalations/{escId}      { allow read: if isAdminUser(); allow write: if isAdminUser() || isSystemDaemon(); }
     match /_internalMarketingDrafts/{drafId} { allow read, write: if isAdminUser(); }
     match /_internalStrategicPlans/{planId}  { allow read, write: if isAdminUser(); }
     match /_internalCEAChat/{chatId}         { allow read, write: if isAdminUser(); }
+    match /_internalConfig/{configId}        { allow read: if isAdminUser(); allow write: if isAdminUser(); }
+    match /_internalXPosts/{postId}          { allow read: if isAdminUser(); allow write: if isAdminUser(); }
+    match /_internalLinkedInPosts/{postId}   { allow read: if isAdminUser(); allow write: if isAdminUser(); }
+    match /_linkedinQueue/{queueId}          { allow read, write: if isAdminUser(); }
+
+    // Blog Content
+    match /published_content/{postId}        { allow read: if true; allow write: if isAdminUser(); }
+    match /_publishedPosts/{postId}          { allow read: if true; }
+    match /_publicQnA/{qnaId}                { allow read: if true; }
+
+    // Telemetry & Security Engine (System streams)
+    match /_telemetryLogs/{logId}            { allow create: if isAuthenticated(); allow read: if isAdminUser(); allow update, delete: if false; }
+    match /_securityLogs/{logId}             { allow create: if isAuthenticated(); allow read: if isAdminUser(); allow update, delete: if false; }
 
     // ═══════════════════════════════════════════════
     //  USER PROFILES
@@ -126,17 +211,23 @@ service cloud.firestore {
         }
       }
 
-      // MATTERS / CASES
+      // MATTERS / CASES — strictly limited to practice division or owners
       match /matters/{matterId} {
-        allow read: if isFirmMember(firmId);
-        allow create: if isFirmOwner(firmId);
-        allow update: if isFirmMember(firmId);
+        allow read: if canAccessMatterData(firmId, resource.data);
+        allow create: if isFirmOwner(firmId) ||
+          (isFirmMember(firmId) && isPracticeDivision() && (isPartnerRole() || hasMatterAssignment(request.resource.data)));
+        allow update: if canAccessMatterData(firmId, resource.data) &&
+          (isFirmOwner(firmId) || isPartnerRole() || hasMatterAssignment(request.resource.data));
         allow delete: if isFirmOwner(firmId);
 
         // Matter Documents
         match /documents/{docId} {
-          allow read: if isFirmMember(firmId);
-          allow write: if isFirmMember(firmId);
+          allow read, write: if canAccessMatterData(firmId, get(/databases/$(database)/documents/firms/$(firmId)/matters/$(matterId)).data);
+        }
+
+        // Public signing is brokered by Cloud Functions; firm users manage requests inside the matter.
+        match /signatureRequests/{requestId} {
+          allow read, write: if canAccessMatterData(firmId, get(/databases/$(database)/documents/firms/$(firmId)/matters/$(matterId)).data);
         }
       }
 
@@ -148,36 +239,63 @@ service cloud.firestore {
 
       // CLIENT PORTAL CHANNELS
       match /clientChannels/{channelId} {
-        allow read, write: if isFirmMember(firmId);
+        allow read, write: if isFirmOwner(firmId) || (isFirmMember(firmId) && isClientCommsUser());
 
         match /messages/{messageId} {
-          allow read, write: if isFirmMember(firmId);
+          allow read: if isFirmOwner(firmId) || (isFirmMember(firmId) && isClientCommsUser());
+          allow create: if isFirmOwner(firmId) || (isFirmMember(firmId) && isClientCommsUser());
+          allow update, delete: if false;
         }
       }
 
-      // BILLING — owner-only (financial data)
-      match /billing/{billingDoc} {
-        allow read: if isFirmOwner(firmId);
-        allow write: if isFirmOwner(firmId);
+      // LEGAL WORKSPACE ARTIFACTS
+      match /drafts/{draftId} {
+        allow read, create, update: if isFirmOwner(firmId) || (isFirmMember(firmId) && isPracticeDivision());
+        allow delete: if isFirmOwner(firmId);
       }
 
-      // BILLABLE ACTIVITIES — previously missing rule (silent deny). Fixed.
-      match /billableActivities/{activityId} {
-        allow read: if isFirmOwner(firmId);
-        allow create: if isFirmMember(firmId);
+      match /documentBundles/{bundleId} {
+        allow read, create, update: if isFirmOwner(firmId) || (isFirmMember(firmId) && isPracticeDivision());
+        allow delete: if isFirmOwner(firmId);
+      }
+
+      match /courtForms/{formId} {
+        allow read, create, update: if isFirmOwner(firmId) || (isFirmMember(firmId) && isPracticeDivision());
+        allow delete: if isFirmOwner(firmId);
+      }
+
+      match /conflictChecks/{checkId} {
+        allow read: if isFirmOwner(firmId) || (isFirmMember(firmId) && (isPracticeDivision() || isIntakeDivision()));
+        allow create: if false;
         allow update, delete: if isFirmOwner(firmId);
       }
 
-      // CLIENT INVOICES — previously missing rule. Fixed.
-      match /clientInvoices/{invoiceId} {
-        allow read: if isFirmOwner(firmId);
-        allow write: if isFirmOwner(firmId);
+      match /trustLedgers/{ledgerId} {
+        allow read: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
+        allow create, update: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
+        allow delete: if false;
       }
 
-      // INVOICES (Stripe) — previously missing rule. Fixed.
+      // BILLING — owner + finance division (financial data)
+      match /billing/{billingDoc} {
+        allow read, write: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
+      }
+
+      // BILLABLE ACTIVITIES
+      match /billableActivities/{activityId} {
+        allow read: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
+        allow create: if isFirmMember(firmId);
+        allow update, delete: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
+      }
+
+      // CLIENT INVOICES
+      match /clientInvoices/{invoiceId} {
+        allow read, write: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
+      }
+
+      // INVOICES (Stripe subscription)
       match /invoices/{invoiceId} {
-        allow read: if isFirmOwner(firmId);
-        allow write: if isFirmOwner(firmId);
+        allow read, write: if isFirmOwner(firmId) || (isFirmMember(firmId) && isFinanceDivision());
       }
 
       // AUDIT TRAIL — immutable append, firm-scoped read
@@ -196,26 +314,28 @@ service cloud.firestore {
 
     // Waitlist — anyone can submit; authenticated users can read/update
     match /waitlist/{entryId} {
-      allow create: if true;
-      allow read: if isAuthenticated();
-      allow update: if isAuthenticated();
+      allow create: if isValidPublicWaitlistLead();
+      allow read: if isAdminUser();
+      allow update: if isAdminUser();
       allow delete: if isAdminUser();
     }
 
-    // Prospects — authenticated CRM entries
+    // Prospects — strictly locked to GTM operators (admins/Peter/Marcus)
     match /prospects/{prospectId} {
-      allow read, write: if isAuthenticated();
+      allow read, write: if isAdminUser();
     }
 
-    // Mail queue — append-only, authenticated trigger
+    // Mail queue — anyone authenticated can queue, only admins can view analytics/update metadata manually
     match /mail/{mailId} {
-      allow read, create, update: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow read, update: if isAdminUser();
       allow delete: if false;
     }
 
     match /mail_queue/{mailId} {
-      allow read, create: if isAuthenticated();
-      allow update, delete: if false;
+      allow create: if isAuthenticated();
+      allow read, update: if isAdminUser();
+      allow delete: if false;
     }
 
     // Call logs — previously missing rule (silent deny). Fixed.

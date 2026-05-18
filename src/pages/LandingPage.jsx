@@ -1,4 +1,5 @@
-import SEO, { structuredDataTemplates } from '../components/SEO';
+import { structuredDataTemplates } from '../components/SEO';
+import SEO from '../components/SEO';
 import Navbar from '../components/Navbar';
 import Hero from '../components/Hero';
 import ParadigmShift from '../components/ParadigmShift';

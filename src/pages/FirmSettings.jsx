@@ -3,11 +3,9 @@ import { useFirm } from '../contexts/FirmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { 
-  Upload, FileText, Trash2, Check, X, Key, Copy, Eye, EyeOff, 
-  MapPin, Phone, Globe, AlertCircle, Search, UserCheck, Bot, Crown, ArrowRight
-} from 'lucide-react';
+
 import '../styles/onboarding.css';
+import { Check, Copy, Eye, EyeOff, FileText, Key, MapPin, Trash2, Upload } from 'lucide-react';
 
 const PRACTICE_AREA_GROUPS = [
   {
@@ -73,20 +71,23 @@ export default function FirmSettings() {
 
   useEffect(() => {
     if (firm) {
-      const parts = (user?.displayName || '').split(' ');
-      setData({
-        firmName: firm?.firmName || firm?.name || '',
-        firmAddress: firm?.firmAddress || '',
-        firmPhone: firm?.firmPhone || '',
-        firmWebsite: firm?.firmWebsite || '',
-        placeId: firm?.placeId || '',
-        stateBar: firm?.stateBar || firm?.practiceArea || '',
-        practiceAreas: firm?.practiceAreas || [],
-        firmSize: firm?.firmSize || 'solo',
-        firstName: parts[0] || '',
-        lastName: parts.slice(1).join(' ') || '',
-        email: user?.email || '',
-      });
+      const syncForm = setTimeout(() => {
+        const parts = (user?.displayName || '').split(' ');
+        setData({
+          firmName: firm?.firmName || firm?.name || '',
+          firmAddress: firm?.firmAddress || '',
+          firmPhone: firm?.firmPhone || '',
+          firmWebsite: firm?.firmWebsite || '',
+          placeId: firm?.placeId || '',
+          stateBar: firm?.stateBar || firm?.practiceArea || '',
+          practiceAreas: firm?.practiceAreas || [],
+          firmSize: firm?.firmSize || 'solo',
+          firstName: parts[0] || '',
+          lastName: parts.slice(1).join(' ') || '',
+          email: user?.email || '',
+        });
+      }, 0);
+      return () => clearTimeout(syncForm);
     }
   }, [firm, user]);
 
@@ -512,7 +513,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
         if (firmId && user) {
           try {
             let websiteName = place.website;
-            try { websiteName = new URL(place.website).hostname; } catch(e) {}
+            try { websiteName = new URL(place.website).hostname; } catch(_e) { /* intentionally ignored */ }
             await addDoc(collection(db, 'firms', firmId, 'knowledgeBase'), {
               fileName: websiteName,
               fileSize: 'Website Crawl',
@@ -537,6 +538,8 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
     });
 
     autocompleteRef.current = ac;
+    // Google Places Autocomplete binds an external widget once for this input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const FIRM_SIZE_OPTIONS = [

@@ -1,16 +1,9 @@
 import { useState } from 'react';
-import {
-  Globe, Search, FileText, UserCheck, PenTool, FolderSearch, Scale, Mic,
-  DollarSign, ScanSearch, Clock, Users, BookOpen, Shield, Mail, Phone,
-  FileSearch, Briefcase, Building2, Gavel, ScrollText, BarChart3,
-  CalendarCheck, FileSignature, MessageSquare, Brain, Landmark, Banknote,
-  BookMarked, Network, ClipboardCheck, AlertTriangle, Receipt, HandCoins,
-  Lightbulb, FolderOpen, FileCheck, Workflow, MapPin, Database,
-  Lock, Megaphone, HeartHandshake, TrendingUp, Layers, X, Check, Send, Crown, Info
+import { Search, FileText, UserCheck,
+  DollarSign, ScanSearch, BookOpen, Phone, Briefcase, AlertTriangle, Database, Crown
 } from 'lucide-react';
 import { useFirm } from '../contexts/FirmContext';
-import { AGENT_SUB_AGENTS, SUB_AGENT_CATALOG, EMPLOYEE_ROLES } from '../lib/agentHierarchy';
-
+import { AGENT_SUB_AGENTS, SUB_AGENT_CATALOG } from '../lib/agentHierarchy';
 const AGENT_ROLE_CONFIG = {
   partner: { name: 'Partner Agent', division: 'practice', desc: 'Full-authority intelligence agent mirroring equity roles. Handles strategy, drafting, and cross-matter analytics.', icon: Crown, color: 'var(--db-nvidia-green)' },
   associate: { name: 'Associate Agent', division: 'practice', desc: 'Primary legal service delivery, document drafting, and precedent retrieval.', icon: Briefcase, color: '#2563eb' },

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, XOctagon, AlertTriangle, Eye } from 'lucide-react';
 import { useFirm } from '../contexts/FirmContext';
 import { getAuditLog } from '../lib/agentAPI';
+import { CheckCircle } from 'lucide-react';
 
 export default function SecurityAudit() {
   const { firm, firmId } = useFirm();
   const [auditLog, setAuditLog] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function loadAudit() {

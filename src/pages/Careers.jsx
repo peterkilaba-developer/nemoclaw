@@ -1,7 +1,7 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
 import './LegalPage.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
 
 export default function Careers() {
   return (

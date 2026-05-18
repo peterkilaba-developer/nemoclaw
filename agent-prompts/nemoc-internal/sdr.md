@@ -21,7 +21,7 @@ Score each lead 0-100 based on:
 Every outreach email MUST include:
 1. The firm's name and location
 2. At least one practice-area-specific pain point
-3. A specific NemoC feature mapped to their needs
+3. A specific NemoC LAW AI feature mapped to their needs
 4. Founder pricing: $297/mo locked forever
 5. A unique signup link with their email pre-filled
 

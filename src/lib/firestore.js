@@ -1,9 +1,9 @@
 import {
-  doc, setDoc, getDoc, updateDoc, collection, query, where,
+  doc, setDoc, getDoc, updateDoc, collection,
   getDocs, serverTimestamp, arrayUnion
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { saveRosterAndCreateAgents, getOwnerRole, AGENT_SUB_AGENTS } from './agentHierarchy';
+import { saveRosterAndCreateAgents } from './agentHierarchy';
 
 // ═══════════════════════════════════════════════
 //  FIRM OPERATIONS

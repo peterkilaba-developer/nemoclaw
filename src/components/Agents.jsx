@@ -1,10 +1,4 @@
-import { useState } from 'react';
-import {
-  Search, FileText, UserCheck, Briefcase, Phone, DollarSign, BarChart3,
-  ArrowRight, ArrowDown, Users, Zap, TrendingUp, Crown, Bot, PenTool,
-  FolderSearch, Scale, Mic, Clock, Mail, Calendar, Database, ScanSearch,
-  Shield, ChevronDown, ChevronUp, Layers, Settings, UserX, MessageSquare, Eye, BookOpen, UserPlus
-} from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, Briefcase, Calendar, Crown, Database, DollarSign, Eye, FileText, FolderSearch, Layers, Mail, MessageSquare, Mic, PenTool, Phone, Scale, Search, Settings, Shield, TrendingUp, UserCheck, UserPlus, Users, UserX, Zap } from 'lucide-react';
 import './Agents.css';
 
 // ═══════════════════════════════════════════════════════════════
@@ -159,7 +153,7 @@ const SUB_AGENTS = [
 
 export default function Agents() {
   return (
-    <section className="section agents-section" id="workforce">
+    <section className="section agents-section" id="hitl-os">
       <div className="container">
         <div className="agents-header">
           <span className="section-label">Single Point of Contact</span>

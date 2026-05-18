@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ArrowRight, Zap, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { getOwnerRole } from '../lib/agentHierarchy';
@@ -7,17 +6,28 @@ import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getFounderDaysRemaining } from '../lib/stripeService';
 import { getAuditLog } from '../lib/agentAPI';
+import { Calendar, X, Zap } from 'lucide-react';
 // Onboarding is exclusively handled by FrictionlessOnboardingPanel.jsx
+
+function formatAuditLabel(log) {
+  return String(log.agentType || log.type || 'audit event')
+    .replace(/[._-]/g, ' ')
+    .replace(/\b\w/g, l => l.toUpperCase());
+}
+
+function formatAuditMessage(log) {
+  return log.userMessage || log.agentResponse || log.reason || log.notes || log.resource || 'Audit event recorded.';
+}
 
 export default function DashboardHome() {
   const { user } = useAuth();
-  const { firm, agents, personalAgents, superAgent, employees, refreshFirm, firmId } = useFirm();
+  const { firm, _agents, personalAgents, superAgent, employees, refreshFirm, firmId } = useFirm();
   const firstName = user?.displayName?.split(' ')[0] || 'there';
   const personalCount = (Array.isArray(personalAgents) ? personalAgents : []).filter(a => !a.isAutonomous).length;
   const autonomousCount = (Array.isArray(personalAgents) ? personalAgents : []).filter(a => a.isAutonomous).length;
   const superCount = superAgent ? 1 : 0;
   const agentCount = personalCount + autonomousCount + superCount;
-  const employeeCount = employees?.length || 0;
+  const _employeeCount = employees?.length || 0;
   const today = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -69,7 +79,18 @@ export default function DashboardHome() {
       } catch (err) { console.error('Agent auto-repair:', err); }
     };
     repairAgents();
-  }, [firmId, user?.uid]);
+  }, [
+    firm?.contactName,
+    firm?.email,
+    firm?.firmSize,
+    firm?.practiceAreas,
+    firmId,
+    refreshFirm,
+    user?.displayName,
+    user?.email,
+    user?.photoURL,
+    user?.uid,
+  ]);
 
   const [showReport, setShowReport] = useState(null);
   const [auditLogs, setAuditLogs] = useState([]);
@@ -101,7 +122,7 @@ export default function DashboardHome() {
     fetchLogs();
   }, [firmId]);
 
-  const handleFeedAction = (type, title) => {
+  const _handleFeedAction = (type, title) => {
     setShowReport({ type, title });
   };
 
@@ -241,9 +262,9 @@ export default function DashboardHome() {
                       <Zap size={16} color="var(--db-nvidia-green)" />
                     </div>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{log.employeeName || 'Staff'} · {log.agentType.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</div>
+                      <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{log.employeeName || log.employeeEmail || 'System'} - {formatAuditLabel(log)}</div>
                       <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)', marginTop: '4px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', fontStyle: 'italic' }}>
-                        "{log.userMessage}"
+                        "{formatAuditMessage(log)}"
                       </div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginTop: '8px', display: 'flex', justifyContent: 'space-between' }}>
                         <span>{timeStr}</span>
@@ -275,14 +296,9 @@ export default function DashboardHome() {
               <div className="db-card-title">Upcoming Deadlines</div>
             </div>
             <div>
-              {false ? (
-                <>
-                </>
-              ) : (
-                <div style={{ padding: '24px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>
-                  No deadlines tracked.
-                </div>
-              )}
+              <div style={{ padding: '24px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>
+                No deadlines tracked.
+              </div>
             </div>
           </div>
 

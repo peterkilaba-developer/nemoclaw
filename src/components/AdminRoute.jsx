@@ -1,5 +1,5 @@
-import { Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
 
 /**
  * Admin email whitelist.
@@ -16,7 +16,7 @@ const ADMIN_EMAILS = [
 
 export function isAdminUser(user) {
   if (!user?.email) return false;
-  return ADMIN_EMAILS.includes(user.email.toLowerCase());
+  return user.emailVerified === true && ADMIN_EMAILS.includes(user.email.toLowerCase());
 }
 
 export default function AdminRoute({ children }) {
@@ -75,7 +75,7 @@ export default function AdminRoute({ children }) {
         }}>
           This area is restricted to NemoC platform administrators.
           You're signed in as <strong style={{ color: '#76b900' }}>{user.email}</strong>,
-          which is not an authorized admin account.
+          which is not a verified authorized admin account.
         </p>
         <div style={{ display: 'flex', gap: '10px' }}>
           <a href="/dashboard" style={{

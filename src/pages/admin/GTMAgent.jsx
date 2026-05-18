@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import {
-  Rocket, Users, Target, TrendingUp, Mail, MapPin, Clock,
-  CheckCircle2, AlertCircle, ArrowUpRight, Flame, Thermometer,
-  Snowflake, BarChart3, ChevronDown, RefreshCw, Eye, Send,
-  Star, Filter, Building2, Briefcase, Zap, Copy, ExternalLink,
-  Megaphone, Inbox, Search, Globe, Sparkles, FileEdit, Activity, Radio
+  Rocket, Users, Target, TrendingUp, Mail, MapPin,
+  CheckCircle2, Flame, Thermometer,
+  Snowflake, RefreshCw, Eye, Send,
+  Star, Copy,
+  Megaphone, Search, Sparkles, Activity, Radio
 } from 'lucide-react';
 import { getWaitlistLeads, updateLeadStatus, getWaitlistStats } from '../../lib/waitlistService';
 import { sendLaunchEmail, sendBulkLaunchEmails, generateSignupLink, getLaunchEmailTemplate } from '../../lib/emailService';
@@ -13,7 +13,6 @@ import { collection, getDocs, query, orderBy, limit, where } from 'firebase/fire
 import GTMProspecting from './GTMProspecting';
 import GTMCampaigns from './GTMCampaigns';
 import GTMContentDrafts from './GTMContentDrafts';
-
 const TASK_LABELS = {
   'legal-research': 'Legal Research', 'contract-review': 'Contract Review',
   'client-intake': 'Client Intake', 'document-drafting': 'Document Drafting',
@@ -45,7 +44,7 @@ const STATUS_CONFIG = {
   converted: { label: 'Converted', color: '#16a34a', bg: 'rgba(22,163,74,0.1)' },
 };
 
-const s = (styles) => styles; // inline style helper
+const _s = (styles) => styles; // inline style helper
 
 const GTM_TABS = [
   { id: 'pipeline', label: 'Pipeline', icon: Target, desc: 'Inbound leads' },
@@ -80,7 +79,7 @@ export default function GTMAgent() {
       );
       const snap = await getDocs(q);
       setAgentActivity(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (err) {
+    } catch (_err) {
       // Fallback: try without the where clause
       try {
         const q2 = query(
@@ -114,7 +113,7 @@ export default function GTMAgent() {
 
   useEffect(() => { loadData(); loadAgentActivity(); }, []);
 
-  const handleStatusChange = async (leadId, newStatus) => {
+  const _handleStatusChange = async (leadId, newStatus) => {
     try {
       await updateLeadStatus(leadId, newStatus);
       await loadData();
@@ -252,7 +251,7 @@ export default function GTMAgent() {
 
         {showActivityFeed && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '200px', overflowY: 'auto' }}>
-            {agentActivity.length > 0 ? agentActivity.map((log, i) => {
+            {agentActivity.length > 0 ? agentActivity.map((log, _i) => {
               const ts = log.timestamp?.toDate?.() || (log.timestamp ? new Date(log.timestamp) : new Date());
               const agentColors = { cea: '#f59e0b', sdr: '#3b82f6', marketing: '#a855f7', success: '#10b981', revenue: '#ef4444' };
               const color = agentColors[log.agentId] || '#76b900';
@@ -540,7 +539,7 @@ export default function GTMAgent() {
 
           {/* Firm Size Distribution */}
           <Card title="Firm Size Distribution" subtitle="Lead demographics">
-            {Object.entries(stats?.byFirmSize || {}).map(([size, count], i) => {
+            {Object.entries(stats?.byFirmSize || {}).map(([size, count], _i) => {
               const pct = stats?.total ? Math.round((count / stats.total) * 100) : 0;
               return (
                 <div key={size} style={{ marginBottom: '10px' }}>

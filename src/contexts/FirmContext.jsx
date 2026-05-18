@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { getFirm, getAgentConfig, getSecurityConfig, getKnowledgeBase } from '../lib/firestore';
 import { getEmployees, getAgents, getSuperAgent, addEmployee, updateEmployee } from '../lib/agentHierarchy';
-import { collection, query, where, limit, getDocs, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, limit, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export const FirmContext = createContext(null);
@@ -48,29 +48,9 @@ export function FirmProvider({ children }) {
             setFirm({ id: foundFirmId, ...firmData });
             setLoading(false);
           } else {
-            // 2b. Final Fallback: Auto-provision a default sandbox firm unconditionally.
-            // This ensures all testing buttons and dashboards work even if onboarding was skipped.
-            console.log('Self-healing: Auto-provisioning firm for user:', user.uid);
-            const firmRef = doc(collection(db, 'firms'));
-            const newFirmId = firmRef.id;
-            const newFirmData = {
-              ownerId: user.uid,
-              members: [user.uid],
-              name: `${user.displayName || 'My'} Law Firm`,
-              status: 'trial',
-              plan: 'trial',
-              trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              isConfigured: false,
-              createdAt: serverTimestamp(),
-            };
-            await setDoc(firmRef, newFirmData);
-            await setDoc(doc(db, 'users', user.uid), { firmId: newFirmId, onboardingComplete: true }, { merge: true });
-            
-            // Wait for propagation before returning
-            setTimeout(() => {
-              setFirm({ id: newFirmId, ...newFirmData });
-              setLoading(false);
-            }, 500);
+            console.warn('Firm healing: no verified firm membership found for current user.');
+            setFirm(null);
+            setLoading(false);
           }
         } catch (err) {
           console.warn('Firm healing error:', err);
@@ -116,9 +96,9 @@ export function FirmProvider({ children }) {
 
     loadFirmData();
     return () => { cancelled = true; };
-  }, [user?.firmId]);
+  }, [user?.firmId, user?.uid, user?.displayName]);
 
-  const refreshFirm = async () => {
+  const refreshFirm = useCallback(async () => {
     if (!user?.firmId) return;
     setLoading(true);
     const [firmData, agentData, secData, kbData, empData, agData, saData] = await Promise.all([
@@ -138,9 +118,9 @@ export function FirmProvider({ children }) {
     setPersonalAgents(agData);
     setSuperAgent(saData);
     setLoading(false);
-  };
+  }, [user?.firmId]);
 
-  const addTeamMember = async (employeeData) => {
+  const addTeamMember = useCallback(async (employeeData) => {
     const targetFirmId = user?.firmId || firm?.id;
     if (!targetFirmId) {
       console.warn('Cannot add team member: no firmId available');
@@ -148,20 +128,20 @@ export function FirmProvider({ children }) {
     }
     await addEmployee(targetFirmId, employeeData);
     await refreshFirm();
-  };
+  }, [firm?.id, refreshFirm, user?.firmId]);
 
-  const updateTeamMember = async (employeeId, employeeData) => {
+  const updateTeamMember = useCallback(async (employeeId, employeeData) => {
     const targetFirmId = user?.firmId || firm?.id;
     if (!targetFirmId) return;
     await updateEmployee(targetFirmId, employeeId, employeeData);
     await refreshFirm();
-  };
+  }, [firm?.id, refreshFirm, user?.firmId]);
 
   return (
     <FirmContext.Provider value={{
       firm, agents, security, knowledgeBase,
       employees, personalAgents, superAgent,
-      firmId: user?.firmId || null,
+      firmId: user?.firmId || firm?.id || null,
       loading, refreshFirm, addTeamMember, updateTeamMember,
     }}>
       {children}

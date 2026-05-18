@@ -1,3 +1,16 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Crown, MessageSquare, Send, Zap, Loader2, Eye, EyeOff,
+  Cpu, RefreshCw, Target, Rocket,
+  BarChart3, Users, DollarSign, Shield, Radio, Trash2
+} from 'lucide-react';
+import { sendInternalAgentMessage } from '../../lib/internalAgentAPI';
+import { collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { getProspects } from '../../lib/prospectService';
+import { getEnrichmentStatus } from '../../lib/enrichmentService';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 /**
  * C.E.A. Chat — Executive Command Interface
  *
@@ -12,18 +25,6 @@
  *   - Sub-agent dispatch visibility
  *   - Executive-grade UI styling
  */
-
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Crown, Bot, MessageSquare, Send, Zap, Loader2, Eye, EyeOff,
-  Cpu, RefreshCw, Activity, TrendingUp, Target, Rocket,
-  BarChart3, Users, DollarSign, Shield, Radio, Sparkles, Trash2
-} from 'lucide-react';
-import { sendInternalAgentMessage } from '../../lib/internalAgentAPI';
-import { collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 const CHAT_COLLECTION = '_internalCEAChat';
 
@@ -40,8 +41,6 @@ const QUICK_ACTIONS = [
 // ── Gather live Agentic OS context ──
 async function gatherLiveContext() {
   try {
-    const { getProspects } = await import('../../lib/prospectService');
-    const { getEnrichmentStatus } = await import('../../lib/enrichmentService');
     const prospects = await getProspects();
     const enrichStatus = getEnrichmentStatus();
 
@@ -63,10 +62,10 @@ async function gatherLiveContext() {
         hunterIO: enrichStatus.hunter.configured ? 'ACTIVE' : 'OFF',
         apolloIO: enrichStatus.apollo.configured ? 'ACTIVE' : 'OFF',
         sendgrid: 'NOT DEPLOYED',
-        blandAI: import.meta.env.VITE_BLAND_API_KEY ? 'ACTIVE' : 'OFF',
+        blandAI: 'BACKEND-MANAGED',
       },
     };
-  } catch (e) {
+  } catch (_e) {
     return { error: 'Failed to load live context', timestamp: new Date().toISOString() };
   }
 }
@@ -198,7 +197,7 @@ export default function CEAChat() {
     }
   };
 
-  const timeAgo = (date) => {
+  const _timeAgo = (date) => {
     if (!date) return '';
     const seconds = Math.floor((new Date() - date) / 1000);
     if (seconds < 60) return 'just now';

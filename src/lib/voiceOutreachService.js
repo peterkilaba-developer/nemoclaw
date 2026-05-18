@@ -1,16 +1,22 @@
-import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { getAuth } from 'firebase/auth';
 
 /* ═══════════════════════════════════════════════
    AI VOICE OUTBOUND CALLING SERVICE
    Uses Bland AI (https://bland.ai) for autonomous phone calls
    ═══════════════════════════════════════════════ */
 
-const BLAND_API = 'https://api.bland.ai/v1';
-const CALL_LOG_COL = 'call_logs';
+const PLACE_CALL_ENDPOINT = '/api/placeBlandCall';
+const CALL_STATUS_ENDPOINT = '/api/getBlandCallStatus';
 
-function getBlandKey() {
-  return import.meta.env.VITE_BLAND_API_KEY || '';
+async function getServerAuthHeaders() {
+  const user = getAuth().currentUser;
+  const token = user ? await user.getIdToken() : '';
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 /**
@@ -112,40 +118,18 @@ export function extractEmailFromTranscript(transcript) {
  * Initiate an outbound AI voice call to a prospect via Bland AI.
  */
 export async function makeOutboundCall(prospect) {
-  const apiKey = getBlandKey();
-  if (!apiKey) {
-    throw new Error('Bland AI API key not configured. Add VITE_BLAND_API_KEY to your .env file.');
-  }
-
   if (!prospect.phone) {
     throw new Error('No phone number available for this prospect.');
   }
 
   const script = generateCallScript(prospect);
 
-  // Initiate the call via Bland AI
-  const response = await fetch(`${BLAND_API}/calls`, {
+  const response = await fetch(PLACE_CALL_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': apiKey,
-    },
+    headers: await getServerAuthHeaders(),
     body: JSON.stringify({
-      phone_number: prospect.phone,
-      task: script.task,
-      first_sentence: script.firstSentence,
-      voice: script.voice,
-      max_duration: script.maxDuration,
-      wait_for_greeting: script.waitForGreeting,
-      temperature: script.temperature,
-      interruption_threshold: script.interruptionThreshold,
-      model: 'enhanced',
-      answered_by_enabled: true,
-      record: true,
-      metadata: {
-        prospectId: prospect.id,
-        firmName: prospect.firmName,
-      },
+      prospect,
+      script,
     }),
   });
 
@@ -155,18 +139,7 @@ export async function makeOutboundCall(prospect) {
   }
 
   const data = await response.json();
-  const callId = data.call_id;
-
-  // Log to Firestore
-  await addDoc(collection(db, CALL_LOG_COL), {
-    callId,
-    prospectId: prospect.id,
-    firmName: prospect.firmName,
-    phone: prospect.phone,
-    status: 'initiated',
-    channel: 'voice',
-    createdAt: serverTimestamp(),
-  });
+  const callId = data.callId || data.call_id;
 
   // Update prospect status
   if (prospect.id) {
@@ -186,11 +159,10 @@ export async function makeOutboundCall(prospect) {
  * Check the status of an active call.
  */
 export async function getCallStatus(callId) {
-  const apiKey = getBlandKey();
-  if (!apiKey) throw new Error('Bland AI API key not configured');
-
-  const response = await fetch(`${BLAND_API}/calls/${callId}`, {
-    headers: { 'Authorization': apiKey },
+  const response = await fetch(CALL_STATUS_ENDPOINT, {
+    method: 'POST',
+    headers: await getServerAuthHeaders(),
+    body: JSON.stringify({ callId }),
   });
 
   if (!response.ok) throw new Error('Failed to fetch call status');

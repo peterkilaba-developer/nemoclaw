@@ -1,5 +1,5 @@
 import './ParadigmShift.css';
-import { MessageSquare, Zap, Clock, ShieldCheck, RefreshCw, BarChart2, Shield } from 'lucide-react';
+import { BarChart2, Clock, MessageSquare, RefreshCw, Shield, Zap } from 'lucide-react';
 
 export default function ParadigmShift() {
   return (

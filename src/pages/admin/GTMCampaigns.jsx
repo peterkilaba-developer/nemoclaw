@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import {
-  Send, Mail, Users, Target, CheckCircle2, AlertCircle,
+  Send, Mail, Users, CheckCircle2, AlertCircle,
   Eye, Megaphone, RefreshCw, Loader, Phone, PhoneCall,
-  PhoneOff, MailPlus, MailCheck, Globe, Filter, Volume2,
-  Play, Square, FileText, Clock
+  PhoneOff, Globe, Volume2, FileText, Clock
 } from 'lucide-react';
 import { getProspects, updateProspect } from '../../lib/prospectService';
 import {
@@ -13,7 +12,6 @@ import {
 import {
   makeOutboundCall, makeBulkCalls, getCallStatus, generateCallScript
 } from '../../lib/voiceOutreachService';
-
 const STATUS_COLORS = {
   researched: { color: '#3b82f6', label: 'Researched' },
   outreach_sent: { color: '#f59e0b', label: 'Outreach Sent' },
@@ -339,7 +337,7 @@ export default function GTMCampaigns() {
                 const canAct = channel === 'voice'
                   ? p.phone && ['researched', 'outreach_sent'].includes(p.status)
                   : p.email && (templateType === 'cold' ? p.status === 'researched' : p.status === 'outreach_sent');
-                const callStatus = callStatuses[p.id];
+                const _callStatus = callStatuses[p.id];
 
                 return (
                   <div key={p.id} style={{
@@ -514,11 +512,9 @@ export default function GTMCampaigns() {
                 <Tag color="#f59e0b">Transcribed</Tag>
                 <Tag color="#a78bfa">{'< 3 min calls'}</Tag>
               </div>
-              {!import.meta.env.VITE_BLAND_API_KEY && (
-                <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', fontSize: '0.6875rem', color: '#ef4444' }}>
-                  ⚠️ Add VITE_BLAND_API_KEY to .env to enable voice calls. Get your key at <a href="https://app.bland.ai" target="_blank" rel="noopener noreferrer" style={{ color: '#ef4444', textDecoration: 'underline' }}>bland.ai</a>
-                </div>
-              )}
+              <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '8px', background: 'rgba(118,185,0,0.06)', border: '1px solid rgba(118,185,0,0.15)', fontSize: '0.6875rem', color: '#76b900' }}>
+                Voice calls run through the server-side Bland proxy with admin authentication.
+              </div>
             </Card>
           ) : (
             <Card title={templateType === 'follow_up' ? 'Follow-up Template' : 'Cold Outreach Template'} subtitle="Personalized per prospect">

@@ -1,27 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, query, getDocs, addDoc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
-import { 
-  Briefcase, Plus, FolderOpen, Scale, Clock, Settings, 
-  AlertCircle, ChevronRight, User, Bot, Zap, RefreshCw,
-  Search, Filter, MoreHorizontal, Shield, X, ArrowRight
-} from 'lucide-react';
+import { ArrowRight, Bot, Briefcase, Filter, MoreHorizontal, RefreshCw, Search, Settings, Shield, X, Zap } from 'lucide-react';
+
 
 export default function Matters() {
   const { user } = useAuth();
   const { firm } = useFirm();
   const navigate = useNavigate();
   const [matters, setMatters] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [showNewModal, setShowNewModal] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const firmId = firm?.id || user?.firmId;
 
   // Pending agentic intake proposals (populated by Intake Agent)
-  const [pendingIntakes, setPendingIntakes] = useState([]);
+  const [pendingIntakes, _setPendingIntakes] = useState([]);
 
   const [provisionStep, setProvisionStep] = useState(1);
   const [newMatter, setNewMatter] = useState({
@@ -35,13 +32,8 @@ export default function Matters() {
     provisionClientPortal: true
   });
 
-  useEffect(() => {
-    if (firmId) {
-      loadMatters();
-    }
-  }, [firmId]);
-
-  async function loadMatters() {
+  const loadMatters = useCallback(async () => {
+    if (!firmId) return;
     try {
       setLoading(true);
       const q = query(collection(db, 'firms', firmId, 'matters'), orderBy('createdAt', 'desc'));
@@ -53,7 +45,11 @@ export default function Matters() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [firmId]);
+
+  useEffect(() => {
+    loadMatters();
+  }, [loadMatters]);
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -69,8 +65,17 @@ export default function Matters() {
       const docRef = await addDoc(collection(db, 'firms', firmId, 'matters'), {
         ...newMatter,
         createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         createdBy: user.uid,
-        assignedTo: [user.email],
+        createdByEmail: user.email || null,
+        assignedTo: [user.email].filter(Boolean),
+        assignedEmails: [user.email].filter(Boolean),
+        assignedUserIds: [user.uid].filter(Boolean),
+        ethicalWall: {
+          ownerUid: user.uid,
+          assignedUserIds: [user.uid].filter(Boolean),
+          assignedEmails: [user.email].filter(Boolean),
+        },
       });
       setShowNewModal(false);
       setNewMatter({ title: '', client: '', type: 'Litigation', status: 'Active', description: '', feeStructure: 'Hourly', rate: '350', provisionClientPortal: true });

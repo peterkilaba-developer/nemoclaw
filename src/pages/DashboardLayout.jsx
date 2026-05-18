@@ -1,18 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Bot, ShieldCheck, Settings, CreditCard, Search, Bell, LogOut, Globe, Crown, Users, Briefcase, Menu, ChevronLeft, ChevronRight, X, FileText, Clock, DollarSign, MessageSquare, Database, HeartHandshake, Network } from 'lucide-react';
+import { LayoutDashboard, Bot, ShieldCheck, Settings, Search, Bell, LogOut, Globe, Crown, Users, Briefcase, Menu, X, FileText, DollarSign, MessageSquare, Database, HeartHandshake, Network } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { isAdminUser } from '../components/AdminRoute';
+import DashboardModeToggle from '../components/DashboardModeToggle';
+import useDashboardInterfaceMode from '../hooks/useDashboardInterfaceMode';
 import { getAuditLog } from '../lib/agentAPI';
+import CommandDashboardLayout from './CommandDashboardLayout';
 import '../styles/dashboard.css';
-
 const NAV_ITEMS = {
   main: [
     { path: '/dashboard', Icon: MessageSquare, label: 'AI Chief of Staff', exact: true },
     { path: '/dashboard/overview', Icon: LayoutDashboard, label: 'Command Center' },
     { path: '/dashboard/matters', Icon: Briefcase, label: 'Matters' },
     { path: '/dashboard/client-portal', Icon: HeartHandshake, label: 'Client Portals' },
+    { path: '/dashboard/crm', Icon: Network, label: 'Firm CRM' },
     { path: '/dashboard/team', Icon: Users, label: 'HR & AR' },
     { path: '/dashboard/super-agent', Icon: Crown, label: 'Super Agent', badge: '⚡' },
     { path: '/dashboard/agents', Icon: Database, label: 'Agents & Knowledgebase' },
@@ -30,6 +33,7 @@ const BREADCRUMBS = {
   '/dashboard/overview': 'Command Center',
   '/dashboard/matters': 'Firm Matters',
   '/dashboard/client-portal': 'Client Communications',
+  '/dashboard/crm': 'Firm Client Roster Database',
   '/dashboard/my-agent': 'AI Chief of Staff',
   '/dashboard/team': 'Human Resources & Agentic Resources',
   '/dashboard/website-builder': 'Website Builder',
@@ -46,6 +50,7 @@ const SEARCHABLE_PAGES = [
   { label: 'Command Center', desc: 'Dashboard overview and firm analytics', path: '/dashboard/overview', icon: LayoutDashboard },
   { label: 'Matters', desc: 'Manage legal matters and workspaces', path: '/dashboard/matters', icon: Briefcase },
   { label: 'Client Portals', desc: 'Secure client communication channels', path: '/dashboard/client-portal', icon: HeartHandshake },
+  { label: 'Firm CRM', desc: 'Central database of all client contacts', path: '/dashboard/crm', icon: Network },
   { label: 'HR & AR', desc: 'Team members and agentic resources', path: '/dashboard/team', icon: Users },
   { label: 'Super Agent', desc: 'Firm-wide agent oversight dashboard', path: '/dashboard/super-agent', icon: Crown },
   { label: 'Agents & Knowledgebase', desc: 'Browse human role mirroring agents', path: '/dashboard/agents', icon: Database },
@@ -68,6 +73,7 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { firm, firmId, agents, employees, personalAgents, loading: firmLoading } = useFirm();
+  const { interfaceMode, setInterfaceMode } = useDashboardInterfaceMode(user);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   // ═══ SEARCH STATE ═══
@@ -114,7 +120,8 @@ export default function DashboardLayout() {
     if (showSearch) {
       setTimeout(() => searchInputRef.current?.focus(), 100);
     } else {
-      setSearchQuery('');
+      const clearSearch = setTimeout(() => setSearchQuery(''), 0);
+      return () => clearTimeout(clearSearch);
     }
   }, [showSearch]);
 
@@ -175,6 +182,26 @@ export default function DashboardLayout() {
     );
   }
 
+  if (!firmId && !firm) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0a0f', color: '#fff', display: 'grid', placeItems: 'center', padding: '24px' }}>
+        <div style={{ maxWidth: '520px', width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '28px' }}>
+          <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#76b900', fontWeight: 800, marginBottom: '12px' }}>Firm Setup Required</div>
+          <h1 style={{ margin: '0 0 10px', fontSize: '1.5rem' }}>No verified firm workspace is linked to this account.</h1>
+          <p style={{ margin: '0 0 20px', color: 'rgba(255,255,255,0.62)', lineHeight: 1.6 }}>
+            The dashboard is intentionally blocked until a real firm membership or owner relationship exists. No placeholder firm was created.
+          </p>
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <button onClick={() => navigate('/onboarding')} style={{ border: 0, borderRadius: '8px', padding: '12px 16px', background: '#76b900', color: '#071000', fontWeight: 800, cursor: 'pointer' }}>Start Firm Setup</button>
+            {isAdminUser(user) && (
+              <button onClick={() => navigate('/admin')} style={{ border: '1px solid rgba(255,255,255,0.16)', borderRadius: '8px', padding: '12px 16px', background: 'transparent', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Return to Admin</button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Breadcrumb
   const isMatterWorkspace = location.pathname.startsWith('/dashboard/matters/');
   const currentPage = isMatterWorkspace ? 'Matter Workspace' : (BREADCRUMBS[location.pathname] || 'Dashboard');
@@ -203,6 +230,25 @@ export default function DashboardLayout() {
     await logout();
     navigate('/');
   };
+
+  if (interfaceMode === 'command') {
+    return (
+      <CommandDashboardLayout
+        agents={agents}
+        currentPage={currentPage}
+        firm={firm}
+        firmId={firmId}
+        initials={initials}
+        interfaceMode={interfaceMode}
+        mainNavItems={mainNavItems}
+        manageNavItems={manageNavItems}
+        onInterfaceModeChange={setInterfaceMode}
+        onLogout={handleLogout}
+        personalAgents={personalAgents}
+        user={user}
+      />
+    );
+  }
 
   return (
     <div className={`dashboard-layout ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
@@ -356,6 +402,8 @@ export default function DashboardLayout() {
             </div>
           </div>
           <div className="db-topbar-right">
+            <DashboardModeToggle value={interfaceMode} onChange={setInterfaceMode} />
+
             {/* SEARCH BUTTON */}
             <div style={{ position: 'relative' }}>
               <button

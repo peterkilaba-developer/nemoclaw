@@ -1,0 +1,71 @@
+.competitive-matrix-section {
+  padding: 80px 0;
+  position: relative;
+  z-index: 2;
+}
+
+.matrix-table-wrapper {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.matrix-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  text-align: left;
+  min-width: 800px;
+}
+
+.matrix-table th {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.matrix-table th.matrix-highlight {
+  background: rgba(118, 185, 0, 0.1);
+  color: var(--nvidia-green);
+  border-bottom: 1px solid rgba(118, 185, 0, 0.3);
+}
+
+.matrix-table td {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9375rem;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.matrix-table tr:last-child td {
+  border-bottom: none;
+}
+
+.matrix-feature {
+  font-weight: 600;
+  width: 20%;
+  color: var(--text-secondary);
+}
+
+.matrix-highlight-cell {
+  background: rgba(118, 185, 0, 0.05);
+  border-left: 1px solid rgba(118, 185, 0, 0.1);
+  border-right: 1px solid rgba(118, 185, 0, 0.1);
+}
+
+.text-error {
+  color: var(--text-error, #ef4444);
+}
+
+@media (max-width: 768px) {
+  .competitive-matrix-section {
+    padding: 60px 0;
+  }
+}

@@ -20,7 +20,7 @@ export default function Navbar() {
         </a>
 
         <div className={`navbar-links ${mobileOpen ? 'open' : ''}`}>
-          <a href="/#workforce" onClick={() => setMobileOpen(false)}>AI Workforce</a>
+          <a href="/#hitl-os" onClick={() => setMobileOpen(false)}>Platform</a>
           <a href="/#security" onClick={() => setMobileOpen(false)}>Security</a>
           <a href="/#born-agentic" onClick={() => setMobileOpen(false)}>Why Us</a>
           <a href="/#pricing" onClick={() => setMobileOpen(false)}>Pricing</a>

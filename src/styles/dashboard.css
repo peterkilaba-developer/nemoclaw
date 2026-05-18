@@ -46,6 +46,44 @@
   --db-shadow-md: var(--shadow-md);
 }
 
+.dashboard-mode-toggle {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--db-border, rgba(255, 255, 255, 0.12));
+  border-radius: 9px;
+  background: var(--db-surface, rgba(255, 255, 255, 0.06));
+  color: var(--db-text-muted, rgba(255, 255, 255, 0.58));
+}
+
+.dashboard-mode-toggle button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 750;
+  padding: 0 10px;
+}
+
+.dashboard-mode-toggle button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--db-text-primary, #fff);
+}
+
+.dashboard-mode-toggle button.is-active {
+  background: var(--db-bg, rgba(255, 255, 255, 0.1));
+  color: var(--db-text-primary, #fff);
+  box-shadow: inset 0 0 0 1px var(--db-border-light, rgba(255, 255, 255, 0.06));
+}
+
 /* ── Light Mode Overrides ── */
 @media (prefers-color-scheme: light) {
   :root {
@@ -413,13 +451,14 @@
 
 /* ── Stats Grid ── */
 .db-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 16px;
   margin-bottom: 24px;
 }
 
 .db-stat-card {
+  flex: 1;
+  min-width: 0;
   background: var(--db-surface);
   border: 1px solid var(--db-border);
   border-radius: var(--db-radius-lg);

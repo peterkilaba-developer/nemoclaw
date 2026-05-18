@@ -1,18 +1,18 @@
-# NemoClaw AI — The Complete Deep Dive
+# NemoC LAW AI — The Complete Deep Dive
 
-## What Is NemoClaw AI?
+## What Is NemoC LAW AI?
 
-NemoClaw AI is the first Agentic-as-a-Service platform built exclusively for the legal industry. It gives every person at your law firm — from the managing partner down to the receptionist — their own personal AI agent that actually does the work. Not a chatbot. Not a search engine with a pretty interface. A digital teammate that drafts motions, redlines contracts, screens clients, manages your calendar, tracks your deadlines, and handles your billing — all inside a military-grade security sandbox where your client data can never leak.
+NemoC LAW AI is the first Agentic-as-a-Service platform built exclusively for the legal industry. It gives every person at your law firm — from the managing partner down to the receptionist — their own personal AI agent that actually does the work. Not a chatbot. Not a search engine with a pretty interface. A digital teammate that drafts motions, redlines contracts, screens clients, manages your calendar, tracks your deadlines, and handles your billing — all inside a military-grade security sandbox where your client data can never leak.
 
 This is not another tool you have to learn. This is a platform you delegate to. You speak to your agent in plain English. You say "Draft a motion to dismiss based on Smith v. Jones and format it for the 9th Circuit." And it does it. No prompt engineering. No training. No learning curve whatsoever.
 
 ## The Origin Story
 
-NemoClaw AI was founded by Peter Swai, who identified a massive and dangerous gap in the legal technology market. On one side, you had large firms with seven-figure IT budgets deploying custom AI solutions behind enterprise firewalls. On the other side, you had solo practitioners and small-to-midsize firms — the backbone of the American legal system — forced to choose between using public AI tools like ChatGPT that offer zero confidentiality protections, or simply going without AI altogether and falling further behind every single day.
+NemoC LAW AI was founded by Peter Swai, who identified a massive and dangerous gap in the legal technology market. On one side, you had large firms with seven-figure IT budgets deploying custom AI solutions behind enterprise firewalls. On the other side, you had solo practitioners and small-to-midsize firms — the backbone of the American legal system — forced to choose between using public AI tools like ChatGPT that offer zero confidentiality protections, or simply going without AI altogether and falling further behind every single day.
 
 Peter recognized that the problem was never about whether AI could help lawyers. Of course it could. The problem was that no one had built AI specifically for the constraints of legal practice: attorney-client privilege, ethical walls between matters, unauthorized practice of law restrictions, state bar confidentiality rules, and the absolute requirement that a human attorney must review every piece of work product before it goes out the door.
 
-So Peter built NemoClaw AI from the ground up — not by wrapping a public API, but by partnering directly with NVIDIA to deploy every agent inside an isolated NemoClaw security sandbox. The result is the only AI platform in the legal industry where your data never leaves your environment, is never used to train models, and is never accessible to anyone outside your firm. Period.
+So Peter built NemoC LAW AI from the ground up — not by wrapping a public API, but by partnering directly with NVIDIA to deploy every agent inside an isolated NemoC LAW AI security sandbox. The result is the only AI platform in the legal industry where your data never leaves your environment, is never used to train models, and is never accessible to anyone outside your firm. Period.
 
 ## The Problem We Solve
 
@@ -24,9 +24,9 @@ Meanwhile, every hour your team spends on administrative busywork is an hour you
 
 And here is the harsh reality: the firms that adopt AI now will compound their advantage every single quarter. The firms that wait will find themselves unable to compete on speed, cost, or quality within twenty-four months. This is not speculation. This is the trajectory that every other professional services industry — accounting, consulting, financial advisory — has already proven.
 
-## How NemoClaw AI Works: One Agent, Endless Capability
+## How NemoC LAW AI Works: One Agent, Endless Capability
 
-Here is the most important thing to understand about NemoClaw AI: you do not interact with thirty different tools. You do not manage a dashboard full of disconnected features. You do not need to learn anything new.
+Here is the most important thing to understand about NemoC LAW AI: you do not interact with thirty different tools. You do not manage a dashboard full of disconnected features. You do not need to learn anything new.
 
 Every single person at your firm gets one personal AI agent. That is it. One agent. One conversation. One interface.
 
@@ -36,7 +36,7 @@ This is what we call Agentic-as-a-Service. Your agent thinks, plans, acts, and d
 
 ### The Three-Tier Architecture (Invisible to You)
 
-Behind the scenes, NemoClaw AI operates on a powerful three-tier hierarchy that you never have to think about:
+Behind the scenes, NemoC LAW AI operates on a powerful three-tier hierarchy that you never have to think about:
 
 **Tier 1 — The Super Agent (Your Firm's AI Chief of Staff)**
 This is the firm-wide intelligence layer. It has visibility across all matters, all clients, all financials, and all team workloads. Only partners have access to the Super Agent. It answers questions like "What is our projected revenue this quarter?", "Are there any conflict-of-interest issues between the Martinez matter and the new Henderson intake?", and "Which associate has bandwidth to take on a new case?"
@@ -51,7 +51,7 @@ The beauty of this architecture is that it is completely invisible. You talk to 
 
 ## Who Gets What: Every Role Covered
 
-NemoClaw AI is the first platform that maps AI agents to every single role in a law firm — not just the attorneys.
+NemoC LAW AI is the first platform that maps AI agents to every single role in a law firm — not just the attorneys.
 
 **Partners and Managing Partners** receive a Partner Agent with access to the Super Agent dashboard. They can see firm-wide analytics, revenue projections, matter pipeline, conflict detection, and resource allocation. Managing partners additionally receive policy administration controls — only they can modify the firm's global AI policies, ensuring that junior staff cannot change security settings or access permissions.
 
@@ -75,15 +75,15 @@ Every single one of these roles communicates with just one agent. That agent is 
 
 ## Security: The Zero Data Leak Guarantee
 
-This is where NemoClaw AI leaves every competitor in the dust.
+This is where NemoC LAW AI leaves every competitor in the dust.
 
-Every AI agent in NemoClaw AI runs inside an isolated NVIDIA NemoClaw security sandbox. This is not a shared cloud environment. This is not a public API call to OpenAI or Anthropic where your prompts are logged, stored, and potentially used to train future models. This is a hardened, air-gapped execution environment where every computation happens inside your firm's private boundary.
+Every AI agent in NemoC LAW AI runs inside an isolated NVIDIA NemoClaw security sandbox. This is not a shared cloud environment. This is not a public API call to OpenAI or Anthropic where your prompts are logged, stored, and potentially used to train future models. This is a hardened, air-gapped execution environment where every computation happens inside your firm's private boundary.
 
 Here is what that means in practice:
 
 **No Data Leaves Your Environment.** When your agent drafts a motion, the document is generated, stored, and delivered entirely within your sandbox. It is never transmitted to a third-party server.
 
-**Your Data Is Never Used to Train AI Models.** Unlike every major public AI tool on the market today, NemoClaw AI guarantees that your client communications, case files, contracts, and work product are never fed back into a model training pipeline. Never.
+**Your Data Is Never Used to Train AI Models.** Unlike every major public AI tool on the market today, NemoC LAW AI guarantees that your client communications, case files, contracts, and work product are never fed back into a model training pipeline. Never.
 
 **Ethical Walls Are Mathematically Enforced.** Our Firestore security rules are not suggestions or policies that rely on user behavior. They are programmatic, database-level access controls. An associate's user ID physically cannot query a document collection for matters they are not assigned to. A contractor's agent is cryptographically scoped to their specific case assignments. These are not configurable — they are absolute.
 
@@ -97,7 +97,7 @@ We do NOT guarantee financial liability or cover malpractice suits in the event 
 
 ## The Data Flywheel: Your Agent Gets Smarter Every Day
 
-Most AI tools on the market today are static. You get the same generic model on day one that you get on day three hundred. NemoClaw AI is fundamentally different because it is built on the NVIDIA NeMo enterprise AI framework, which enables a continuous learning architecture called the Data Flywheel.
+Most AI tools on the market today are static. You get the same generic model on day one that you get on day three hundred. NemoC LAW AI is fundamentally different because it is built on the NVIDIA NeMo enterprise AI framework, which enables a continuous learning architecture called the Data Flywheel.
 
 Here is how it works:
 
@@ -113,7 +113,7 @@ The result: on day one, your agent is good. By day thirty, it is excellent. By d
 
 ## Zero Learning Curve: Instant Utilization
 
-We want to be absolutely clear about something: NemoClaw AI is not a new platform to learn. It is a platform to utilize.
+We want to be absolutely clear about something: NemoC LAW AI is not a new platform to learn. It is a platform to utilize.
 
 There are no training sessions. There are no certification courses. There is no 90-day onboarding process. There is no change management consultant you need to hire.
 
@@ -144,7 +144,7 @@ You can also type in any custom name you prefer. This is your digital teammate. 
 
 ## Firm-Grade Controls
 
-NemoClaw AI was built for real law firms with real governance requirements.
+NemoC LAW AI was built for real law firms with real governance requirements.
 
 **Managing Partner Policy Controls.** Only designated managing partners can modify firm-wide AI policies. Associates, paralegals, and staff cannot change security configurations, access scopes, or compliance settings. This prevents accidental or intentional policy erosion.
 
@@ -156,7 +156,7 @@ NemoClaw AI was built for real law firms with real governance requirements.
 
 ## Pricing That Makes the Decision Easy
 
-NemoClaw AI offers three transparent pricing tiers with no hidden fees, no per-token charges, and no usage caps:
+NemoC LAW AI offers three transparent pricing tiers with no hidden fees, no per-token charges, and no usage caps:
 
 **Solo Practitioner — 199 dollars per month.** One hybrid agent that combines partner-level strategy with associate-level execution. Unlimited AI tokens. Full security sandbox. Your entire AI workforce for less than the cost of a single Westlaw subscription.
 
@@ -168,11 +168,11 @@ Every plan includes unlimited AI tokens. You will never receive a surprise bill 
 
 ## Founder Pricing: The Price Lock Advantage
 
-Here is what makes NemoClaw AI's pricing model unlike anything else in the legal technology market.
+Here is what makes NemoC LAW AI's pricing model unlike anything else in the legal technology market.
 
-Every firm that subscribes to NemoClaw AI receives a Lifetime Price Lock Guarantee. The price you sign up at is the price you pay for as long as you remain an active subscriber. Not for a year. Not for a promotional period. For as long as you maintain your subscription.
+Every firm that subscribes to NemoC LAW AI receives a Lifetime Price Lock Guarantee. The price you sign up at is the price you pay for as long as you remain an active subscriber. Not for a year. Not for a promotional period. For as long as you maintain your subscription.
 
-Here is how it works: NemoClaw AI launches at founding prices that will never be this low again. The first 100 firms to join in each size tier lock in at the launch rate. After those 100 spots fill, the price increases permanently for all new subscribers:
+Here is how it works: NemoC LAW AI launches at founding prices that will never be this low again. The first 100 firms to join in each size tier lock in at the launch rate. After those 100 spots fill, the price increases permanently for all new subscribers:
 
 **Solo Practitioner:** First 100 firms pay $199 per month. After 100 firms join, the price rises to $499 per month for new subscribers.
 
@@ -186,7 +186,7 @@ The only way you lose your locked rate is if you lapse your payment. If your sub
 
 This means the earliest adopters get the best deal — permanently. The first 100 solo firms in each state lock in at $199 for life. The next 100 might lock in at $299 for life. And so on. Every wave of firms pays more than the wave before them, but every firm within a wave keeps their price forever.
 
-This is not a gimmick. This is a deliberate reward structure for firms that move decisively. The firms that recognize the value of NemoClaw AI today and act on it will pay a fraction of what firms pay twelve months from now.
+This is not a gimmick. This is a deliberate reward structure for firms that move decisively. The firms that recognize the value of NemoC LAW AI today and act on it will pay a fraction of what firms pay twelve months from now.
 
 If you are reading this or listening to this right now, you are in the earliest wave. The launch pricing window is open. But once those first 100 spots fill in your tier, the price moves up — and it never comes back down.
 
@@ -198,7 +198,7 @@ You can continue operating the way you always have — manually researching case
 
 Or you can give every person at your firm a personal AI agent today that handles the work they should not be spending their time on, so they can focus on the work that actually requires a human being with a law degree and a bar card: counseling clients, developing case strategy, appearing in court, and building the relationships that drive your practice.
 
-NemoClaw AI does not replace lawyers. It replaces the 60 to 70 percent of a lawyer's day that is not actually lawyering.
+NemoC LAW AI does not replace lawyers. It replaces the 60 to 70 percent of a lawyer's day that is not actually lawyering.
 
 Your agent is ready. Your spot in the founding cohort is available. The only question is whether you will claim it before someone else in your state does.
 
