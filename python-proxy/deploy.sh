@@ -18,6 +18,6 @@ gcloud run deploy $SERVICE_NAME \
   --source . \
   --region $REGION \
   --allow-unauthenticated \
-  --set-env-vars="NVIDIA_MODEL_ID=meta/llama-3.1-70b-instruct"
+  --set-env-vars="NVIDIA_MODEL_ID=nvidia/nemotron-3-super-120b-a12b"
 
-echo "Deployment completed successfully. Don't forget to set your runtime secrets (NVIDIA_API_KEY, OPENAI_API_KEY, etc.) in the Cloud Run console."
+echo "Deployment completed successfully. Don't forget to set NVIDIA_API_KEY in the Cloud Run console."

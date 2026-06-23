@@ -26,7 +26,7 @@ export default function Blog() {
       <SEO
         title="Blog & Insights"
         path="/blog"
-        description="NemoC Law AI blog — insights on legal AI strategy, data privacy for law firms, agentic AI workflows, and the future of AI-powered legal practice."
+        description="NemoC LAW AI blog — insights on legal AI strategy, data privacy for law firms, agentic AI workflows, and the future of AI-powered legal practice."
       />
       <main className="legal-page">
         <div className="container">

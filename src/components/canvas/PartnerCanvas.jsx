@@ -1,15 +1,45 @@
+import { useState } from 'react';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { CheckCircle, Eye, Target, TrendingUp } from 'lucide-react';
+import { db } from '../../lib/firebase';
 
-export default function PartnerCanvas({ _firmId, _user, billableActivities = [], matters = [] }) {
+export default function PartnerCanvas({ firmId, user, billableActivities = [], matters = [] }) {
+  const [verifiedIds, setVerifiedIds] = useState(new Set());
+  const [pendingId, setPendingId] = useState('');
+  const [approvalError, setApprovalError] = useState('');
   // Aggregate real WIP
-  const unbilledActivities = billableActivities.filter(a => a.status !== 'approved');
-  const wipRevenue = unbilledActivities.reduce((acc, act) => acc + (parseFloat(act.hours) * 350), 0); // Assuming blended $350 rate
+  const unbilledActivities = billableActivities.filter(a => !['approved', 'invoiced'].includes(a.status));
+  const wipRevenue = unbilledActivities.reduce((total, activity) => {
+    const explicitValue = Number(activity.value);
+    if (Number.isFinite(explicitValue)) return total + explicitValue;
+
+    const hours = Number.parseFloat(activity.hours ?? activity.duration);
+    return total + (Number.isFinite(hours) ? hours * 350 : 0);
+  }, 0);
   
   // Find at-risk matters
   const criticalCases = matters.filter(m => m.status === 'urgent' || m.stage === 'trial');
 
+  const handleVerify = async (activity) => {
+    if (!firmId || !activity?.id || pendingId) return;
+    setPendingId(activity.id);
+    setApprovalError('');
+    try {
+      await updateDoc(doc(db, 'firms', firmId, 'billableActivities', activity.id), {
+        status: 'approved',
+        approvedAt: serverTimestamp(),
+        approvedBy: user?.email || user?.uid || null,
+      });
+      setVerifiedIds(prev => new Set(prev).add(activity.id));
+    } catch (error) {
+      setApprovalError(error.message || 'Could not approve this billing activity.');
+    } finally {
+      setPendingId('');
+    }
+  };
+
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--db-text-primary)' }}>Partner Overwatch</h2>
@@ -55,11 +85,12 @@ export default function PartnerCanvas({ _firmId, _user, billableActivities = [],
                     <div key={act.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: 'var(--db-bg)', borderRadius: '6px', borderLeft: '3px solid #f59e0b' }}>
                         <div>
                            <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>Pre-bill Authorization: {act.clientName || 'General Client'}</div>
-                           <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginTop: '4px' }}>{act.hours} hours · {act.performerName || 'Associate'}</div>
+                           <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginTop: '4px' }}>{act.hours || act.duration || '0h'} · {act.performerName || act.agentRole || 'Associate'}</div>
                         </div>
-                        <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '4px 10px' }}><CheckCircle size={14} style={{ marginRight: '6px' }}/> Verify</button>
+                        <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '4px 10px' }} onClick={() => handleVerify(act)} disabled={pendingId === act.id || verifiedIds.has(act.id)}><CheckCircle size={14} style={{ marginRight: '6px' }}/> {verifiedIds.has(act.id) ? 'Verified' : pendingId === act.id ? 'Verifying...' : 'Verify'}</button>
                     </div>
                   ))}
+                  {approvalError && <div role="alert" style={{ color: '#ef4444', fontSize: '0.75rem' }}>{approvalError}</div>}
                 </div>
             )}
           </div>

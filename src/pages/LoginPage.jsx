@@ -87,20 +87,20 @@ export default function LoginPage() {
         <div className="auth-brand-content">
           <Link to="/" className="auth-brand-logo">
             <img src="/logos/claw-64-transparent.png" alt="" style={{ height: '40px', width: '40px', objectFit: 'contain', marginRight: '8px' }} />
-            <img src="/logos/wordmark.svg" alt="NemoC Law AI" className="auth-brand-wordmark" />
+            <img src="/logos/wordmark.svg" alt="NemoC LAW AI" className="auth-brand-wordmark" />
           </Link>
           <h1 className="auth-brand-title">
-            Your Firm's Private<br />
-            <span className="auth-brand-highlight">AI Workforce.</span>
+            Solo Attorney.<br />
+            <span className="auth-brand-highlight">Full AI Workforce.</span>
           </h1>
           <p className="auth-brand-desc">
-            10 AI roles. Zero data leak. Secured by NVIDIA NemoClaw. 
-            10x your team — or fill roles you haven't hired yet.
+            19 AI specialists. Zero data leak. Secured by NVIDIA NemoClaw.
+            Your complete AI workforce — no hiring required.
           </p>
           <div className="auth-brand-stats">
             <div className="auth-brand-stat">
-              <span className="auth-brand-stat-value">10</span>
-              <span className="auth-brand-stat-label">AI Roles</span>
+              <span className="auth-brand-stat-value">19</span>
+              <span className="auth-brand-stat-label">AI Specialists</span>
             </div>
             <div className="auth-brand-stat-divider" />
             <div className="auth-brand-stat">
@@ -128,7 +128,7 @@ export default function LoginPage() {
             </h2>
             <p className="auth-form-subtitle">
               {isSignup
-                ? 'Start your 7-day free founder access. No credit card required.'
+                ? 'Start your 30-day free trial. No charge until day 31.'
                 : 'Sign in to access your AI workforce.'}
             </p>
           </div>

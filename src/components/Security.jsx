@@ -55,12 +55,12 @@ export default function Security() {
         {/* Anti-Public AI Comparison — Architectural Cleanup */}
         <div className="public-ai-comparison">
           <h3 className="public-ai-comparison-title">
-            Comparison Matrix: Public AI vs. NemoC Agentic AI
+            Comparison Matrix: Public AI vs. NemoC LAW AI
           </h3>
           <div className="public-ai-table">
             <div className="public-ai-header">
               <span className="pai-col-risk-label">⚠️ Public AI (Traditional/Generative)</span>
-              <span className="pai-col-nemoc-label">✅ NemoC Agentic AI (NemoClaw)</span>
+              <span className="pai-col-nemoc-label">✅ NemoC LAW AI (NemoClaw)</span>
             </div>
             {publicAiRisks.map((row, i) => (
               <div key={i} className="public-ai-row">

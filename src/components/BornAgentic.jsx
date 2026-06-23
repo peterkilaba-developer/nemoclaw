@@ -67,7 +67,7 @@ export default function BornAgentic() {
             <span>VS</span>
           </div>
 
-          {/* NemoC Platform */}
+          {/* NemoC LAW AI Platform */}
           <div className="born-col born-col-nemoc">
             <div className="born-col-header born-nemoc-header">
               <span className="born-col-year">Modern Stack — 2026 Ready</span>
@@ -87,7 +87,7 @@ export default function BornAgentic() {
                 <div className="born-pillar-icon"><Bot size={16} /></div>
                 <div className="born-pillar-content">
                   <div className="born-pillar-title">Agentic AI Orchestration</div>
-                  <div className="born-pillar-desc">Orchestrates your entire 10-person AI legal team.</div>
+                  <div className="born-pillar-desc">Orchestrates your entire AI workforce — 19 specialist agents on demand.</div>
                 </div>
               </div>
               <div className="born-pillar">
@@ -111,7 +111,7 @@ export default function BornAgentic() {
               <tr>
                 <th>Feature Comparison</th>
                 <th className="born-th-legacy">Legacy + AI Bolted On</th>
-                <th className="born-th-nemoc">NemoC Law AI</th>
+                <th className="born-th-nemoc">NemoC LAW AI</th>
               </tr>
             </thead>
             <tbody>

@@ -1,5 +1,5 @@
 /* ========================================
-   NemoC Law AI — Design System
+   NemoC LAW AI — Design System
    Lawyer-grade: authority through restraint.
    Adaptive light/dark theme system.
    ======================================== */
@@ -70,7 +70,7 @@
   /* Spacing */
   --section-padding: 120px 0;
 
-  color-scheme: dark light;
+  color-scheme: dark;
 }
 
 /* ── Reset ── */
@@ -278,32 +278,35 @@ img {
 }
 
 /* ── Light Theme Overrides ── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg-primary: #fcfcfd;
-    --bg-secondary: #f4f4f5;
-    --bg-tertiary: #e9e9ec;
-    --bg-card: #ffffff;
-    --bg-card-hover: #f1f1f4;
-    --bg-glass: rgba(252, 252, 253, 0.9);
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
 
-    --text-primary: #09090b;
-    --text-secondary: #52525b;
-    --text-muted: #71717a;
-    --text-on-dark: #ffffff;
+:root[data-theme='light'] {
+  --bg-primary: #fcfcfd;
+  --bg-secondary: #f4f4f5;
+  --bg-tertiary: #e9e9ec;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f1f4;
+  --bg-glass: rgba(252, 252, 253, 0.9);
 
-    --border-subtle: rgba(0, 0, 0, 0.06);
-    --border-medium: rgba(0, 0, 0, 0.1);
-    --border-accent: rgba(118, 185, 0, 0.15);
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #71717a;
+  --text-on-dark: #ffffff;
 
-    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
-    --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-medium: rgba(0, 0, 0, 0.1);
+  --border-accent: rgba(118, 185, 0, 0.15);
 
-    --overlay-bg: rgba(0, 0, 0, 0.2);
-    --modal-bg: #ffffff;
-    --modal-text: #09090b;
-    --modal-text-muted: #71717a;
-    --modal-border: rgba(0, 0, 0, 0.1);
-  }
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
+
+  --overlay-bg: rgba(0, 0, 0, 0.2);
+  --modal-bg: #ffffff;
+  --modal-text: #09090b;
+  --modal-text-muted: #71717a;
+  --modal-border: rgba(0, 0, 0, 0.1);
+  color-scheme: light;
 }

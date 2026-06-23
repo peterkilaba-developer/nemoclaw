@@ -83,8 +83,12 @@ axios.interceptors.response.use(
     logger.error(`[⚒️ FORGE] Captured API Degradation -> Status: ${status} | URL: ${url} | MSG: ${errorMsg}`);
 
     try {
-      // 1. LLM Fallback (NVIDIA -> Gemini)
-      if (url.includes('integrate.api.nvidia.com') && (status >= 500 || status === 429)) {
+      // 1. Optional LLM fallback. Disabled by default so NemoClaw remains NVIDIA-first.
+      if (
+        process.env.ENABLE_NON_NVIDIA_LLM_FALLBACKS === 'true' &&
+        url.includes('integrate.api.nvidia.com') &&
+        (status >= 500 || status === 429)
+      ) {
          logger.info('[⚒️ FORGE] Executing Gemini Fallback Protocol for NVIDIA...');
          const geminiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
          if (geminiKey && error.config.data) {
@@ -172,6 +176,18 @@ axios.interceptors.response.use(
 // Config
 const FROM_EMAIL = 'outreach@nemoc-law.ai';
 const FROM_NAME = 'NemoC LAW AI';
+
+function getClientPayload(req) {
+  return req.body?.data || req.body || {};
+}
+
+function sendClientJson(req, res, payload) {
+  if (req.body && Object.prototype.hasOwnProperty.call(req.body, 'data')) {
+    res.json({ result: payload });
+    return;
+  }
+  res.json(payload);
+}
 
 /**
  * Triggered when a new document is created in the 'mail' collection.
@@ -346,6 +362,83 @@ const NemoClawGuardrails = {
   }
 };
 
+const NEMOCLAW_DEFAULT_MODEL = process.env.NVIDIA_MODEL_ID || 'nvidia/nemotron-3-super-120b-a12b';
+
+const SERVER_SIDE_REDACTION_RULES = [
+  { type: 'ssn', regex: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: '[REDACTED-SSN]' },
+  { type: 'email', regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, replacement: '[REDACTED-EMAIL]' },
+  { type: 'phone', regex: /\b(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g, replacement: '[REDACTED-PHONE]' },
+  { type: 'dob', regex: /\b(?:0?[1-9]|1[0-2])\/(?:0?[1-9]|[12]\d|3[01])\/(?:19|20)\d{2}\b/g, replacement: '[REDACTED-DOB]' },
+  { type: 'credit_card', regex: /\b(?:\d[ -]*?){13,19}\b/g, replacement: '[REDACTED-FINANCIAL-DATA]' },
+  { type: 'banking', regex: /\b(?:routing|account|iolta|trust\s+account|swift|iban)[\s:#-]*[A-Z0-9]{8,34}\b/gi, replacement: '[REDACTED-BANKING-DATA]' },
+];
+
+function redactSensitiveText(text) {
+  let redacted = text || '';
+  const redactions = [];
+
+  for (const rule of SERVER_SIDE_REDACTION_RULES) {
+    const matches = redacted.match(rule.regex);
+    if (matches?.length) {
+      redactions.push({ type: rule.type, count: matches.length });
+      redacted = redacted.replace(rule.regex, rule.replacement);
+    }
+  }
+
+  return { text: redacted, redactions };
+}
+
+function redactMessageContent(content) {
+  if (typeof content === 'string') {
+    const result = redactSensitiveText(content);
+    return { content: result.text, redactions: result.redactions };
+  }
+
+  if (Array.isArray(content)) {
+    const redactions = [];
+    const safeContent = content.map((part) => {
+      if (part && typeof part.text === 'string') {
+        const result = redactSensitiveText(part.text);
+        redactions.push(...result.redactions);
+        return { ...part, text: result.text };
+      }
+      return part;
+    });
+    return { content: safeContent, redactions };
+  }
+
+  return { content, redactions: [] };
+}
+
+function redactMessagesForInference(messages) {
+  const allRedactions = [];
+  const safeMessages = (messages || []).map((msg) => {
+    const result = redactMessageContent(msg.content);
+    allRedactions.push(...result.redactions);
+    return { ...msg, content: result.content };
+  });
+
+  return { messages: safeMessages, redactions: allRedactions };
+}
+
+async function logNemoClawInferenceAudit({ model, status, rail, routeProfile, redactions, outputFiltered, error }) {
+  try {
+    await admin.firestore().collection('_nemoclawInferenceAudit').add({
+      model,
+      status,
+      rail: rail || null,
+      routeProfile: routeProfile || 'default',
+      redactionTypes: (redactions || []).map((item) => item.type),
+      redactionCount: (redactions || []).reduce((sum, item) => sum + (item.count || 0), 0),
+      outputFiltered: Boolean(outputFiltered),
+      error: error ? String(error).slice(0, 500) : null,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (auditError) {
+    logger.warn('NemoClaw inference audit write failed:', auditError.message);
+  }
+}
+
 /**
  * Cloud Function: nvidiaInference
  * Secure Proxy for NVIDIA NIM / NemoClaw Guardrails
@@ -373,18 +466,35 @@ exports.nvidiaInference = onRequest({ maxInstances: 15, timeoutSeconds: 300, reg
     return;
   }
 
+  const routeProfile = req.get('X-Routing-Profile') || 'default';
+  const requestedModel = model || NEMOCLAW_DEFAULT_MODEL;
+  const redactionResult = redactMessagesForInference(messages);
+  const safeMessages = redactionResult.messages;
+
   // 1. Evaluate NeMo Guardrails Input Rails
-  const inputRailResult = NemoClawGuardrails.checkInput(messages);
+  const inputRailResult = NemoClawGuardrails.checkInput(safeMessages);
   if (!inputRailResult.allowed) {
     logger.warn(`🛡️ NemoClaw Input Blocked: ${inputRailResult.reason} [Rail: ${inputRailResult.rail}]`);
+    await logNemoClawInferenceAudit({
+      model: requestedModel,
+      status: 'blocked',
+      rail: inputRailResult.rail,
+      routeProfile,
+      redactions: redactionResult.redactions,
+    });
     res.status(403).json({
       error: `Security Rail Enforced: ${inputRailResult.reason}`,
-      nemoclaw: { blocked: true, rail: inputRailResult.rail }
+      nemoclaw: {
+        blocked: true,
+        rail: inputRailResult.rail,
+        pii_redactions: redactionResult.redactions,
+        server_side_redaction_active: true,
+      }
     });
     return;
   }
 
-  logger.info(`🔥 Routing inference to NVIDIA NIM (${model || 'nvidia/nemotron-3-super'})`);
+  logger.info(`Routing inference to NVIDIA NIM (${requestedModel})`);
 
   try {
     const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || process.env.VITE_NVIDIA_API_KEY;
@@ -397,8 +507,8 @@ exports.nvidiaInference = onRequest({ maxInstances: 15, timeoutSeconds: 300, reg
     const response = await axios.post(
       'https://integrate.api.nvidia.com/v1/chat/completions',
       {
-        model: model || 'meta/llama-3.1-70b-instruct',
-        messages: messages,
+        model: requestedModel,
+        messages: safeMessages,
         max_tokens: max_tokens || 4096,
         temperature: temperature || 0.4,
         top_p: top_p || 0.9,
@@ -413,23 +523,799 @@ exports.nvidiaInference = onRequest({ maxInstances: 15, timeoutSeconds: 300, reg
     );
 
     // 2. Evaluate NeMo Guardrails Output Rails
-    let aiResponse = response.data.choices[0].message.content;
+    let aiResponse = response.data.choices?.[0]?.message?.content || '';
     const outputRailResult = NemoClawGuardrails.checkOutput(aiResponse);
-    response.data.choices[0].message.content = outputRailResult.content;
+    if (response.data.choices?.[0]?.message) {
+      response.data.choices[0].message.content = outputRailResult.content;
+    }
+
+    await logNemoClawInferenceAudit({
+      model: requestedModel,
+      status: 'success',
+      routeProfile,
+      redactions: redactionResult.redactions,
+      outputFiltered: outputRailResult.logs.length > 0,
+    });
 
     res.status(200).json({
       ...response.data,
       nemoclaw: { 
-        input_filtered: false, 
+        input_filtered: redactionResult.redactions.length > 0,
         output_filtered: outputRailResult.logs.length > 0,
+        pii_redactions: redactionResult.redactions,
         logs: outputRailResult.logs,
-        deterministic_rails_active: true
+        deterministic_rails_active: true,
+        server_side_redaction_active: true,
+        provider: 'nvidia_nim',
+        model: requestedModel,
       }
     });
   } catch (error) {
     logger.error('NVIDIA Inference Error:', error?.response?.data || error.message);
+    await logNemoClawInferenceAudit({
+      model: requestedModel,
+      status: 'error',
+      routeProfile,
+      redactions: redactionResult.redactions,
+      error: error?.response?.data?.error?.message || error.message,
+    });
     res.status(500).json({ error: 'Inference failed', details: error.message });
   }
+});
+
+function normalizeCourtListenerUrl(value) {
+  if (!value) return null;
+  if (value.startsWith('http')) return value;
+  return `https://www.courtlistener.com${value.startsWith('/') ? '' : '/'}${value}`;
+}
+
+function stripHtml(value) {
+  return String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Cloud Function: courtListenerSearch
+ *
+ * Server-side legal research proxy for CourtListener. Keeps legal-research
+ * workflows wired through the backend and gives NemoClaw grounded citations.
+ */
+exports.courtListenerSearch = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 60, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (!['GET', 'POST'].includes(req.method)) {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const payload = req.method === 'GET' ? req.query : getClientPayload(req);
+  const queryText = String(payload.q || payload.query || '').trim();
+  const pageSize = Math.min(Math.max(Number(payload.pageSize || payload.page_size || 5), 1), 10);
+  const searchType = String(payload.type || 'o');
+
+  if (!queryText) {
+    res.status(400).json({ error: 'Missing query' });
+    return;
+  }
+
+  try {
+    const headers = { Accept: 'application/json' };
+    const apiKey = process.env.COURTLISTENER_API_KEY;
+    if (apiKey) {
+      headers.Authorization = `Token ${apiKey}`;
+    }
+
+    const response = await axios.get('https://www.courtlistener.com/api/rest/v4/search/', {
+      headers,
+      timeout: 12000,
+      params: {
+        q: queryText,
+        type: searchType,
+        page_size: pageSize,
+      },
+    });
+
+    const rawResults = response.data?.results || [];
+    const results = rawResults.slice(0, pageSize).map((item) => ({
+      id: item.id || item.cluster_id || item.absolute_url || null,
+      caseName: item.caseName || item.caseNameFull || item.case_name || item.case_name_full || item.name || 'Unknown case',
+      citation: Array.isArray(item.citation) ? item.citation.join(', ') : (item.citation || item.cite || ''),
+      court: item.court || item.court_citation_string || item.court_exact || '',
+      dateFiled: item.dateFiled || item.date_filed || '',
+      precedentialStatus: item.status || item.precedential_status || '',
+      url: normalizeCourtListenerUrl(item.absolute_url || item.cluster_url || item.resource_uri),
+      snippet: stripHtml(item.snippet || item.syllabus || item.plain_text || ''),
+    }));
+
+    await admin.firestore().collection('_legalResearchAudit').add({
+      provider: 'courtlistener',
+      queryHash: crypto.createHash('sha256').update(queryText).digest('hex'),
+      resultCount: results.length,
+      searchType,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    sendClientJson(req, res, {
+      provider: 'courtlistener',
+      query: queryText,
+      count: results.length,
+      results,
+    });
+  } catch (error) {
+    logger.error('CourtListener search failed:', error?.response?.data || error.message);
+    res.status(error?.response?.status || 500).json({
+      error: 'CourtListener search failed',
+      details: error?.response?.data?.detail || error.message,
+    });
+  }
+});
+
+async function readFirmIntegration(firmId, provider) {
+  if (!firmId || !provider) return {};
+  const snap = await admin.firestore()
+    .collection('firms')
+    .doc(firmId)
+    .collection('integrations')
+    .doc(provider)
+    .get();
+  return snap.exists ? snap.data() : {};
+}
+
+async function queueIntegrationAction(firmId, provider, action, payload, reason) {
+  const ref = await admin.firestore().collection('_integrationOutbox').add({
+    firmId,
+    provider,
+    action,
+    payload,
+    reason,
+    status: 'pending',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return ref.id;
+}
+
+function buildIcsEvent(eventData) {
+  const start = new Date(eventData.start || eventData.startDate || eventData.dueDate || Date.now());
+  const end = new Date(eventData.end || eventData.endDate || start.getTime() + 60 * 60 * 1000);
+  const formatDate = (date) => date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const escapeText = (text) => String(text || '').replace(/\\/g, '\\\\').replace(/,/g, '\\,').replace(/;/g, '\\;').replace(/\n/g, '\\n');
+
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//NemoC LAW AI//Agentic OS//EN',
+    'BEGIN:VEVENT',
+    `UID:${crypto.randomUUID()}@nemoc-law.ai`,
+    `DTSTAMP:${formatDate(new Date())}`,
+    `DTSTART:${formatDate(start)}`,
+    `DTEND:${formatDate(end)}`,
+    `SUMMARY:${escapeText(eventData.title || eventData.summary || 'NemoC LAW AI Deadline')}`,
+    `DESCRIPTION:${escapeText(eventData.description || '')}`,
+    eventData.location ? `LOCATION:${escapeText(eventData.location)}` : null,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].filter(Boolean).join('\r\n');
+}
+
+async function logWorkflowAudit(firmId, workflow, status, details = {}) {
+  const entry = {
+    firmId,
+    workflow,
+    status,
+    details,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  };
+
+  await admin.firestore().collection('_workflowAudit').add(entry);
+  if (firmId) {
+    await admin.firestore().collection('firms').doc(firmId).collection('auditLog').add({
+      type: `workflow.${workflow}`,
+      status,
+      workflow,
+      details,
+      immutable: true,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+}
+
+async function callNemoClawWorkflow(messages, options = {}) {
+  const NVIDIA_API_KEY = process.env.NVIDIA_API_KEY || process.env.VITE_NVIDIA_API_KEY;
+  if (!NVIDIA_API_KEY) {
+    throw new Error('NVIDIA_API_KEY is not configured.');
+  }
+
+  const redactionResult = redactMessagesForInference(messages);
+  const inputRailResult = NemoClawGuardrails.checkInput(redactionResult.messages);
+  if (!inputRailResult.allowed) {
+    const error = new Error(inputRailResult.reason);
+    error.rail = inputRailResult.rail;
+    throw error;
+  }
+
+  const response = await axios.post(
+    'https://integrate.api.nvidia.com/v1/chat/completions',
+    {
+      model: options.model || NEMOCLAW_DEFAULT_MODEL,
+      messages: redactionResult.messages,
+      temperature: options.temperature ?? 0.05,
+      top_p: options.top_p ?? 0.8,
+      max_tokens: options.max_tokens || 1200,
+      stream: false,
+    },
+    {
+      timeout: options.timeout || 30000,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${NVIDIA_API_KEY}`,
+      },
+    }
+  );
+
+  const content = response.data?.choices?.[0]?.message?.content || '';
+  const outputRailResult = NemoClawGuardrails.checkOutput(content);
+  return {
+    content: outputRailResult.content,
+    redactions: redactionResult.redactions,
+    outputRails: outputRailResult.logs,
+    model: options.model || NEMOCLAW_DEFAULT_MODEL,
+  };
+}
+
+function parseCurrency(value) {
+  if (typeof value === 'number') return value;
+  const cleaned = String(value || '').replace(/[$,\s]/g, '');
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function batesNumber(prefix, index) {
+  return `${String(prefix || 'NEMOC').toUpperCase()}${String(index + 1).padStart(6, '0')}`;
+}
+
+function analyzePrivilegeSignals(text) {
+  const content = String(text || '');
+  const signals = [
+    /attorney[-\s]client/i,
+    /privileged/i,
+    /legal advice/i,
+    /work product/i,
+    /in anticipation of litigation/i,
+    /confidential/i,
+  ].filter((rx) => rx.test(content));
+
+  return {
+    privileged: signals.length > 0,
+    signalCount: signals.length,
+    tags: signals.length > 0 ? ['privilege-review'] : [],
+  };
+}
+
+function buildFilingChecklist(payload) {
+  const filingType = payload.filingType || 'Court filing';
+  const jurisdiction = payload.jurisdiction || 'configured jurisdiction';
+  const serviceMethod = payload.serviceMethod || 'configured service method';
+  return [
+    `Confirm ${filingType} caption and case number for ${jurisdiction}.`,
+    'Verify attorney signature block, certificate of service, and required local-rule formatting.',
+    'Convert final filing and exhibits to searchable PDFs where required.',
+    'Confirm ECF/PACER filing event, party selection, filing fee status, and sealed-material handling.',
+    `Prepare service package using ${serviceMethod}; record proof of service in the matter file.`,
+    'Require attorney approval before submission or client communication.',
+  ];
+}
+
+exports.getIntegrationStatus = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 30, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  const payload = req.method === 'GET' ? req.query : getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const providers = ['clio', 'googleCalendar', 'courtlistener', 'slack'];
+
+  if (!firmId) {
+    res.status(400).json({ error: 'Missing firmId' });
+    return;
+  }
+
+  const statuses = {};
+  for (const provider of providers) {
+    const config = await readFirmIntegration(firmId, provider);
+    statuses[provider] = {
+      connected: Boolean(config.accessToken || config.webhookUrl || provider === 'courtlistener'),
+      hasEnvironmentFallback: Boolean(
+        (provider === 'slack' && process.env.SLACK_WEBHOOK_URL) ||
+        (provider === 'clio' && process.env.CLIO_ACCESS_TOKEN) ||
+        (provider === 'googleCalendar' && process.env.GOOGLE_CALENDAR_ACCESS_TOKEN)
+      ),
+      updatedAt: config.updatedAt || null,
+    };
+  }
+
+  sendClientJson(req, res, { firmId, integrations: statuses });
+});
+
+exports.postSlackNotification = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 30, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const text = String(payload.text || payload.message || '').trim();
+  if (!firmId || !text) return res.status(400).json({ error: 'Missing firmId or message' });
+
+  const config = await readFirmIntegration(firmId, 'slack');
+  const webhookUrl = config.webhookUrl || process.env.SLACK_WEBHOOK_URL;
+  if (!webhookUrl) {
+    const queueId = await queueIntegrationAction(firmId, 'slack', 'post_notification', { text }, 'Slack webhook not connected');
+    return res.status(202).json({ status: 'queued', queueId });
+  }
+
+  await axios.post(webhookUrl, { text }, { timeout: 8000 });
+  await admin.firestore().collection('_integrationAudit').add({
+    firmId,
+    provider: 'slack',
+    action: 'post_notification',
+    status: 'sent',
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return res.json({ status: 'sent' });
+});
+
+exports.syncGoogleCalendarDeadline = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 30, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const eventData = payload.event || payload.deadline || {};
+  if (!firmId || !(eventData.title || eventData.summary)) {
+    return res.status(400).json({ error: 'Missing firmId or event title' });
+  }
+
+  const config = await readFirmIntegration(firmId, 'googleCalendar');
+  const accessToken = config.accessToken || process.env.GOOGLE_CALENDAR_ACCESS_TOKEN;
+  const calendarId = encodeURIComponent(config.calendarId || process.env.GOOGLE_CALENDAR_ID || 'primary');
+  const startDate = new Date(eventData.start || eventData.startDate || eventData.dueDate || Date.now());
+  const endDate = new Date(eventData.end || eventData.endDate || startDate.getTime() + 60 * 60 * 1000);
+  const googleEvent = {
+    summary: eventData.title || eventData.summary,
+    description: eventData.description || '',
+    location: eventData.location || '',
+    start: { dateTime: startDate.toISOString() },
+    end: { dateTime: endDate.toISOString() },
+  };
+
+  if (!accessToken) {
+    const ics = buildIcsEvent(eventData);
+    const queueId = await queueIntegrationAction(firmId, 'googleCalendar', 'sync_deadline', { event: eventData, ics }, 'Google Calendar not connected');
+    return res.status(202).json({ status: 'queued', queueId, ics });
+  }
+
+  const response = await axios.post(
+    `https://www.googleapis.com/calendar/v3/calendars/${calendarId}/events`,
+    googleEvent,
+    { timeout: 10000, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+  );
+  await admin.firestore().collection('_integrationAudit').add({
+    firmId,
+    provider: 'googleCalendar',
+    action: 'sync_deadline',
+    status: 'synced',
+    externalId: response.data?.id || null,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return res.json({ status: 'synced', eventId: response.data?.id, htmlLink: response.data?.htmlLink });
+});
+
+exports.syncClioMatter = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 60, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const matter = payload.matter || {};
+  if (!firmId || !(matter.description || matter.display_number || matter.client_reference)) {
+    return res.status(400).json({ error: 'Missing firmId or matter payload' });
+  }
+
+  const config = await readFirmIntegration(firmId, 'clio');
+  const accessToken = config.accessToken || process.env.CLIO_ACCESS_TOKEN;
+  const apiBase = config.apiBase || process.env.CLIO_API_BASE_URL || 'https://app.clio.com';
+  const clioPayload = {
+    data: {
+      description: matter.description || matter.title || 'NemoC LAW AI Matter',
+      display_number: matter.display_number || matter.matterNumber || undefined,
+      client_reference: matter.client_reference || matter.clientReference || undefined,
+      status: matter.status || 'Open',
+    }
+  };
+
+  if (!accessToken) {
+    const queueId = await queueIntegrationAction(firmId, 'clio', 'sync_matter', { matter: clioPayload.data }, 'Clio access token not connected');
+    return res.status(202).json({ status: 'queued', queueId });
+  }
+
+  const response = await axios.post(
+    `${apiBase.replace(/\/$/, '')}/api/v4/matters.json?fields=id,display_number,description,status`,
+    clioPayload,
+    { timeout: 12000, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' } }
+  );
+  await admin.firestore().collection('_integrationAudit').add({
+    firmId,
+    provider: 'clio',
+    action: 'sync_matter',
+    status: 'synced',
+    externalId: response.data?.data?.id || null,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+  return res.json({ status: 'synced', matter: response.data?.data });
+});
+
+exports.runEDiscoveryReview = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 120, memory: '512Mi', region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const documents = Array.isArray(payload.documents) ? payload.documents.slice(0, 25) : [];
+  const reviewIssue = String(payload.reviewIssue || payload.query || 'general relevance').slice(0, 1000);
+  const batesPrefix = payload.batesPrefix || 'NEMOC';
+
+  if (!firmId || documents.length === 0) {
+    return res.status(400).json({ error: 'Missing firmId or documents' });
+  }
+
+  const reviewed = documents.map((docItem, index) => {
+    const text = String(docItem.text || docItem.content || '').slice(0, 12000);
+    const privilege = analyzePrivilegeSignals(text);
+    return {
+      id: docItem.id || `doc-${index + 1}`,
+      name: docItem.name || `Document ${index + 1}`,
+      batesStart: batesNumber(batesPrefix, index),
+      batesEnd: batesNumber(batesPrefix, index),
+      relevanceScore: text.toLowerCase().includes(reviewIssue.toLowerCase().split(/\s+/)[0] || '') ? 0.75 : 0.35,
+      tags: [...privilege.tags, text.length > 0 ? 'reviewed' : 'empty-text'],
+      privileged: privilege.privileged,
+      privilegeSignalCount: privilege.signalCount,
+      excerpt: text.slice(0, 600),
+    };
+  });
+
+  let memo = 'Automated eDiscovery pass completed. Attorney review is required before production.';
+  try {
+    const nim = await callNemoClawWorkflow([
+      { role: 'system', content: 'You are an eDiscovery review agent. Summarize review-set risk, privilege concerns, and production readiness. Do not provide legal advice. Require attorney validation.' },
+      { role: 'user', content: JSON.stringify({ reviewIssue, reviewed }, null, 2) },
+    ], { max_tokens: 900 });
+    memo = nim.content;
+  } catch (error) {
+    logger.warn('eDiscovery NemoClaw memo unavailable:', error.message);
+  }
+
+  await logWorkflowAudit(firmId, 'ediscovery_review', 'completed', {
+    documentCount: reviewed.length,
+    privilegedCount: reviewed.filter((docItem) => docItem.privileged).length,
+  });
+
+  return res.json({
+    status: 'completed',
+    reviewIssue,
+    documents: reviewed,
+    memo,
+    requiresAttorneyReview: true,
+    disclosure: 'AI-generated eDiscovery work product. Attorney validation required before production.',
+  });
+});
+
+exports.runTrustReconciliation = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 60, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const ledger = Array.isArray(payload.ledger) ? payload.ledger : [];
+  const bank = Array.isArray(payload.bankTransactions) ? payload.bankTransactions : [];
+
+  if (!firmId) return res.status(400).json({ error: 'Missing firmId' });
+
+  const ledgerBalance = ledger.reduce((sum, entry) => sum + parseCurrency(entry.amount), 0);
+  const bankBalance = bank.reduce((sum, entry) => sum + parseCurrency(entry.amount), 0);
+  const clientBalances = {};
+  for (const entry of ledger) {
+    const client = entry.clientId || entry.client || 'unassigned';
+    clientBalances[client] = (clientBalances[client] || 0) + parseCurrency(entry.amount);
+  }
+
+  const flags = [];
+  if (Math.round((ledgerBalance - bankBalance) * 100) !== 0) {
+    flags.push({ severity: 'high', code: 'balance_mismatch', message: 'Ledger and bank balances do not match.' });
+  }
+  for (const [client, balance] of Object.entries(clientBalances)) {
+    if (balance < 0) flags.push({ severity: 'critical', code: 'negative_client_trust', message: `Client ${client} has a negative trust balance.` });
+  }
+  if (ledger.some((entry) => /operating|earned fee|office expense/i.test(`${entry.memo || ''} ${entry.category || ''}`))) {
+    flags.push({ severity: 'high', code: 'possible_commingling', message: 'Potential operating-fund activity detected in trust ledger.' });
+  }
+
+  await logWorkflowAudit(firmId, 'trust_reconciliation', 'completed', {
+    ledgerEntries: ledger.length,
+    bankTransactions: bank.length,
+    flagCount: flags.length,
+  });
+
+  return res.json({
+    status: 'completed',
+    ledgerBalance,
+    bankBalance,
+    variance: ledgerBalance - bankBalance,
+    clientBalances,
+    flags,
+    requiresAttorneyReview: flags.length > 0,
+    disclosure: 'AI-assisted trust reconciliation. Validate against bank statements and jurisdiction rules.',
+  });
+});
+
+exports.prepareCourtFiling = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 60, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  if (!firmId) return res.status(400).json({ error: 'Missing firmId' });
+
+  const checklist = buildFilingChecklist(payload);
+  const serviceDate = payload.serviceDate || payload.dueDate || new Date().toISOString();
+  const calendarIcs = buildIcsEvent({
+    title: `${payload.filingType || 'Court filing'} service deadline`,
+    dueDate: serviceDate,
+    description: `Prepared by NemoC LAW AI for ${payload.jurisdiction || 'configured jurisdiction'}.`,
+  });
+
+  await logWorkflowAudit(firmId, 'court_filing_prep', 'completed', {
+    filingType: payload.filingType || null,
+    jurisdiction: payload.jurisdiction || null,
+  });
+
+  return res.json({
+    status: 'prepared',
+    checklist,
+    pacerEcfReady: true,
+    serviceDate,
+    calendarIcs,
+    requiresAttorneyApproval: true,
+    disclosure: 'ECF/PACER preparation only. NemoC LAW AI does not submit filings without attorney action.',
+  });
+});
+
+exports.runCaseAnalytics = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 120, memory: '512Mi', region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const matter = payload.matter || {};
+  const queryText = String(payload.query || [matter.claims, matter.judge, matter.jurisdiction].filter(Boolean).join(' ') || matter.description || '').trim();
+  if (!firmId || !queryText) return res.status(400).json({ error: 'Missing firmId or analytics query' });
+
+  let authorities = [];
+  try {
+    const courtListener = await axios.get('https://www.courtlistener.com/api/rest/v4/search/', {
+      timeout: 12000,
+      headers: { Accept: 'application/json' },
+      params: { q: queryText, type: 'o', page_size: 5 },
+    });
+    authorities = (courtListener.data?.results || []).slice(0, 5).map((item) => ({
+      caseName: item.caseName || item.caseNameFull || 'Unknown case',
+      citation: Array.isArray(item.citation) ? item.citation.join(', ') : (item.citation || ''),
+      court: item.court || item.court_citation_string || '',
+      dateFiled: item.dateFiled || '',
+      url: normalizeCourtListenerUrl(item.absolute_url || item.cluster_url || item.resource_uri),
+      snippet: stripHtml(item.snippet || item.syllabus || ''),
+    }));
+  } catch (error) {
+    logger.warn('Case analytics CourtListener lookup failed:', error.message);
+  }
+
+  let analysis = 'Insufficient model context for predictive narrative. Review the authority list and matter facts manually.';
+  try {
+    const nim = await callNemoClawWorkflow([
+      { role: 'system', content: 'You are a legal case analytics agent. Provide cautious outcome evaluation, judge-tendency observations from supplied sources only, timeline risks, and strategy questions. Never guarantee outcomes.' },
+      { role: 'user', content: JSON.stringify({ matter, authorities }, null, 2) },
+    ], { max_tokens: 1100 });
+    analysis = nim.content;
+  } catch (error) {
+    logger.warn('Case analytics NemoClaw analysis unavailable:', error.message);
+  }
+
+  await logWorkflowAudit(firmId, 'case_analytics', 'completed', {
+    authorityCount: authorities.length,
+    hasJudge: Boolean(matter.judge),
+  });
+
+  return res.json({
+    status: 'completed',
+    query: queryText,
+    authorities,
+    analysis,
+    requiresAttorneyReview: true,
+    disclosure: 'AI-assisted case analytics. Not a prediction guarantee; verify all authorities and strategy decisions.',
+  });
+});
+
+exports.recordHumanApproval = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 30, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const artifactId = String(payload.artifactId || '').trim();
+  const decision = String(payload.decision || 'approved').trim();
+  const reviewer = String(payload.reviewer || payload.userEmail || '').trim();
+
+  if (!firmId || !artifactId || !reviewer) {
+    return res.status(400).json({ error: 'Missing firmId, artifactId, or reviewer' });
+  }
+
+  const approval = {
+    firmId,
+    artifactId,
+    decision,
+    reviewer,
+    workflow: payload.workflow || null,
+    notes: payload.notes || '',
+    immutable: true,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  const ref = await admin.firestore().collection('firms').doc(firmId).collection('humanApprovals').add(approval);
+  await logWorkflowAudit(firmId, 'human_approval', decision, {
+    artifactId,
+    reviewer,
+    workflow: payload.workflow || null,
+  });
+
+  return res.json({ status: 'recorded', approvalId: ref.id, immutable: true });
+});
+
+async function readCollectionDocs(collectionRef, maxDocs = 500) {
+  const snap = await collectionRef.limit(maxDocs).get();
+  return snap.docs.map((docSnap) => ({
+    id: docSnap.id,
+    ...docSnap.data(),
+  }));
+}
+
+exports.exportFirmAuditLog = onRequest({ cors: true, maxInstances: 5, timeoutSeconds: 60, memory: '512Mi', region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  const payload = req.method === 'GET' ? req.query : getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const limitCount = Math.min(Math.max(Number(payload.limit || 250), 1), 1000);
+  if (!firmId) return res.status(400).json({ error: 'Missing firmId' });
+
+  const auditSnap = await admin.firestore()
+    .collection('firms')
+    .doc(firmId)
+    .collection('auditLog')
+    .orderBy('timestamp', 'desc')
+    .limit(limitCount)
+    .get();
+
+  const records = auditSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }));
+  await logWorkflowAudit(firmId, 'audit_export', 'completed', { recordCount: records.length });
+
+  return res.json({
+    status: 'exported',
+    firmId,
+    exportedAt: new Date().toISOString(),
+    recordCount: records.length,
+    records,
+  });
+});
+
+exports.exportFirmData = onRequest({ cors: true, maxInstances: 3, timeoutSeconds: 120, memory: '1Gi', region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+
+  const payload = req.method === 'GET' ? req.query : getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  if (!firmId) return res.status(400).json({ error: 'Missing firmId' });
+
+  const firmRef = admin.firestore().collection('firms').doc(firmId);
+  const firmSnap = await firmRef.get();
+  if (!firmSnap.exists) return res.status(404).json({ error: 'Firm not found' });
+
+  const collections = ['agents', 'employees', 'matters', 'auditLog', 'humanApprovals', 'integrations'];
+  const exportData = {
+    firm: { id: firmSnap.id, ...firmSnap.data() },
+    collections: {},
+  };
+
+  for (const collectionName of collections) {
+    exportData.collections[collectionName] = await readCollectionDocs(firmRef.collection(collectionName));
+  }
+
+  await logWorkflowAudit(firmId, 'firm_data_export', 'completed', {
+    collections: Object.keys(exportData.collections),
+  });
+
+  return res.json({
+    status: 'exported',
+    firmId,
+    exportedAt: new Date().toISOString(),
+    data: exportData,
+  });
+});
+
+exports.requestFirmDataDeletion = onRequest({ cors: true, maxInstances: 5, timeoutSeconds: 30, region: 'us-central1' }, async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const payload = getClientPayload(req);
+  const firmId = String(payload.firmId || '').trim();
+  const requestedBy = String(payload.requestedBy || payload.userEmail || '').trim();
+  if (!firmId || !requestedBy) return res.status(400).json({ error: 'Missing firmId or requestedBy' });
+
+  const ref = await admin.firestore().collection('_dataDeletionRequests').add({
+    firmId,
+    requestedBy,
+    reason: payload.reason || '',
+    status: 'pending_review',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  await logWorkflowAudit(firmId, 'data_deletion_request', 'pending_review', {
+    requestId: ref.id,
+    requestedBy,
+  });
+
+  return res.status(202).json({
+    status: 'pending_review',
+    requestId: ref.id,
+    message: 'Deletion request recorded for administrator review and retention-policy validation.',
+  });
 });
 
 exports.scrapeWebsite = onRequest({ cors: true, maxInstances: 10, timeoutSeconds: 60 }, async (req, res) => {
@@ -1044,7 +1930,7 @@ async function processAgaasOrchestrator() {
 
       if (!firmDocSnap.exists) {
         await firmDocRef.set({
-          firmName: 'NemoC LAW',
+          firmName: 'NemoC LAW AI',
           contactEmail: superAdminEmail,
           subscriptionStatus: 'active',
           plan: 'autonomous-workflow',
@@ -1360,7 +2246,7 @@ async function processAgaasOrchestrator() {
     // Validating against hardcoded alignment standards as requested by Overseer directives
     const _currentStandards = {
        base_standard: 49700,
-       seat_standard: 24900,
+       seat_standard: 29700,
        auto_founder: 99700,
        auto_standard: 199700
     };
@@ -1373,7 +2259,7 @@ async function processAgaasOrchestrator() {
         type: 'internal_agent_action',
         department: 'finance',
         userMessage: 'Automated pricing alignment validation',
-        agentResponse: `Successfully verified base OS standard is $497, seat is $249, and autonomous is $1997. No revenue drift detected.`,
+        agentResponse: `Successfully verified base OS standard is $497 and human role/agent standard is $297. No revenue drift detected.`,
         contextProvided: true,
         timestamp: runTimestamp,
         immutable: true,
@@ -1428,6 +2314,8 @@ exports.forceAgaasOrchestrator = onRequest(async (req, res) => {
  *
  * POST body: { firmId, firmSize, userId, userEmail, firmName }
  */
+const MAX_HUMAN_AGENT_SEATS = 19; // 20 total humans, including the onboarding partner included in Agentic OS.
+
 exports.createCheckoutSession = onRequest({ cors: true, maxInstances: 5 }, async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
@@ -1442,34 +2330,41 @@ exports.createCheckoutSession = onRequest({ cors: true, maxInstances: 5 }, async
   }
 
   const stripe = require('stripe')(stripeKey);
-  const { firmId, userId, userEmail, _firmName, extraSeats = 0, autonomousRoles = 0 } = req.body;
+  const { firmId, userId, userEmail, _firmName, extraSeats = 0 } = getClientPayload(req);
+  const extraSeatCount = Number(extraSeats);
 
   if (!firmId || !userId) {
     res.status(400).json({ error: 'Missing firmId or userId' });
     return;
   }
 
-  // Modular founder pricing (matches Pricing.jsx and stripeService.js)
-  // Base Platform:   $297/mo (founder) / $497/mo (standard) — includes 1 Managing Partner Agent
-  // 10x Output Seat: $149/mo (founder) / $249/mo (standard) — per additional human role
-  // Autonomous Role: $997/mo (founder) / $1997/mo (standard) — per fully autonomous role
+  if (!Number.isInteger(extraSeatCount) || extraSeatCount < 0 || extraSeatCount > MAX_HUMAN_AGENT_SEATS) {
+    res.status(400).json({ error: `Agentic OS supports up to ${MAX_HUMAN_AGENT_SEATS} additional human role agents for small-firm workspaces.` });
+    return;
+  }
+
+  // Solo practitioner tiers:
+  //   essentials:  $149/mo (founder) / $179/mo (standard) — 6 core AI specialists
+  //   base:        $297/mo (founder) / $997/mo (standard) — full 19-agent workforce
   const PRODUCTS = {
-    base:       { founder: 29700, standard: 49700, name: 'Base Platform',   desc: 'Agentic OS + 1 Managing Partner Agent' },
-    seat:       { founder: 14900, standard: 24900, name: '10x Output Seat', desc: 'Dedicated agent per human role' },
-    autonomous: { founder: 99700, standard: 199700, name: 'Autonomous Role', desc: 'Fully autonomous 24/7 firm role replacement' },
+    base: { founder: 29700, standard: 49700, name: 'Agentic OS', desc: 'HITL Agentic OS with one partner agent included' },
+    seat: { founder: 14900, standard: 29700, name: 'Human Role + Agent', desc: 'Dedicated personal agent mapped to an additional human role' },
   };
 
+  // Validate: only public tiers purchasable via checkout
+  const safeTier = 'base';
+
   try {
-    // Check if firm is within the 7-day founder window AND under the 100-per-state cap
+    // Check if firm is within its 30-day free trial AND under the 100-per-state founder cap
     const firmDoc = await firestore.collection('firms').doc(firmId).get();
     const firmData = firmDoc.data();
     const trialEnd = firmData?.trialEndsAt?.toDate?.() || new Date(firmData?.trialEndsAt);
-    const isWithin7Days = trialEnd && trialEnd > new Date();
-    
+    const _isInTrialPeriod = trialEnd && trialEnd > new Date();
+
     // Check state-specific count (Founder limit: 100 per state)
     let stateFirmsCount = 0;
     const firmState = firmData?.stateBar || 'New York'; // Default to NY if unknown
-    
+
     try {
       const stateQuery = await firestore.collection('firms')
         .where('stateBar', '==', firmState)
@@ -1480,84 +2375,79 @@ exports.createCheckoutSession = onRequest({ cors: true, maxInstances: 5 }, async
       logger.warn(`Failed to count firms in ${firmState}, defaulting to safe count:`, e);
     }
 
-    const isFounderWindow = isWithin7Days && stateFirmsCount < 100;
+    const isFounderWindow = stateFirmsCount < 100;
     const priceKey = isFounderWindow ? 'founder' : 'standard';
 
     // Log the logic for audit
-    logger.info(`Pricing evaluation for ${firmId}: state=${firmState}, count=${stateFirmsCount}, within7Days=${isWithin7Days} -> priceKey=${priceKey}`);
+    logger.info(`Pricing evaluation for ${firmId}: state=${firmState}, count=${stateFirmsCount}, inTrialPeriod=${_isInTrialPeriod} -> priceKey=${priceKey}`);
 
-    // Build line items — always includes Base Platform
+    // Build line items — primary tier determined by request
     const line_items = [
       {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `${PRODUCTS.base.name}${isFounderWindow ? ' — Founder Price' : ''}`,
-            description: PRODUCTS.base.desc,
-            metadata: { firmId, type: 'base' },
+            name: `${PRODUCTS[safeTier].name}${isFounderWindow ? ' — Founder Price' : ''}`,
+            description: PRODUCTS[safeTier].desc,
+            metadata: { firmId, type: safeTier },
           },
-          unit_amount: PRODUCTS.base[priceKey],
+          unit_amount: PRODUCTS[safeTier][priceKey],
           recurring: { interval: 'month' },
         },
         quantity: 1,
       },
     ];
 
-    // Add 10x Output Seats if requested
-    if (extraSeats > 0) {
+    if (extraSeatCount > 0) {
       line_items.push({
         price_data: {
           currency: 'usd',
           product_data: {
-            name: `${PRODUCTS.seat.name}${isFounderWindow ? ' — Founder Price' : ''}`,
+            name: PRODUCTS.seat.name,
             description: PRODUCTS.seat.desc,
             metadata: { firmId, type: 'seat' },
           },
           unit_amount: PRODUCTS.seat[priceKey],
           recurring: { interval: 'month' },
         },
-        quantity: extraSeats,
+        quantity: extraSeatCount,
       });
     }
 
-    // Add Autonomous Roles if requested
-    if (autonomousRoles > 0) {
-      line_items.push({
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `${PRODUCTS.autonomous.name}${isFounderWindow ? ' — Founder Price' : ''}`,
-            description: PRODUCTS.autonomous.desc,
-            metadata: { firmId, type: 'autonomous' },
-          },
-          unit_amount: PRODUCTS.autonomous[priceKey],
-          recurring: { interval: 'month' },
-        },
-        quantity: autonomousRoles,
-      });
-    }
+    // Determine if this firm is still within its 30-day free trial
+    // (trial start = firm creation; if trialEndsAt not set, treat as new)
+    const firmCreatedAt = firmData?.createdAt?.toDate?.() || new Date();
+    const trialEndDate = firmData?.trialEndsAt?.toDate?.()
+      || new Date(firmCreatedAt.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const trialDaysRemaining = Math.max(
+      0,
+      Math.ceil((trialEndDate - new Date()) / (1000 * 60 * 60 * 24))
+    );
 
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       payment_method_types: ['card'],
       customer_email: userEmail,
       line_items,
+      // Card required + 30-day free trial: highest-converting SaaS pattern.
+      // Stripe handles the trial natively; card is on file but not charged
+      // until the trial ends.
+      subscription_data: {
+        trial_period_days: trialDaysRemaining > 0 ? Math.min(trialDaysRemaining, 30) : 0,
+        metadata: { firmId, userId, founderPriceLocked: isFounderWindow ? 'true' : 'false' },
+      },
       metadata: {
         firmId,
         userId,
-        extraSeats: String(extraSeats),
-        autonomousRoles: String(autonomousRoles),
+        extraSeats: String(extraSeatCount),
         founderPriceLocked: isFounderWindow ? 'true' : 'false',
       },
-      success_url: `${req.headers.origin || 'https://nemoc-law-ai.web.app'}/pmi/billing?session_id={CHECKOUT_SESSION_ID}&status=success`,
-      cancel_url: `${req.headers.origin || 'https://nemoc-law-ai.web.app'}/pmi/billing?status=cancelled`,
-      subscription_data: {
-        metadata: { firmId, userId, founderPriceLocked: isFounderWindow ? 'true' : 'false' },
-      },
+      success_url: `${req.headers.origin || 'https://nemoc-law-ai.web.app'}/dashboard/billing?session_id={CHECKOUT_SESSION_ID}&status=success`,
+      cancel_url: `${req.headers.origin || 'https://nemoc-law-ai.web.app'}/dashboard/billing?status=cancelled`,
     });
 
     logger.info(`Checkout session created for firm ${firmId}: ${session.id}`);
-    res.json({ sessionId: session.id, url: session.url });
+    sendClientJson(req, res, { sessionId: session.id, url: session.url });
 
   } catch (error) {
     logger.error('Stripe checkout error:', error.message);
@@ -1589,6 +2479,7 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
   const stripe = require('stripe')(stripeKey);
   logger.info(`Inline sub request received: ${JSON.stringify(req.body)}`);
   const { firmId, userId, userEmail, firmName, extraSeats = 0, _includeWebsite = false } = req.body;
+  const extraSeatCount = Number(extraSeats);
 
   if (!firmId || !userId || !userEmail) {
     logger.error('Missing required fields for inline sub');
@@ -1596,10 +2487,15 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
     return;
   }
 
-  // Pricing (cents) — matches stripeService.js PRICING
+  if (!Number.isInteger(extraSeatCount) || extraSeatCount < 0 || extraSeatCount > MAX_HUMAN_AGENT_SEATS) {
+    res.status(400).json({ error: `Agentic OS supports up to ${MAX_HUMAN_AGENT_SEATS} additional human role agents for small-firm workspaces.` });
+    return;
+  }
+
+  // Solo practitioner pricing (cents)
   const PRICES = {
-    base:    { founder: 29700, standard: 99700 },
-    seat:    { founder: 14900, standard: 49700 },
+    base: { founder: 29700, standard: 49700 },
+    seat: { founder: 14900, standard: 29700 },
   };
 
   try {
@@ -1613,8 +2509,8 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
     }
     const firmData = firmDoc.data();
     const trialEnd = firmData?.trialEndsAt?.toDate?.() || new Date(firmData?.trialEndsAt);
-    const isWithin7Days = trialEnd && trialEnd > new Date();
-    
+    const _isInTrialPeriod = trialEnd && trialEnd > new Date();
+
     let stateFirmsCount = 0;
     const firmState = firmData?.stateBar || 'New York';
     logger.info(`Checking founder cap for state: ${firmState}`);
@@ -1628,15 +2524,14 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
       logger.warn(`Failed to count firms in ${firmState}:`, e);
     }
 
-    const isFounderWindow = isWithin7Days && stateFirmsCount < 100;
+    const isFounderWindow = stateFirmsCount < 100;
     const priceKey = isFounderWindow ? 'founder' : 'standard';
 
     logger.info(`Pricing decision: isFounder=${isFounderWindow}, stateCount=${stateFirmsCount}`);
 
     // --- STRIPE PRODUCT MANAGEMENT ---
-    // Subscriptions.create requires existing products (unlike Checkout)
     const baseProdName = 'NemoC LAW AI Platform';
-    const seatProdName = '10x Output Seat';
+    const seatProdName = 'Human Role + Agent';
     
     let baseProd, seatProd;
     try {
@@ -1648,10 +2543,7 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
         logger.info(`Creating product: ${baseProdName}`);
         baseProd = await stripe.products.create({ name: baseProdName });
       }
-      if (!seatProd) {
-        logger.info(`Creating product: ${seatProdName}`);
-        seatProd = await stripe.products.create({ name: seatProdName });
-      }
+      if (!seatProd) seatProd = await stripe.products.create({ name: seatProdName });
     } catch (e) {
       logger.error('Product retrieval/creation failed:', e);
       throw e;
@@ -1702,7 +2594,7 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
       await firestore.collection('firms').doc(firmId).update({ stripeCustomerId: customerId });
     }
 
-    // Build price items for the subscription
+    // Build price items for Agentic OS plus any additional human role agents.
     const items = [
       {
         price_data: {
@@ -1715,8 +2607,7 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
       },
     ];
 
-    if (extraSeats > 0) {
-      logger.info(`Adding ${extraSeats} extra seats to sub`);
+    if (extraSeatCount > 0) {
       items.push({
         price_data: {
           currency: 'usd',
@@ -1724,7 +2615,7 @@ exports.createInlineSubscription = onRequest({ cors: true, maxInstances: 5 }, as
           unit_amount: PRICES.seat[priceKey],
           recurring: { interval: 'month' },
         },
-        quantity: extraSeats,
+        quantity: extraSeatCount,
       });
     }
 
@@ -1834,7 +2725,7 @@ exports.createPortalSession = onRequest({ cors: true, maxInstances: 5 }, async (
   }
 
   const stripe = require('stripe')(stripeKey);
-  const { firmId } = req.body;
+  const { firmId } = getClientPayload(req);
 
   if (!firmId) {
     res.status(400).json({ error: 'Missing firmId' });
@@ -1869,10 +2760,10 @@ exports.createPortalSession = onRequest({ cors: true, maxInstances: 5 }, async (
 
     const session = await stripe.billingPortal.sessions.create({
       customer: firmData.stripeCustomerId,
-      return_url: `${req.headers.origin || 'https://nemoc-law-ai.web.app'}/pmi/settings`,
+      return_url: `${req.headers.origin || 'https://nemoc-law-ai.web.app'}/dashboard/settings`,
     });
 
-    res.json({ url: session.url });
+    sendClientJson(req, res, { url: session.url });
   } catch (error) {
     logger.error('Stripe portal error:', error.message);
     res.status(500).json({ error: error.message });
@@ -1885,7 +2776,7 @@ exports.createPortalSession = onRequest({ cors: true, maxInstances: 5 }, async (
  * Persists the subscription status, Stripe IDs, and most importantly
  * the founderPriceLocked flag to the firm document.
  */
-async function activateFirmSubscription(firmId, userId, customerId, subId, isFounder, extraSeats = '0', autonomousRoles = '0') {
+async function activateFirmSubscription(firmId, userId, customerId, subId, isFounder) {
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   const stripe = stripeKey ? require('stripe')(stripeKey) : null;
   
@@ -1915,8 +2806,6 @@ async function activateFirmSubscription(firmId, userId, customerId, subId, isFou
     stripeCustomerId: customerId,
     stripeSubscriptionId: subId,
     founderPriceLocked: isFounder,
-    extraSeats: parseInt(extraSeats || '0', 10),
-    autonomousRoles: parseInt(autonomousRoles || '0', 10),
     planActivatedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
@@ -1991,9 +2880,9 @@ exports.stripeWebhook = onRequest({ cors: false, maxInstances: 3 }, async (req, 
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
-      const { firmId, userId, founderPriceLocked, extraSeats, autonomousRoles } = session.metadata || {};
+      const { firmId, userId, founderPriceLocked } = session.metadata || {};
       if (firmId) {
-        await activateFirmSubscription(firmId, userId, session.customer, session.subscription, founderPriceLocked === 'true', extraSeats, autonomousRoles);
+        await activateFirmSubscription(firmId, userId, session.customer, session.subscription, founderPriceLocked === 'true');
         
         // Send success email notification
         const customerEmail = session.customer_email || session.customer_details?.email;
@@ -2008,7 +2897,7 @@ exports.stripeWebhook = onRequest({ cors: false, maxInstances: 3 }, async (req, 
               <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 12px; padding: 20px; margin: 24px 0;">
                 <p style="color: #16a34a; font-size: 14px; font-weight: 600; margin: 0;">🔒 Founder Price-Lock: ${founderPriceLocked === 'true' ? 'ACTIVE — Locked for Life' : 'Standard Pricing'}</p>
               </div>
-              <a href="https://nemoc-law-ai.web.app/pmi" style="display: inline-block; padding: 12px 32px; background: #76b900; color: #000; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 14px;">Open your Agentic PMI →</a>
+              <a href="https://nemoc-law-ai.web.app/dashboard" style="display: inline-block; padding: 12px 32px; background: #76b900; color: #000; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 14px;">Open your Dashboard →</a>
               <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">NemoC LAW AI · Born Agentic OS for Law Firms</p>
             </div>`,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2023,9 +2912,9 @@ exports.stripeWebhook = onRequest({ cors: false, maxInstances: 3 }, async (req, 
     case 'customer.subscription.updated': {
       const sub = event.data.object;
       if (sub.status === 'active') {
-        const { firmId, userId, founderPriceLocked, extraSeats, autonomousRoles } = sub.metadata || {};
+        const { firmId, userId, founderPriceLocked } = sub.metadata || {};
         if (firmId) {
-          await activateFirmSubscription(firmId, userId, sub.customer, sub.id, founderPriceLocked === 'true', extraSeats, autonomousRoles);
+          await activateFirmSubscription(firmId, userId, sub.customer, sub.id, founderPriceLocked === 'true');
         }
       }
       break;
@@ -2078,7 +2967,7 @@ exports.stripeWebhook = onRequest({ cors: false, maxInstances: 3 }, async (req, 
               <div style="background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 20px; margin: 24px 0;">
                 <p style="color: #d97706; font-size: 14px; font-weight: 600; margin: 0;">⚠️ Note: If you had Founder Pricing, that rate is no longer guaranteed upon re-enrollment.</p>
               </div>
-              <a href="https://nemoc-law-ai.web.app/pmi/billing" style="display: inline-block; padding: 12px 32px; background: #76b900; color: #000; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 14px;">Reactivate Subscription →</a>
+              <a href="https://nemoc-law-ai.web.app/dashboard/billing" style="display: inline-block; padding: 12px 32px; background: #76b900; color: #000; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 14px;">Reactivate Subscription →</a>
               <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">NemoC LAW AI · Born Agentic OS for Law Firms</p>
             </div>`,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2119,7 +3008,7 @@ exports.stripeWebhook = onRequest({ cors: false, maxInstances: 3 }, async (req, 
               <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin: 24px 0;">
                 <p style="color: #ef4444; font-size: 14px; font-weight: 600; margin: 0;">⚠️ Your account is now in Past Due status. Agentic services may be degraded.</p>
               </div>
-              <a href="https://nemoc-law-ai.web.app/pmi/billing" style="display: inline-block; padding: 12px 32px; background: #ef4444; color: #fff; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 14px;">Update Payment Method →</a>
+              <a href="https://nemoc-law-ai.web.app/dashboard/billing" style="display: inline-block; padding: 12px 32px; background: #ef4444; color: #fff; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 14px;">Update Payment Method →</a>
               <p style="color: #94a3b8; font-size: 12px; margin-top: 32px;">NemoC LAW AI · Born Agentic OS for Law Firms</p>
             </div>`,
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2266,6 +3155,65 @@ exports.provisionFirmNumber = twilioGateway.provisionFirmNumber;
    TEAM INVITE ACCEPTANCE (Secure Backend)
    ═══════════════════════════════════════════════ */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+
+exports.setHumanAgentSeatCount = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required.');
+  const { firmId, count } = request.data || {};
+  const seatCount = Number(count);
+  if (!firmId || !Number.isInteger(seatCount) || seatCount < 0) {
+    throw new HttpsError('invalid-argument', 'A firmId and non-negative seat count are required.');
+  }
+  if (seatCount > MAX_HUMAN_AGENT_SEATS) {
+    throw new HttpsError('invalid-argument', `Agentic OS supports up to ${MAX_HUMAN_AGENT_SEATS} additional human role agents for small-firm workspaces.`);
+  }
+
+  const firmRef = firestore.collection('firms').doc(firmId);
+  const firmSnap = await firmRef.get();
+  if (!firmSnap.exists || firmSnap.data().ownerId !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'Only the onboarding partner can change human-agent mappings.');
+  }
+
+  const firm = firmSnap.data();
+  if (!firm.stripeSubscriptionId) return { synced: false, reason: 'no-active-subscription' };
+  const stripeKey = process.env.STRIPE_SECRET_KEY;
+  if (!stripeKey) throw new HttpsError('failed-precondition', 'Stripe is not configured.');
+
+  const stripe = require('stripe')(stripeKey);
+  const subscription = await stripe.subscriptions.retrieve(firm.stripeSubscriptionId, { expand: ['items.data.price.product'] });
+  const seatItem = subscription.items.data.find(item => {
+    const product = item.price?.product;
+    return product && typeof product !== 'string' && product.metadata?.billingType === 'human-agent-seat';
+  });
+
+  if (seatCount === 0) {
+    if (seatItem) await stripe.subscriptionItems.del(seatItem.id);
+    return { synced: true, count: 0 };
+  }
+
+  const unitAmount = firm.founderPriceLocked ? 14900 : 29700;
+  let product;
+  const products = await stripe.products.search({ query: "active:'true' AND metadata['billingType']:'human-agent-seat'" });
+  product = products.data[0];
+  if (!product) {
+    product = await stripe.products.create({
+      name: 'Human Role + Agent',
+      metadata: { billingType: 'human-agent-seat' },
+    });
+  }
+  const price = await stripe.prices.create({
+    currency: 'usd', unit_amount: unitAmount, recurring: { interval: 'month' }, product: product.id,
+    metadata: { billingType: 'human-agent-seat', founder: firm.founderPriceLocked ? 'true' : 'false' },
+  }, { idempotencyKey: `human-agent-seat-price-${unitAmount}-${product.id}` });
+
+  if (seatItem) {
+    await stripe.subscriptionItems.update(seatItem.id, { quantity: seatCount, price: price.id, proration_behavior: 'create_prorations' });
+  } else {
+    await stripe.subscriptionItems.create({
+      subscription: subscription.id, price: price.id, quantity: seatCount, proration_behavior: 'create_prorations',
+    }, { idempotencyKey: `human-agent-seats-${firmId}-${seatCount}` });
+  }
+  return { synced: true, count: seatCount, unitAmount };
+});
 
 exports.acceptTeamInvite = onCall(async (request) => {
   const { data, auth } = request;
@@ -2771,7 +3719,7 @@ async function processCMOLinkedIn() {
         const genRes = await axios.post(
           url,
           {
-            model: 'meta/llama-3.1-70b-instruct',
+            model: NEMOCLAW_DEFAULT_MODEL,
             messages: [
               {
                 role: 'system',
@@ -2878,7 +3826,7 @@ CRITICAL RULES:
           const replRes = await axios.post(
             url,
             {
-              model: 'meta/llama-3.1-70b-instruct',
+              model: NEMOCLAW_DEFAULT_MODEL,
               messages: [
                 {
                   role: 'system',
@@ -2964,7 +3912,7 @@ CRITICAL: Output ONLY the raw post text. ABSOLUTELY NO conversational filler or 
         const xGenRes = await axios.post(
           url,
           {
-            model: 'meta/llama-3.1-70b-instruct',
+            model: NEMOCLAW_DEFAULT_MODEL,
             messages: [
               {
                 role: 'system',
@@ -3177,7 +4125,7 @@ exports.forgeSystemMonitor = onSchedule('every 10 minutes', async (_event) => {
         logger.info("[⚒️ FORGE] Firing synthetic API ping to NVIDIA...");
         // This request triggers our global Axios interceptor, which auto-logs to _telemetryLogs.
         await axios.post('https://integrate.api.nvidia.com/v1/chat/completions', {
-            model: "meta/llama-3.1-8b-instruct",
+            model: NEMOCLAW_DEFAULT_MODEL,
             messages: [{role: "user", content: "ping"}],
             max_tokens: 3
         }, {
@@ -4819,7 +5767,7 @@ exports.cmoSocialEngagementDaemon = onSchedule(
        const targetUrl = 'https://integrate.api.nvidia.com/v1/chat/completions';
        try {
            const genRes = await axios.post(targetUrl, {
-               model: 'meta/llama-3.1-70b-instruct',
+               model: NEMOCLAW_DEFAULT_MODEL,
                messages: [
                  {
                    role: 'system',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { collection, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
 import {
@@ -11,9 +11,7 @@ import {
   Clock,
   DollarSign,
   FileText,
-  Gavel,
   Layers,
-  Lock,
   LogOut,
   Menu,
   MessageSquare,
@@ -31,6 +29,7 @@ import {
 } from 'lucide-react';
 import { isAdminUser } from '../components/AdminRoute';
 import DashboardModeToggle from '../components/DashboardModeToggle';
+import { sendAgentMessage } from '../lib/agentAPI';
 import { db } from '../lib/firebase';
 import '../styles/commandDashboard.css';
 
@@ -84,62 +83,35 @@ function buildCommandMatter(matter, currentPage, firm, user, counts = {}) {
   if (!matter) {
     return {
       id: 'firm-command',
-      title: currentPage === 'AI Chief of Staff' ? 'Practice Command Center' : currentPage,
-      shortTitle: 'Firm command',
-      client: user?.displayName || 'Firm leadership',
-      practice: (firm?.practiceAreas || [])[0] || 'All practice areas',
+      title: currentPage || 'Dashboard',
+      shortTitle: 'Firm',
+      client: user?.displayName || 'Attorney',
+      practice: (firm?.practiceAreas || [])[0] || '',
       forum: firmName,
-      stage: currentPage,
+      stage: '',
       status: 'Active',
       risk: 'Low',
       riskTone: 'calm',
-      deadline: 'Today',
-      nextAction: 'Review practice priorities',
-      value: 'Firm-wide',
-      agent: 'NemoC Practice OS',
-      summary: `Command workspace for ${firmName}: matters, deadlines, client posture, documents, billing, and agent activity in one thread.`,
-      workflow: ['Intake', 'Conflict', 'Matters', 'Documents', 'Billing', 'Review'],
-      activeStep: 2,
+      deadline: '',
+      nextAction: '',
+      value: '',
+      agent: 'NemoC LAW AI',
+      summary: `Workspace for ${firmName}.`,
+      workflow: [],
+      activeStep: 0,
       metrics: [
         { label: 'Matters', value: String(counts.matters || 0) },
         { label: 'Agents', value: String(counts.agents || 0) },
-        { label: 'Mode', value: 'Command' },
       ],
-      prompts: ['Review open priorities', 'Prepare matter intake checklist', 'Summarize firm risk'],
-      layers: {
-        timeline: [
-          { title: 'Practice command initialized', meta: 'Ready now', state: 'done' },
-          { title: 'Matter intake monitoring', meta: 'Listening across channels', state: 'pending' },
-          { title: 'Attorney review queue', meta: 'Protected by ethical wall', state: 'pending' },
-        ],
-        work: [
-          { title: 'Review active matters', owner: 'Partner', time: 'Firm-wide', state: 'Queued' },
-          { title: 'Confirm practice-area knowledge base', owner: 'NemoC', time: 'Ready', state: 'In progress' },
-          { title: 'Audit command workflows', owner: 'Operations', time: 'Today', state: 'Needs review' },
-        ],
-        documents: [
-          { title: 'Firm knowledge base', type: 'KB', status: 'Ready' },
-          { title: 'Intake templates', type: 'Workflow', status: 'Queued' },
-          { title: 'Audit trail', type: 'Security', status: 'Active' },
-        ],
-        billing: [
-          { title: 'Subscription posture', amount: 'Active', status: 'Monitored' },
-          { title: 'Unbilled WIP review', amount: '$0.00', status: 'Ready' },
-          { title: 'Trust controls', amount: 'Protected', status: 'Active' },
-        ],
-        client: [
-          { title: 'Client portal layer', meta: 'Available', state: 'Ready' },
-          { title: 'Receptionist intake', meta: 'Website-ready', state: 'Queued' },
-          { title: 'Privilege warning', meta: 'Attorney review required', state: 'Restricted' },
-        ],
-      },
+      prompts: [],
+      layers: { timeline: [], work: [], documents: [], billing: [], client: [] },
     };
   }
 
   const practice = getMatterType(matter);
   const stage = matter.stage || matter.status || 'Active';
   const nextAction = matter.nextAction || matter.nextStep || matter.action || 'Review matter posture';
-  const deadline = compactDate(matter.deadline || matter.nextDeadline || matter.trialDate || matter.updatedAt, 'Next review');
+  const deadline = compactDate(matter.deadline || matter.nextDeadline || matter.trialDate || matter.updatedAt, '');
   const riskTone = getRiskTone(matter);
   const title = matter.title || 'Untitled matter';
   const shortTitle = matter.shortTitle || title;
@@ -147,7 +119,7 @@ function buildCommandMatter(matter, currentPage, firm, user, counts = {}) {
     id: matter.id,
     title,
     shortTitle,
-    client: matter.client || matter.clientName || 'Client',
+    client: matter.client || matter.clientName || '',
     practice,
     forum: matter.court || matter.forum || firmName,
     stage,
@@ -156,73 +128,21 @@ function buildCommandMatter(matter, currentPage, firm, user, counts = {}) {
     riskTone,
     deadline,
     nextAction,
-    value: matter.value || matter.feeStructure || 'Matter value',
+    value: matter.value || matter.feeStructure || '',
     agent: matter.agent || `${practice} pod`,
-    summary: matter.summary || matter.description || `${practice} matter in ${stage}. NemoC is watching deadlines, documents, client posture, work, and billing in one command thread.`,
-    workflow: Array.isArray(matter.workflow) && matter.workflow.length ? matter.workflow : DEFAULT_WORKFLOW,
-    activeStep: Math.min(3, DEFAULT_WORKFLOW.length - 1),
+    summary: matter.summary || matter.description || '',
+    workflow: Array.isArray(matter.workflow) && matter.workflow.length ? matter.workflow : [],
+    activeStep: 0,
     metrics: [
       { label: 'Open tasks', value: String(matter.openTasks || matter.tasks?.length || 0) },
       { label: 'Documents', value: String(matter.documents?.length || 0) },
-      { label: 'Value', value: matter.value || (matter.rate ? `$${matter.rate}` : 'Tracked') },
     ],
-    prompts: matter.prompts || [
-      `Summarize ${practice.toLowerCase()} posture`,
-      `Draft ${nextAction.toLowerCase()}`,
-      'Prepare client update',
-    ],
-    layers: {
-      timeline: [
-        { title: nextAction, meta: `Due ${deadline}`, state: riskTone === 'danger' ? 'urgent' : 'pending' },
-        { title: 'Matter status review', meta: stage, state: 'pending' },
-        { title: 'Ethical wall check', meta: 'Active', state: 'done' },
-      ],
-      work: [
-        { title: nextAction, owner: 'Attorney', time: '1.0h', state: 'In progress' },
-        { title: 'Update matter notes', owner: 'Associate', time: '0.5h', state: 'Queued' },
-        { title: 'Partner posture review', owner: 'Partner', time: '0.3h', state: 'Needs review' },
-      ],
-      documents: [
-        { title: `${title} workspace file`, type: 'Matter file', status: 'Current' },
-        { title: 'Client intake packet', type: 'Intake', status: 'Indexed' },
-        { title: 'Attorney work product', type: 'Protected', status: 'Review' },
-      ],
-      billing: [
-        { title: 'Matter billing posture', amount: matter.feeStructure || 'Hourly', status: 'Tracked' },
-        { title: 'Unbilled work review', amount: '$0.00', status: 'Ready' },
-        { title: 'Trust balance check', amount: 'Protected', status: 'Active' },
-      ],
-      client: [
-        { title: 'Client portal', meta: matter.portalProvisioned ? 'Provisioned' : 'Ready to provision', state: 'Open' },
-        { title: 'Client update', meta: 'Attorney review required', state: 'Restricted' },
-        { title: 'Intake facts', meta: matter.client || 'Client', state: 'Current' },
-      ],
-    },
+    prompts: Array.isArray(matter.prompts) ? matter.prompts : [],
+    layers: matter.layers || { timeline: [], work: [], documents: [], billing: [], client: [] },
   };
 }
 
-function buildInitialMessages(commandMatter) {
-  return [
-    {
-      id: `${commandMatter.id}-intro`,
-      role: 'assistant',
-      label: 'NemoC Practice OS',
-      content: 'I pulled the active matter context, deadlines, open work, client posture, documents, and billing signals into one command thread.',
-    },
-    {
-      id: `${commandMatter.id}-pod`,
-      role: 'assistant',
-      label: commandMatter.agent,
-      content: `${commandMatter.shortTitle} is in ${commandMatter.stage}. ${commandMatter.nextAction} is the next pressure point, with privilege, billing, and client communication checks attached.`,
-    },
-  ];
-}
 
-function buildAssistantReply(matter, activeLayer, text) {
-  const layer = COMMAND_LAYER_ITEMS.find(item => item.id === activeLayer)?.label || 'matter';
-  const firstTask = matter.layers[activeLayer]?.[0]?.title || matter.nextAction;
-  return `For ${matter.shortTitle}, I would handle ${firstTask.toLowerCase()} first. I will keep the ${layer.toLowerCase()} layer tied to ${matter.practice}, ${matter.stage.toLowerCase()}, and the ${matter.deadline} deadline. Your note was: "${text}".`;
-}
 
 function getStateIcon(state) {
   const normalized = String(state || '').toLowerCase();
@@ -233,7 +153,7 @@ function getStateIcon(state) {
 
 function buildPageSummary(currentPage, activeMatter, firm) {
   if (activeMatter) {
-    return `${activeMatter.client || 'Client'} · ${getMatterType(activeMatter)} · ${activeMatter.status || 'Active'}`;
+    return `${activeMatter.client || 'Client'} \u00B7 ${getMatterType(activeMatter)} \u00B7 ${activeMatter.status || 'Active'}`;
   }
   if (currentPage === 'AI Chief of Staff') return `Command thread for ${getFirmName(firm)}.`;
   if (currentPage === 'Firm Matters') return 'Matter pipeline, intake proposals, and active workspaces.';
@@ -252,6 +172,7 @@ export default function CommandDashboardLayout({
   manageNavItems,
   onInterfaceModeChange,
   onLogout,
+  personalAgents,
   user,
 }) {
   const location = useLocation();
@@ -264,7 +185,18 @@ export default function CommandDashboardLayout({
   const [isInspectorOpen, setIsInspectorOpen] = useState(() => typeof window === 'undefined' || window.innerWidth > 880);
   const [activeLayer, setActiveLayer] = useState('timeline');
   const [composer, setComposer] = useState('');
-  const [threadLog, setThreadLog] = useState({ matterId: null, messages: [] });
+  const [attachments, setAttachments] = useState([]);
+  const [showLayerActions, setShowLayerActions] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const messagesEndRef = useRef(null);
+  const attachmentInputRef = useRef(null);
+  const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a?.employeeEmail === user?.email);
+  const agentId = myAgent?.id || null;
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   useEffect(() => {
     if (!firmId) return undefined;
@@ -288,9 +220,8 @@ export default function CommandDashboardLayout({
     user,
     { matters: matters.length, agents: activeAgentsCount }
   ), [activeAgentsCount, activeMatter, currentPage, firm, location.pathname, matters, user]);
-  const shouldRenderCommandCanvas = location.pathname === '/dashboard' || Boolean(activeMatter);
-  const activeLayerData = commandMatter.layers[activeLayer] || commandMatter.layers.timeline;
-  const threadMessages = threadLog.matterId === commandMatter.id ? threadLog.messages : buildInitialMessages(commandMatter);
+  const shouldRenderCommandCanvas = location.pathname.startsWith('/dashboard/matters/') && Boolean(activeMatter);
+  const activeLayerData = commandMatter.layers[activeLayer] || [];
 
   const visibleMatters = useMemo(() => {
     const normalizedQuery = matterQuery.trim().toLowerCase();
@@ -335,30 +266,44 @@ export default function CommandDashboardLayout({
     setComposer(prompt);
   };
 
-  const handleSendCommand = () => {
-    const text = composer.trim();
-    if (!text) return;
-    const baseMessages = threadLog.matterId === commandMatter.id ? threadLog.messages : buildInitialMessages(commandMatter);
-    setThreadLog({
-      matterId: commandMatter.id,
-      messages: [
-        ...baseMessages,
-        {
-          id: `user-${Date.now()}`,
-          role: 'user',
-          label: user?.displayName || 'Managing attorney',
-          content: text,
-        },
-        {
-          id: `assistant-${Date.now()}`,
-          role: 'assistant',
-          label: commandMatter.agent,
-          content: buildAssistantReply(commandMatter, activeLayer, text),
-        },
-      ],
-    });
-    setComposer('');
+  const handleAttachmentChange = async (event) => {
+    const files = Array.from(event.target.files || []).slice(0, 5);
+    event.target.value = '';
+    const next = await Promise.all(files.map(async file => {
+      const isText = file.type.startsWith('text/') || /\.(txt|md|csv|json)$/i.test(file.name);
+      return {
+        id: `${file.name}-${file.lastModified}-${file.size}`,
+        name: file.name,
+        size: file.size,
+        content: isText && file.size <= 1024 * 1024 ? (await file.text()).slice(0, 20000) : '',
+      };
+    }));
+    setAttachments(prev => [...prev, ...next].slice(0, 5));
   };
+
+  const handleSendCommand = useCallback(async () => {
+    const text = composer.trim();
+    if (!text || isTyping || !agentId) return;
+    const attachmentContext = attachments.map(file => file.content
+      ? `\n\nAttached file: ${file.name}\n${file.content}`
+      : `\n\nAttached file metadata: ${file.name} (${file.size} bytes; binary content unavailable)`
+    ).join('');
+    const agentText = `${text}${attachmentContext}`;
+    const userMsg = { id: `user-${Date.now()}`, role: 'user', label: user?.displayName || 'Attorney', content: text };
+    setMessages(prev => [...prev, userMsg]);
+    setComposer('');
+    setAttachments([]);
+    setIsTyping(true);
+    try {
+      const history = messages.slice(-20).map(m => ({ role: m.role, content: m.content }));
+      const result = await sendAgentMessage(firmId, agentId, agentText, history);
+      setMessages(prev => [...prev, { id: `assistant-${Date.now()}`, role: 'assistant', label: 'NemoC LAW AI', content: result.response }]);
+    } catch (err) {
+      setMessages(prev => [...prev, { id: `error-${Date.now()}`, role: 'system', label: '', content: `Error: ${err.message}` }]);
+    } finally {
+      setIsTyping(false);
+    }
+  }, [agentId, attachments, composer, firmId, isTyping, messages, user]);
 
   return (
     <main className="command-dashboard">
@@ -419,6 +364,14 @@ export default function CommandDashboardLayout({
         </header>
 
         <div className="command-shell">
+          {isSidebarOpen && (
+            <button
+              type="button"
+              className="command-sidebar-scrim"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Close navigation"
+            />
+          )}
           <aside className={`command-sidebar ${isSidebarOpen ? 'is-open' : ''}`}>
         <div className="command-mobile-head">
           <span>Workspace</span>
@@ -571,7 +524,9 @@ export default function CommandDashboardLayout({
 
                   <div className="command-thread-board">
                     <div className="command-message-stack" aria-live="polite">
-                      {threadMessages.map(message => (
+                      {messages.length === 0 ? (
+                        <div className="command-empty-state" style={{ padding: '24px', textAlign: 'center', color: 'var(--cmd-muted)' }}>Send a message to get started.</div>
+                      ) : messages.map(message => (
                         <article className={`command-thread-message ${message.role}`} key={message.id}>
                           <div className="command-message-avatar">
                             {message.role === 'assistant' ? <Bot size={17} /> : <Users size={17} />}
@@ -582,17 +537,25 @@ export default function CommandDashboardLayout({
                           </div>
                         </article>
                       ))}
+                      <div ref={messagesEndRef} />
                     </div>
 
                     <div className="command-layer-board" aria-label="Selected matter layer">
-                      <div className="command-layer-board-head">
+                      <div className="command-layer-board-head" style={{ position: 'relative' }}>
                         <div>
                           <span>{COMMAND_LAYER_ITEMS.find(layer => layer.id === activeLayer)?.label}</span>
                           <strong>{commandMatter.nextAction}</strong>
                         </div>
-                        <button type="button" aria-label="More actions">
+                        <button type="button" aria-label="More actions" aria-expanded={showLayerActions} onClick={() => setShowLayerActions(open => !open)}>
                           <MoreHorizontal size={18} />
                         </button>
+                        {showLayerActions && (
+                          <div style={{ position: 'absolute', top: '42px', right: 0, zIndex: 20, minWidth: '180px', padding: '6px', borderRadius: '8px', border: '1px solid var(--db-border)', background: 'var(--db-surface-elevated)', boxShadow: '0 12px 30px rgba(0,0,0,.22)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <button type="button" className="db-btn db-btn-secondary db-btn-sm" onClick={() => { navigate(`/dashboard/matters/${commandMatter.id}`); setShowLayerActions(false); }}>Open matter workspace</button>
+                            <button type="button" className="db-btn db-btn-secondary db-btn-sm" onClick={() => { navigate('/dashboard/billing'); setShowLayerActions(false); }}>Open billing</button>
+                            <button type="button" className="db-btn db-btn-secondary db-btn-sm" onClick={() => { navigate('/dashboard/client-portal'); setShowLayerActions(false); }}>Open client portal</button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="command-layer-card-grid">
@@ -623,9 +586,17 @@ export default function CommandDashboardLayout({
                   </div>
 
                   <div className="command-composer">
-                    <button type="button" aria-label="Attach file">
+                    <input ref={attachmentInputRef} type="file" multiple hidden accept=".txt,.md,.csv,.json,.pdf,.doc,.docx" onChange={handleAttachmentChange} />
+                    <button type="button" aria-label="Attach file" onClick={() => attachmentInputRef.current?.click()}>
                       <Upload size={18} />
                     </button>
+                    {attachments.length > 0 && (
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', maxWidth: '220px' }}>
+                        {attachments.map(file => (
+                          <button key={file.id} type="button" title="Remove attachment" onClick={() => setAttachments(prev => prev.filter(item => item.id !== file.id))} style={{ border: '1px solid var(--db-border)', borderRadius: '999px', background: 'var(--db-surface)', color: 'var(--db-text-secondary)', padding: '3px 8px', fontSize: '0.6875rem', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{file.name}</button>
+                        ))}
+                      </div>
+                    )}
                     <textarea
                       value={composer}
                       onChange={event => setComposer(event.target.value)}
@@ -776,26 +747,13 @@ export default function CommandDashboardLayout({
 
             <section className="command-context-card">
               <div className="command-section-title">
-                <Gavel size={16} />
-                <span>Authority</span>
-              </div>
-              <div className="command-authority-list">
-                <span><Lock size={14} /> Attorney review required</span>
-                <span><ShieldCheck size={14} /> Privilege protected</span>
-                <span><CheckCircle size={14} /> Audit trail active</span>
-              </div>
-            </section>
-
-            <section className="command-context-card">
-              <div className="command-section-title">
                 <Bot size={16} />
-                <span>Assigned pod</span>
+                <span>My Agents</span>
               </div>
               <div className="command-pod-list">
-                <span>Partner Agent</span>
-                <span>Associate Agent</span>
-                <span>Paralegal Agent</span>
-                <span>Billing Agent</span>
+                {(Array.isArray(personalAgents) ? personalAgents : []).length > 0
+                  ? personalAgents.map(a => <span key={a.id}>{a.agentName || 'Agent'}</span>)
+                  : <span>No agents configured</span>}
               </div>
             </section>
 

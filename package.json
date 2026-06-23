@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint . --max-warnings=0",
+    "test:migration": "node scripts/migration_mapper_test.mjs",
     "preview": "vite preview",
     "start:agents": "node scripts/activate_platform_agents.mjs",
     "ralph": "node scripts/ralph_loop.mjs",
@@ -28,7 +29,6 @@
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.13.2",
     "remark-gfm": "^4.0.1",
-    "sharp": "^0.34.5",
     "stripe": "^21.0.1"
   },
   "devDependencies": {

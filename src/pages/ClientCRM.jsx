@@ -136,7 +136,7 @@ export default function ClientCRM({ hideHeader }) {
             </thead>
             <tbody>
               {filteredClients.map(client => (
-                <tr key={client.id} style={{ borderBottom: '1px solid var(--db-border)', transition: 'background 0.2s', cursor: 'pointer' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--db-bg)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
+                <tr key={client.id} style={{ borderBottom: '1px solid var(--db-border)', transition: 'background 0.2s' }} onMouseEnter={(e) => e.currentTarget.style.background = 'var(--db-bg)'} onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}>
                   <td style={{ padding: '16px 24px' }}>
                     <div style={{ fontWeight: 600, color: 'var(--db-text-primary)' }}>{client.name}</div>
                   </td>

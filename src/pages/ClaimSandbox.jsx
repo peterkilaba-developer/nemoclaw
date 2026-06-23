@@ -59,7 +59,7 @@ export default function ClaimSandbox() {
 
       setSuccess(true);
       setTimeout(() => {
-        navigate('/pmi');
+        navigate('/dashboard');
       }, 1500);
     } catch (err) {
       console.error('Accept claim error:', err);

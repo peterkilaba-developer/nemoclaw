@@ -37,8 +37,9 @@ export default function Hero() {
         </h1>
 
         <p className="hero-subtitle animate-fade-in-up delay-3">
-          <strong>Scale your entire operational engine</strong> — without losing the human touch.{' '}
-          Your operations run natively inside your firm's own <span className="text-nvidia">NVIDIA</span> security sandbox.{' '}
+          <strong>The complete AI workforce for solo attorneys and growing small firms.</strong>{' '}
+          19 specialist agents handle drafting, research, intake, billing, and scheduling — while you practice law.{' '}
+          Everything runs inside your own <span className="text-nvidia">NVIDIA</span> <span className="text-nvidia">NemoClaw</span> security sandbox.{' '}
           No client data ever leaves your environment.{' '}
           <strong>Your price? Locked forever.</strong>
         </p>
@@ -68,8 +69,8 @@ export default function Hero() {
           </div>
           <div className="hero-stat-divider"></div>
           <div className="hero-stat">
-            <span className="hero-stat-value">1</span>
-            <span className="hero-stat-label"><span className="text-nvidia">Agentic</span> PMI</span>
+            <span className="hero-stat-value">19</span>
+            <span className="hero-stat-label"><span className="text-nvidia">AI</span> Specialists</span>
           </div>
           <div className="hero-stat-divider"></div>
           <div className="hero-stat">

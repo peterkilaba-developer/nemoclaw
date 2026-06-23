@@ -8,7 +8,9 @@ export default function AssociateCanvas({ firmId, user, activeMatter }) {
   const [activeDraft, setActiveDraft] = useState(null);
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [actionNotice, setActionNotice] = useState('');
   const saveTimeoutRef = useRef(null);
+  const discoveryInputRef = useRef(null);
 
   useEffect(() => {
     fetchDrafts().then(setDrafts);
@@ -55,8 +57,27 @@ export default function AssociateCanvas({ firmId, user, activeMatter }) {
     }, 1000);
   };
 
+  const handleRequestRedline = async () => {
+    if (!activeDraft || isSaving) return;
+    setIsSaving(true);
+    try {
+      await genericUpdate('drafts', activeDraft.id, { status: 'redline-requested', redlineRequestedAt: new Date() });
+      setActionNotice('Redline review queued for Nemo.');
+    } catch (error) {
+      setActionNotice(error.message || 'Could not queue the redline review.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDiscoveryFiles = (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    setActionNotice(files.length ? `${files.length} discovery file${files.length === 1 ? '' : 's'} staged for review.` : '');
+  };
+
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--db-text-primary)' }}>Associate Workbench</h2>
@@ -113,7 +134,7 @@ export default function AssociateCanvas({ firmId, user, activeMatter }) {
                     placeholder="Nemo's draft will appear here..."
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                    <button className="db-btn db-btn-secondary db-btn-sm" style={{ gap: '6px' }}><Sparkles size={12} color="var(--db-nvidia-green)" /> Ask Nemo to Redline</button>
+                    <button className="db-btn db-btn-secondary db-btn-sm" style={{ gap: '6px' }} onClick={handleRequestRedline} disabled={isSaving}><Sparkles size={12} color="var(--db-nvidia-green)" /> Ask Nemo to Redline</button>
                   </div>
                 </>
               )}
@@ -128,7 +149,9 @@ export default function AssociateCanvas({ firmId, user, activeMatter }) {
           </div>
           <div style={{ padding: '16px' }}>
              <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', margin: 0 }}>Provide Nemo with raw discovery files. It will automatically tag issues and redact PII.</p>
-             <button className="db-btn db-btn-secondary" style={{ width: '100%', marginTop: '16px' }}>Provide Batch to Nemo</button>
+             <input ref={discoveryInputRef} type="file" multiple hidden onChange={handleDiscoveryFiles} />
+             <button className="db-btn db-btn-secondary" style={{ width: '100%', marginTop: '16px' }} onClick={() => discoveryInputRef.current?.click()}>Provide Batch to Nemo</button>
+             {actionNotice && <div role="status" style={{ marginTop: '10px', fontSize: '0.75rem', color: 'var(--db-text-secondary)' }}>{actionNotice}</div>}
           </div>
         </div>
       </div>

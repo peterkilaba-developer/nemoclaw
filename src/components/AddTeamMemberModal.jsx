@@ -1,9 +1,7 @@
 import { useState, useRef } from 'react';
-import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS } from '../lib/agentHierarchy';
+import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS, PARTNER_ROLES } from '../lib/agentHierarchy';
 import { capitalizeWords } from '../utils/formatters';
 import { Bot, Check, CheckCircle, Plus, Trash2, X } from 'lucide-react';
-
-const PARTNER_ROLES = ['partner', 'managing-partner', 'solo-partner'];
 
 export default /* ─────────────────────────────────────────────── */
 /*  ADD TEAM MEMBER MODAL                          */
@@ -17,6 +15,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
   });
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
   const [removing, setRemoving] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
@@ -65,6 +64,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
   const handleSave = async () => {
     if (!formData.name.trim() || !formData.email.trim()) return;
     setSaving(true);
+    setError('');
     try {
       if (initialData?.id) {
         await onUpdated(initialData.id, formData);
@@ -75,6 +75,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
       setTimeout(() => { onClose(); }, 1200);
     } catch (err) {
       console.error('Failed to add team member:', err);
+      setError(err.message || 'Could not save this human role mapping.');
       setSaving(false);
     }
   };
@@ -108,10 +109,10 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
         }}>
           <div>
             <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--db-text-primary)' }}>
-              {initialData ? 'Edit Human Resource' : 'Add Human Resource'}
+              {initialData ? 'Edit Human Role Mapping' : 'Add Human Role + Agent'}
             </div>
             <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginTop: '2px' }}>
-              A dedicated Personal Agent will be provisioned automatically.
+              A dedicated Personal Agent will be provisioned automatically with role-aware permissions.
             </div>
           </div>
           <button onClick={onClose} style={{
@@ -161,6 +162,17 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
 
           ) : (
             <>
+              {error && (
+                <div style={{
+                  padding: '10px 12px', borderRadius: '8px',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  background: 'rgba(239, 68, 68, 0.08)', color: '#ef4444',
+                  fontSize: '0.75rem', marginBottom: '16px', fontWeight: 600,
+                }}>
+                  {error}
+                </div>
+              )}
+
               {/* Row 1: Name + Email */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 <div>
@@ -205,6 +217,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
                     onChange={e => update('role', e.target.value)}
                     disabled={isManagingPartner}
                   >
+                    {formData.role === 'solo-partner' && <option value="solo-partner">Solo Practitioner</option>}
                     <optgroup label="Practice of Law">
                       {EMPLOYEE_ROLES.filter(r => r.division === 'practice' && r.value !== 'solo-partner').map(r => (
                         <option key={r.value} value={r.value}>{r.label}</option>
@@ -341,7 +354,7 @@ function AddTeamMemberModal({ partners, onClose, onAdded, onUpdated, onRemoved, 
 
               {/* Actions */}
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
-                {initialData?.id && (
+                {initialData?.id && !isManagingPartner && (
                   <div style={{ marginRight: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {isConfirmingDelete ? (
                       <>

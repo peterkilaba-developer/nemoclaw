@@ -1,18 +1,13 @@
 import { collection, doc, getDocs, limit, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { db } from './firebase';
-
-const IS_DEV = import.meta.env.DEV;
-const PROXY_URL = import.meta.env.VITE_PYTHON_PROXY_URL || 'https://nemoc-proxy-71708455648.us-central1.run.app';
-const NEMOCLAW_ENDPOINT = IS_DEV
-  ? '/api/nvidia/v1/chat/completions'
-  : `${PROXY_URL}`;
+import { NEMOCLAW_ENDPOINT, NEMOCLAW_MODEL_ID } from './nemoclawConfig';
 
 async function callSniperInference(messages, maxTokens = 500) {
   const res = await fetch(NEMOCLAW_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: 'meta/llama-3.1-70b-instruct',
+      model: NEMOCLAW_MODEL_ID,
       messages,
       max_tokens: maxTokens,
       temperature: 0.5,

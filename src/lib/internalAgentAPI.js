@@ -1,7 +1,7 @@
 /**
  * Internal Agent API - NemoC LAW AI
  *
- * Powers the internal agent fleet that runs NemoC as a company.
+ * Powers the internal agent fleet that runs NemoC LAW AI as a company.
  */
 
 import {
@@ -22,15 +22,9 @@ import {
   getInternalAgentById,
   resolveInternalAgentId,
 } from './internalAgentRegistry';
+import { NEMOCLAW_ENDPOINT, NEMOCLAW_MODEL_ID } from './nemoclawConfig';
 
 export { INTERNAL_AGENTS } from './internalAgentRegistry';
-
-const IS_DEV = import.meta.env.DEV;
-const NEMOCLAW_ENDPOINT = IS_DEV
-  ? '/api/nvidia/v1/chat/completions'
-  : (import.meta.env.VITE_NEMOCLAW_ENDPOINT || '/api/nvidia/v1/chat/completions');
-
-const MODEL_ID = 'nvidia/nemotron-3-super-120b-a12b';
 
 const INTERNAL_PROMPTS = {
   cea: `You are the Chief Executive Agent (C.E.A.) of NemoC LAW AI.
@@ -52,7 +46,7 @@ Prefer small reversible fixes, existing codebase patterns, and verified checks b
 
   cma: `You are the Chief Marketing Agent (C.M.A.) of NemoC LAW AI.
 You own brand signal, content, campaign testing, social publishing, and demand generation.
-All content reinforces the Born Agentic positioning: NemoC is agent-led, not merely AI-assisted.`,
+All content reinforces the Born Agentic positioning: NemoC LAW AI is agent-led, not merely AI-assisted.`,
 
   cra: `You are the Chief Revenue Agent (C.R.A.) of NemoC LAW AI.
 You own prospecting, lead scoring, outreach strategy, pipeline generation, and conversion loops.
@@ -89,7 +83,7 @@ Convert noisy inputs into clear priorities, blockers, owners, and deadlines.`,
   sdr: `You are the SDR Agent for NemoC LAW AI.
 You handle outbound sales: lead scraping, personalized cold emails, pipeline qualification.
 Score leads 0-100 based on firm size, practice area, location, and engagement signals.
-Every email must include: firm name, practice-area pain point, specific NemoC feature, founder pricing, and a unique signup link.`,
+Every email must include: firm name, practice-area pain point, specific NemoC LAW AI feature, founder pricing, and a unique signup link.`,
 
   marketing: `You are the Marketing Agent for NemoC LAW AI.
 You generate blog posts, LinkedIn content, SEO landing pages, release notes, and newsletter content.
@@ -218,7 +212,7 @@ async function callInternalInference(messages, _agent) {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: MODEL_ID,
+      model: NEMOCLAW_MODEL_ID,
       messages,
       max_tokens: 4096,
       temperature: 0.4,

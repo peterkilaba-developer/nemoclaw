@@ -3,7 +3,7 @@ import {
   getDocs, serverTimestamp, arrayUnion
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { saveRosterAndCreateAgents } from './agentHierarchy';
+import { ACCESS_MATRIX, AGENT_SUB_AGENTS, saveRosterAndCreateAgents } from './agentHierarchy';
 
 // ═══════════════════════════════════════════════
 //  FIRM OPERATIONS
@@ -23,6 +23,7 @@ export async function createFirm(userId, firmData, existingFirmId = null) {
     firmWebsite: firmData.firmWebsite || '',
     placeId: firmData.placeId || '',
     stateBar: firmData.stateBar || '',
+    federalCircuits: firmData.federalCircuits || [],
     practiceAreas: firmData.practiceAreas || [],
     firmSize: firmData.firmSize || 'solo',
     contactName: firmData.contactName || '',
@@ -30,7 +31,8 @@ export async function createFirm(userId, firmData, existingFirmId = null) {
     status: 'trial',
     plan: 'trial',
     planPrice: 0,
-    trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7-day founder pricing window
+    isConfigured: true,
+    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30-day free trial
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -40,6 +42,8 @@ export async function createFirm(userId, firmData, existingFirmId = null) {
   // Link user to firm and mark onboarding as complete
   await setDoc(doc(db, 'users', userId), {
     firmId: firmRef.id,
+    role: firmData.firmSize === 'solo' ? 'solo-partner' : 'managing-partner',
+    agentType: firmData.firmSize === 'solo' ? 'solo-partner' : 'managing-partner',
     onboardingComplete: true,
     updatedAt: serverTimestamp(),
   }, { merge: true });
@@ -240,7 +244,11 @@ export async function completeOnboarding(userId, onboardingData, existingFirmId 
 
   // 6. Save employee roster & create agent hierarchy for staff
   if (onboardingData.employees && onboardingData.employees.length > 0) {
-    await saveRosterAndCreateAgents(firmId, onboardingData.employees);
+    const ownerRole = onboardingData.firmSize === 'solo' ? 'solo-partner' : 'managing-partner';
+    const roster = onboardingData.employees.map((employee, index) => index === 0
+      ? { ...employee, id: userId, role: ownerRole }
+      : employee);
+    await saveRosterAndCreateAgents(firmId, roster);
   }
 
   // 7. Provision the OWNER with their proper legal role + personal agent
@@ -276,11 +284,8 @@ export async function completeOnboarding(userId, onboardingData, existingFirmId 
       agentType: 'partner',
       agentName: 'AI Chief of Staff',
       firmId,
-      permissions: {},
-      availableSubAgents: [
-        'legal-research', 'contract-review', 'drafting', 'case-analytics',
-        'business-intelligence', 'knowledge-search', 'communication-drafter',
-      ],
+      permissions: ACCESS_MATRIX.partner,
+      availableSubAgents: AGENT_SUB_AGENTS.partner,
       context: { preferences: {}, writingStyle: null, caseload: [] },
       settings: { showSubAgentVisibility: false },
       superAgentAccess: true,

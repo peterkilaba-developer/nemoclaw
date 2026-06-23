@@ -6,6 +6,18 @@ const twilio = require('twilio');
 
 if (!admin.apps.length) admin.initializeApp();
 const firestore = admin.firestore();
+const NEMOCLAW_DEFAULT_MODEL = process.env.NVIDIA_MODEL_ID || 'nvidia/nemotron-3-super-120b-a12b';
+
+const REDACTION_RULES = [
+  { regex: /\b\d{3}-\d{2}-\d{4}\b/g, replacement: '[REDACTED-SSN]' },
+  { regex: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g, replacement: '[REDACTED-EMAIL]' },
+  { regex: /\b(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g, replacement: '[REDACTED-PHONE]' },
+  { regex: /\b(?:routing|account|iolta|trust\s+account|swift|iban)[\s:#-]*[A-Z0-9]{8,34}\b/gi, replacement: '[REDACTED-BANKING-DATA]' },
+];
+
+function redactSensitiveText(text) {
+  return REDACTION_RULES.reduce((safeText, rule) => safeText.replace(rule.regex, rule.replacement), text || '');
+}
 
 function getTwilioClient() {
   const twilioSid = process.env.TWILIO_ACCOUNT_SID;
@@ -147,10 +159,10 @@ exports.processInboundSms = onDocumentCreated('_inboundSms/{msgId}', async (even
     Never provide legal advice (UPL Guard). Offer to schedule consultations or pass to an attorney.`;
 
     const requestBody = {
-      model: "meta/llama-3.1-70b-instruct",
+      model: NEMOCLAW_DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: text } // Context enhancement opportunities here
+        { role: "user", content: redactSensitiveText(text) }
       ],
       temperature: 0.3,
       max_tokens: 150

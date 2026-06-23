@@ -427,6 +427,17 @@ export default function WebsiteBuilder() {
     catch { return '<html><body style="padding:40px;font-family:sans-serif;color:#999"><h2>Preview loading...</h2></body></html>'; }
   }, [config, domain]);
 
+  const handleDownloadHtml = () => {
+    const objectUrl = URL.createObjectURL(new Blob([generatedHtml], { type: 'text/html;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `${domain || 'law-firm-website'}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
   const handleAnalyze = async () => {
     if (!url.trim() || analyzing) return;
     hasAutoSeeded.current = true; // Block the mount effect from competing
@@ -572,12 +583,12 @@ export default function WebsiteBuilder() {
   // ═══ CUSTOMIZER ACTIVE: split-pane layout ═══
   if (report && !analyzing && showCustomizer && config) {
     return (
-      <div style={{ display: 'flex', gap: 0, margin: '-24px', height: 'calc(100vh - 60px)' }}>
+      <div style={{ display: 'flex', gap: 0, margin: '-24px', height: 'calc(100vh - 60px)', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
         {/* ── LEFT: CUSTOMIZATION PANEL ── */}
         <div style={{
           width: '320px', minWidth: '320px', background: 'var(--db-surface)',
           borderRight: '1px solid var(--db-border)', display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
+          minHeight: 0, overflow: 'hidden',
         }}>
           {/* Panel Header */}
           <div style={{
@@ -615,16 +626,16 @@ export default function WebsiteBuilder() {
           </div>
 
           {/* Tab Content */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px' }}>
             {activeTab === 'profile' && <ProfileTab config={config} updateConfig={updateConfig} updateAttorney={updateAttorney} />}
             {activeTab === 'colors' && <ColorsTab config={config} updateColors={updateColors} />}
-            {activeTab === 'photos' && <PhotosTab config={config} />}
+            {activeTab === 'photos' && <PhotosTab config={config} updateConfig={updateConfig} updateAttorney={updateAttorney} />}
             {activeTab === 'agent' && <AgentTab config={config} updateAgent={updateAgent} />}
           </div>
         </div>
 
         {/* ── RIGHT: LIVE PREVIEW ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#e5e7eb' }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#e5e7eb' }}>
           <PreviewToolbar 
             domain={domain} 
             previewMode={previewMode} setPreviewMode={setPreviewMode} 
@@ -634,7 +645,7 @@ export default function WebsiteBuilder() {
           <div style={{
             flex: 1, padding: previewMode === 'desktop' ? 0 : '20px',
             display: 'flex', justifyContent: 'center', alignItems: previewMode === 'desktop' ? 'stretch' : 'flex-start',
-            overflow: 'auto', gap: previewMode === 'desktop' ? '2px' : '40px', background: '#d1d5db'
+            minHeight: 0, overflow: 'auto', gap: previewMode === 'desktop' ? '2px' : '40px', background: '#d1d5db'
           }}>
             {/* Original Site Frame */}
             {(comparisonMode === 'original' || comparisonMode === 'split') && (
@@ -821,10 +832,10 @@ export default function WebsiteBuilder() {
                 <button onClick={() => setShowCustomizer(true)} className="db-btn db-btn-secondary" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>
                   <Settings2 size={16} /> Customize First
                 </button>
-                <button className="db-btn db-btn-secondary" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>
+                <button onClick={handleDownloadHtml} className="db-btn db-btn-secondary" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>
                   <Download size={16} /> Download HTML
                 </button>
-                <button className="db-btn db-btn-accent db-btn-lg">
+                <button onClick={() => window.location.assign('/dashboard/billing?product=website-deployment')} className="db-btn db-btn-accent db-btn-lg">
                   <ShoppingCart size={16} /> Purchase & Deploy
                 </button>
               </div>
@@ -1164,7 +1175,14 @@ function ColorsTab({ config, updateColors }) {
   );
 }
 
-function PhotosTab({ config }) {
+function PhotosTab({ config, updateConfig, updateAttorney }) {
+  const loadImage = (file, onLoad) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onLoad(reader.result);
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-muted)' }}>Website Photos</div>
@@ -1173,10 +1191,15 @@ function PhotosTab({ config }) {
           padding: '14px', background: 'var(--db-bg)', borderRadius: '8px',
           border: '1.5px dashed var(--db-border)', textAlign: 'center',
         }}>
-          <Image size={20} color="var(--db-text-muted)" style={{ opacity: 0.4, marginBottom: '6px' }} />
+          {config.photos?.[slot.id]
+            ? <img src={config.photos[slot.id]} alt={`${slot.label} preview`} style={{ width: '100%', height: '72px', objectFit: 'cover', borderRadius: '6px', marginBottom: '8px' }} />
+            : <Image size={20} color="var(--db-text-muted)" style={{ opacity: 0.4, marginBottom: '6px' }} />}
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{slot.label}</div>
           <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', marginBottom: '8px' }}>{slot.desc}</div>
-          <button className="db-btn db-btn-secondary db-btn-sm">Upload</button>
+          <label className="db-btn db-btn-secondary db-btn-sm" style={{ cursor: 'pointer' }}>
+            Upload
+            <input type="file" accept="image/*" hidden onChange={event => loadImage(event.target.files?.[0], image => updateConfig('photos', { ...(config.photos || {}), [slot.id]: image }))} />
+          </label>
         </div>
       ))}
       <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-muted)', marginTop: '4px' }}>Attorney Headshots</div>
@@ -1189,12 +1212,17 @@ function PhotosTab({ config }) {
             width: '40px', height: '40px', borderRadius: '50%', background: config.colors.primary,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0,
-          }}>{atty.initials}</div>
+          }}>
+            {atty.photo ? <img src={atty.photo} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : atty.initials}
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{atty.name}</div>
             <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)' }}>{atty.title}</div>
           </div>
-          <button className="db-btn db-btn-secondary db-btn-sm">Upload</button>
+          <label className="db-btn db-btn-secondary db-btn-sm" style={{ cursor: 'pointer' }}>
+            Upload
+            <input type="file" accept="image/*" hidden onChange={event => loadImage(event.target.files?.[0], image => updateAttorney(i, 'photo', image))} />
+          </label>
         </div>
       ))}
     </div>

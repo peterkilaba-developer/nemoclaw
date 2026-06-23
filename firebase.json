@@ -32,6 +32,58 @@
         "function": "scrapeWebsite"
       },
       {
+        "source": "/api/courtListenerSearch",
+        "function": "courtListenerSearch"
+      },
+      {
+        "source": "/api/getIntegrationStatus",
+        "function": "getIntegrationStatus"
+      },
+      {
+        "source": "/api/postSlackNotification",
+        "function": "postSlackNotification"
+      },
+      {
+        "source": "/api/syncGoogleCalendarDeadline",
+        "function": "syncGoogleCalendarDeadline"
+      },
+      {
+        "source": "/api/syncClioMatter",
+        "function": "syncClioMatter"
+      },
+      {
+        "source": "/api/runEDiscoveryReview",
+        "function": "runEDiscoveryReview"
+      },
+      {
+        "source": "/api/runTrustReconciliation",
+        "function": "runTrustReconciliation"
+      },
+      {
+        "source": "/api/prepareCourtFiling",
+        "function": "prepareCourtFiling"
+      },
+      {
+        "source": "/api/runCaseAnalytics",
+        "function": "runCaseAnalytics"
+      },
+      {
+        "source": "/api/recordHumanApproval",
+        "function": "recordHumanApproval"
+      },
+      {
+        "source": "/api/exportFirmAuditLog",
+        "function": "exportFirmAuditLog"
+      },
+      {
+        "source": "/api/exportFirmData",
+        "function": "exportFirmData"
+      },
+      {
+        "source": "/api/requestFirmDataDeletion",
+        "function": "requestFirmDataDeletion"
+      },
+      {
         "source": "/api/forceSdrAgentCron",
         "function": "forceSdrAgentCron"
       },

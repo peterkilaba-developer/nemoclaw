@@ -22,7 +22,12 @@ export default function ClientPortal() {
     if (!activeFirmId) return;
     const q = query(collection(db, 'firms', activeFirmId, 'clientChannels'), orderBy('updatedAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
-      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const nextClients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setClients(nextClients);
+      setActiveClient(current => {
+        if (!current) return nextClients[0] || null;
+        return nextClients.find(client => client.id === current.id) || nextClients[0] || null;
+      });
     });
     return () => unsub();
   }, [firm?.id, user?.firmId]);
@@ -113,7 +118,7 @@ export default function ClientPortal() {
 
       <div className="db-two-col" style={{ flex: 1, minHeight: 0 }}>
         {/* Chat interface */}
-        <div className="db-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: 0 }}>
+        <div className="db-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 }}>
           <div className="db-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px' }}>
             <div>
               <div className="db-card-title">
@@ -133,7 +138,7 @@ export default function ClientPortal() {
 
           {activeClient ? (
             <>
-              <div style={{ flex: 1, padding: '28px', overflowY: 'auto', background: 'var(--db-bg)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ flex: 1, minHeight: 0, padding: '28px', overflowY: 'auto', background: 'var(--db-bg)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ textAlign: 'center', margin: '10px 0' }}>
                   <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', background: 'rgba(0,0,0,0.05)', padding: '4px 12px', borderRadius: '20px' }}>
                     Secure communication established on {activeClient.createdAt?.toDate ? activeClient.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString()}
@@ -240,7 +245,7 @@ export default function ClientPortal() {
         </div>
 
         {/* Right Col - Context Panels */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: 0, overflowY: 'auto' }}>
           <div className="db-card" style={{ padding: 0 }}>
             <div className="db-card-header" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="db-card-title">
@@ -271,7 +276,16 @@ export default function ClientPortal() {
               {filteredClients.map(client => (
                 <div 
                   key={client.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open channel for ${client.name || 'client'}`}
                   onClick={() => setActiveClient(client)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setActiveClient(client);
+                    }
+                  }}
                   style={{ 
                     padding: '12px 24px', 
                     cursor: 'pointer',

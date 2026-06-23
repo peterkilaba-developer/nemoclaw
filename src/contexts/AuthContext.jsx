@@ -102,7 +102,7 @@ export function AuthProvider({ children }) {
       onboardingComplete: false,
       createdAt: serverTimestamp(),
     });
-    // Send 7-day urgency lock welcome email asynchronously (fire and forget)
+    // Send 30-day trial welcome email asynchronously (fire and forget)
     sendWelcomeSignupEmail(email, displayName).catch(console.error);
     return result.user;
   };

@@ -20,6 +20,7 @@ const BillingUsage = lazy(() => import('./pages/BillingUsage'));
 const WebsiteBuilder = lazy(() => import('./pages/WebsiteBuilder'));
 const ClientPortal = lazy(() => import('./pages/ClientPortal'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const MigrationCenter = lazy(() => import('./pages/MigrationCenter'));
 const OnboardingWizard = lazy(() => import('./pages/OnboardingWizard'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./pages/TermsOfService'));
@@ -152,6 +153,7 @@ function App() {
           <Route path="settings" element={<FirmSettings />} />
           <Route path="billing" element={<BillingUsage />} />
           <Route path="website-builder" element={<WebsiteBuilder />} />
+          <Route path="migration" element={<MigrationCenter />} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
 

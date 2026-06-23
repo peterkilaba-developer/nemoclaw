@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import useWorkspace from '../../hooks/useWorkspace';
 import { CheckSquare, Loader2, Mail, RefreshCw, ShieldCheck, UserCheck } from 'lucide-react';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { runConflictCheck } from '../../lib/lawFirmOSService';
+import { db } from '../../lib/firebase';
 
 export default function IntakeCanvas({ firmId, leads = [] }) {
   const { fetchConflictChecks, loading } = useWorkspace(firmId);
@@ -9,6 +11,9 @@ export default function IntakeCanvas({ firmId, leads = [] }) {
   const [partyName, setPartyName] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [checkError, setCheckError] = useState('');
+  const [approvedLeadIds, setApprovedLeadIds] = useState(new Set());
+  const [selectedDraftId, setSelectedDraftId] = useState('');
+  const [leadError, setLeadError] = useState('');
 
   useEffect(() => {
     fetchConflictChecks().then(setConflictChecks);
@@ -30,8 +35,22 @@ export default function IntakeCanvas({ firmId, leads = [] }) {
     }
   };
 
+  const handleApproveLead = async (lead) => {
+    if (!firmId || !lead?.id) return;
+    setLeadError('');
+    try {
+      await updateDoc(doc(db, 'firms', firmId, 'leads', lead.id), {
+        status: 'won',
+        approvedAt: serverTimestamp(),
+      });
+      setApprovedLeadIds(prev => new Set(prev).add(lead.id));
+    } catch (error) {
+      setLeadError(error.message || 'Could not approve this lead.');
+    }
+  };
+
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '24px', height: '100%', minHeight: 0, overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--db-text-primary)' }}>Intake & Reception Workbench</h2>
@@ -112,19 +131,25 @@ export default function IntakeCanvas({ firmId, leads = [] }) {
               </div>
             ) : (
               leads.map(lead => (
-                <div key={lead.id} style={{ padding: '12px', borderLeft: lead.status === 'won' ? '3px solid var(--db-nvidia-green)' : '3px solid #3b82f6', background: 'var(--db-bg)', borderRadius: '6px', transition: 'transform 0.1s', cursor: 'pointer' }}>
+                <div key={lead.id} style={{ padding: '12px', borderLeft: lead.status === 'won' ? '3px solid var(--db-nvidia-green)' : '3px solid #3b82f6', background: 'var(--db-bg)', borderRadius: '6px', transition: 'transform 0.1s' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{lead.name}</div>
                     {lead.value && <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-nvidia-green)' }}>${lead.value}</div>}
                   </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginTop: '4px' }}>{lead.practiceArea || 'General Inquiry'}</div>
                   <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-                    <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '4px 10px', fontSize: '0.6875rem' }}><CheckSquare size={12} style={{ marginRight: '6px' }} /> Approve Lead</button>
-                    <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '4px 10px', fontSize: '0.6875rem' }}><Mail size={12} style={{ marginRight: '6px' }} /> Review AI Draft</button>
+                    <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '4px 10px', fontSize: '0.6875rem' }} onClick={() => handleApproveLead(lead)} disabled={approvedLeadIds.has(lead.id)}><CheckSquare size={12} style={{ marginRight: '6px' }} /> {approvedLeadIds.has(lead.id) ? 'Approved' : 'Approve Lead'}</button>
+                    <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '4px 10px', fontSize: '0.6875rem' }} onClick={() => setSelectedDraftId(current => current === lead.id ? '' : lead.id)}><Mail size={12} style={{ marginRight: '6px' }} /> {selectedDraftId === lead.id ? 'Hide Draft' : 'Review AI Draft'}</button>
                   </div>
+                  {selectedDraftId === lead.id && (
+                    <div style={{ marginTop: '10px', padding: '10px', borderRadius: '6px', background: 'var(--db-surface)', border: '1px solid var(--db-border)', fontSize: '0.75rem', color: 'var(--db-text-secondary)', lineHeight: 1.5 }}>
+                      {lead.aiDraft || lead.draft || `Thank you for contacting the firm about ${lead.practiceArea || 'your legal matter'}. An attorney will review your inquiry and follow up regarding next steps.`}
+                    </div>
+                  )}
                 </div>
               ))
             )}
+            {leadError && <div role="alert" style={{ color: '#ef4444', fontSize: '0.75rem' }}>{leadError}</div>}
           </div>
         </div>
       </div>

@@ -4,14 +4,14 @@ import {
   Search, FileText, UserCheck, PenTool, FolderSearch, Scale, Mic,
   DollarSign, ScanSearch, Clock, ShieldCheck, Lock, ClipboardList,
   Gavel, MapPin, FileCheck, Upload, File, Lightbulb, Infinity as InfinityIcon, Check,
-  Plus, Trash2, Briefcase, Phone, Bot, Crown, ArrowRight, ChevronRight, AlertCircle, Globe, Users, Zap, Loader2
+  Plus, Phone, Bot, ArrowRight, ChevronRight, AlertCircle, Globe, Users, Zap, Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { completeOnboarding } from '../lib/firestore';
 import { scrapeFirmWebsite } from '../lib/prospectService';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
-import { EMPLOYEE_ROLES, AGENT_SUB_AGENTS } from '../lib/agentHierarchy';
+
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../styles/onboarding.css';
@@ -156,25 +156,10 @@ function buildWebsiteKnowledgeContent({ place, website, liveData, practiceAreas 
     `Website Summary: ${liveData?.description || ''}`,
     `Attorneys Detected: ${attorneys.join('; ') || 'None detected'}`,
     `Pages Scraped: ${liveData?.pagesScraped || 0}`,
-    `Source: Google Places selection + NemoC website crawl`,
+    `Source: Google Places selection + NemoC LAW AI website crawl`,
     `Captured At: ${new Date().toISOString()}`,
   ].join('\n');
 }
-
-const AGENT_NAME_SUGGESTIONS = [
-  { name: 'Lexi', desc: 'Jurisdictional Logic' },
-  { name: 'Prudence', desc: 'Standard of Care' },
-  { name: 'Justice', desc: 'Equity & Fairness' },
-  { name: 'Amicus', desc: 'Procedural Advisory' },
-  { name: 'Portia', desc: 'Advanced Drafting' },
-  { name: 'Atticus', desc: 'Litigation Strategy' },
-  { name: 'Harvey', desc: 'Aggressive Advocacy' },
-  { name: 'Marshall', desc: 'Constitutional Depth' },
-  { name: 'Solon', desc: 'Regulatory Framework' },
-  { name: 'Verity', desc: 'Evidentiary Truth' },
-  { name: 'Lincoln', desc: 'Trial Readiness' },
-  { name: 'Sterling', desc: 'Operations Excellence' },
-];
 
 const AGENTS = [
   { id: 'website-builder', Icon: Globe, name: 'Website Builder Agent', desc: 'Analyze and redesign your firm website — included free with every account', recommended: true, category: 'Marketing', free: true },
@@ -208,7 +193,37 @@ const EXTERNAL_SERVICES = [
   { id: 'courtlistener', name: 'CourtListener', desc: 'Federal case law research', required: false, default: true },
 ];
 
-const STEP_LABELS = ['Firm Profile', 'Knowledge Base', 'Security', 'Review'];
+// ═══════════════════════════════════════════════════════════════
+//  FEDERAL CIRCUIT JURISDICTION
+// ═══════════════════════════════════════════════════════════════
+
+const FEDERAL_CIRCUITS = [
+  { value: '1st', label: 'First Circuit', states: ['Maine', 'Massachusetts', 'New Hampshire', 'Rhode Island'] },
+  { value: '2nd', label: 'Second Circuit', states: ['Connecticut', 'New York', 'Vermont'] },
+  { value: '3rd', label: 'Third Circuit', states: ['Delaware', 'New Jersey', 'Pennsylvania'] },
+  { value: '4th', label: 'Fourth Circuit', states: ['Maryland', 'North Carolina', 'South Carolina', 'Virginia', 'West Virginia'] },
+  { value: '5th', label: 'Fifth Circuit', states: ['Louisiana', 'Mississippi', 'Texas'] },
+  { value: '6th', label: 'Sixth Circuit', states: ['Kentucky', 'Michigan', 'Ohio', 'Tennessee'] },
+  { value: '7th', label: 'Seventh Circuit', states: ['Illinois', 'Indiana', 'Wisconsin'] },
+  { value: '8th', label: 'Eighth Circuit', states: ['Arkansas', 'Iowa', 'Minnesota', 'Missouri', 'Nebraska', 'North Dakota', 'South Dakota'] },
+  { value: '9th', label: 'Ninth Circuit', states: ['Alaska', 'Arizona', 'California', 'Hawaii', 'Idaho', 'Montana', 'Nevada', 'Oregon', 'Washington'] },
+  { value: '10th', label: 'Tenth Circuit', states: ['Colorado', 'Kansas', 'New Mexico', 'Oklahoma', 'Utah', 'Wyoming'] },
+  { value: '11th', label: 'Eleventh Circuit', states: ['Alabama', 'Florida', 'Georgia'] },
+  { value: 'DC', label: 'D.C. Circuit', states: ['District of Columbia'] },
+  { value: 'Federal', label: 'Federal Circuit', states: [] },
+];
+
+const STATE_TO_CIRCUIT = {};
+FEDERAL_CIRCUITS.forEach(c => {
+  c.states.forEach(s => { STATE_TO_CIRCUIT[s] = c.value; });
+});
+
+function getDefaultCircuits(stateBar) {
+  const circuit = STATE_TO_CIRCUIT[stateBar];
+  return circuit ? [circuit] : ['Federal'];
+}
+
+const STEP_LABELS = ['Firm Profile'];
 
 export default function OnboardingWizard() {
   const navigate = useNavigate();
@@ -226,13 +241,14 @@ export default function OnboardingWizard() {
     firmWebsite: '',
     placeId: '',
     stateBar: '',
+    federalCircuits: [],
     practiceAreas: [],
     firmSize: 'solo',
     firstName: nameParts[0] || '',
     lastName: nameParts.slice(1).join(' ') || '',
     email: user?.email || '',
     employees: [
-      { name: user?.displayName || '', email: user?.email || '', role: 'managing-partner', practiceAreas: [], supervisingPartnerId: null, agentName: '' },
+      { name: user?.displayName || '', email: user?.email || '', role: 'solo-partner', practiceAreas: [], supervisingPartnerId: null, agentName: '' },
     ],
     selectedAgents: AGENTS.filter(a => a.recommended || a.free).map(a => a.id),
     files: [],
@@ -285,6 +301,7 @@ export default function OnboardingWizard() {
   const isStepValid = () => {
     if (step === 0) {
       return (data.firmName?.trim().length || 0) > 2 && 
+             (data.stateBar?.trim().length || 0) > 0 &&
              data.practiceAreas.length > 0 && 
              (data.firstName?.trim().length || 0) > 0 &&
              (data.lastName?.trim().length || 0) > 0 &&
@@ -311,7 +328,7 @@ export default function OnboardingWizard() {
             userId: user.uid,
             userEmail: user.email,
             firmName: data.firmName,
-            extraSeats: Math.max(0, data.employees.length - 1),
+            // Solo practitioner — no extra seats
           }),
         });
         const result = await response.json();
@@ -471,6 +488,8 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
         ? STATE_MAP[stateComponent.long_name]
         : '';
 
+      const defaultCircuits = getDefaultCircuits(stateBar);
+
       const placeFields = {
         firmName: place.name,
         ...(place.formatted_address && { firmAddress: place.formatted_address }),
@@ -478,6 +497,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
         ...(place.formatted_phone_number && { firmPhone: place.formatted_phone_number }),
         ...(place.website && { firmWebsite: place.website }),
         ...(stateBar && { stateBar }),
+        federalCircuits: defaultCircuits,
       };
 
       setData(prev => ({ ...prev, ...placeFields }));
@@ -550,13 +570,14 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
           // Browser storage is a convenience for the builder; onboarding still persists to Firestore.
         }
 
+        const scrapedStateBar = websiteSeed.stateBar;
         setData(prev => ({
           ...prev,
           ...placeFields,
           firmName: websiteSeed.firmName,
           ...(websiteSeed.phone && { firmPhone: websiteSeed.phone }),
           ...(websiteSeed.address && { firmAddress: websiteSeed.address }),
-          ...(websiteSeed.stateBar && { stateBar: websiteSeed.stateBar }),
+          ...(scrapedStateBar && { stateBar: scrapedStateBar, federalCircuits: getDefaultCircuits(scrapedStateBar) }),
           practiceAreas: [...new Set([...(prev.practiceAreas || []), ...detectedPracticeAreas])],
           files: [
             ...(prev.files || []).filter(file => file.source !== 'google_places_website_crawl'),
@@ -636,12 +657,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const FIRM_SIZE_OPTIONS = [
-    { value: 'solo', label: '1 — Solo Practitioner', desc: 'Agentic OS included' },
-    { value: '2-5', label: '2–5 Attorneys', desc: 'Add seats as needed' },
-    { value: '6-10', label: '6–10 Attorneys', desc: 'Add seats as needed' },
-    { value: '10+', label: '10+ Attorneys', desc: 'Enterprise allocation' },
-  ];
+
 
   return (
     <>
@@ -650,7 +666,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
         Start typing your firm name — we'll auto-fill details from Google. Only verified law firms, attorneys, and legal businesses are returned.
       </p>
 
-      {/* Managing Partner Name — First/Last */}
+      {/* Attorney Name — First/Last */}
       <div className="ob-form-row">
         <div className="ob-form-group">
           <label className="ob-form-label">First Name <span className="required">*</span></label>
@@ -711,33 +727,52 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
 
       <div className="ob-form-row">
         <div className="ob-form-group">
-          <label className="ob-form-label">State Bar {data.stateBar ? <Check size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> : <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', fontWeight: 400 }}>(auto-detected)</span>}</label>
-          <input className="ob-form-input" type="text" value={data.stateBar || 'Select a firm above to auto-detect'} readOnly style={{ background: 'rgba(0,0,0,0.02)', cursor: 'default', color: data.stateBar ? 'var(--db-text-primary)' : 'var(--db-text-muted)' }} />
-        </div>
-        <div className="ob-form-group">
-          <label className="ob-form-label">Firm Size</label>
-          <select className="ob-form-select" value={data.firmSize} onChange={e => updateData('firmSize', e.target.value)}>
-            {FIRM_SIZE_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
+          <label className="ob-form-label">State Bar <span className="required">*</span> {data.stateBar && <Check size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />}</label>
+          <select
+            className="ob-form-input"
+            value={data.stateBar}
+            onChange={event => {
+              const stateBar = event.target.value;
+              setData(prev => ({ ...prev, stateBar, federalCircuits: getDefaultCircuits(stateBar) }));
+            }}
+          >
+            <option value="">Select your licensed state</option>
+            {Object.keys(STATE_TO_CIRCUIT).sort().map(state => <option key={state} value={state}>{state}</option>)}
           </select>
-          <div style={{ fontSize: '0.6875rem', marginTop: '4px', color: 'var(--db-text-muted)' }}>
-            {FIRM_SIZE_OPTIONS.find(o => o.value === data.firmSize)?.desc}
-          </div>
         </div>
       </div>
 
-      {data.firmSize === '10+' && (
-        <div style={{ padding: '12px 16px', marginBottom: '16px', background: 'var(--db-warning-subtle)', border: '1px solid var(--db-warning-subtle)', borderRadius: '8px', fontSize: '0.8125rem', color: 'var(--db-text-secondary)', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-          <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-          <div>
-            <strong>Enterprise Token Pricing</strong>
-            <div style={{ color: 'var(--db-text-secondary)', marginTop: '2px', fontSize: '0.75rem' }}>
-              Firms with 10+ attorneys use significantly more AI tokens. Additional tokens billed at cost ($0.002/1K tokens).
-            </div>
-          </div>
+      <div className="ob-form-group">
+        <label className="ob-form-label">Federal Circuit Jurisdiction</label>
+        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginBottom: '8px', lineHeight: '1.4' }}>
+          Auto-detected from your state bar. Select additional circuits where your firm practices.
         </div>
-      )}
+        <div className="ob-checkbox-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+          {FEDERAL_CIRCUITS.map(circuit => {
+            const isDefault = getDefaultCircuits(data.stateBar).includes(circuit.value);
+            const isSelected = data.federalCircuits.includes(circuit.value);
+            return (
+              <div
+                key={circuit.value}
+                className={`ob-checkbox-item ${isSelected ? 'checked' : ''}`}
+                onClick={() => {
+                  const next = isSelected
+                    ? data.federalCircuits.filter(v => v !== circuit.value)
+                    : [...data.federalCircuits, circuit.value];
+                  updateData('federalCircuits', next);
+                }}
+                style={{ opacity: isDefault && !isSelected ? 0.85 : 1 }}
+              >
+                <div className="ob-checkbox-box">{isSelected && <Check size={12} />}</div>
+                <span className="ob-checkbox-label">
+                  {circuit.label}
+                  {isDefault && <span style={{ fontSize: '0.625rem', marginLeft: '4px', color: 'var(--db-nvidia-green)', fontWeight: 600 }}>(auto)</span>}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="ob-form-group">
         <label className="ob-form-label">Practice Areas <span className="required">*</span> <span style={{ fontSize: '0.6875rem', fontWeight: 400, color: 'var(--db-text-muted)' }}>(select at least 1)</span></label>
@@ -762,234 +797,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, setData }) {
 }
 
 
-/* Step 2: Team Roster — Add employees & auto-assign agents */
-function StepTeamRoster({ data, updateData }) {
-  const addEmployee = () => {
-    updateData('employees', [...data.employees, {
-      name: '', email: '', role: 'associate', practiceAreas: [],
-      supervisingPartnerId: null, agentName: '',
-    }]);
-  };
 
-  const updateEmployee = (index, field, value) => {
-    const updated = [...data.employees];
-    updated[index] = { ...updated[index], [field]: value };
-    updateData('employees', updated);
-  };
-
-  const removeEmployee = (index) => {
-    if (data.employees.length <= 1) return;
-    updateData('employees', data.employees.filter((_, i) => i !== index));
-  };
-
-  const partners = data.employees.filter(e => ['partner', 'managing-partner', 'solo-partner'].includes(e.role));
-  const totalAgents = data.employees.length;
-
-  const ROLE_ICONS = {
-    partner: Crown, 'managing-partner': Crown, 'solo-partner': Crown, 
-    associate: Briefcase, 'of-counsel': Briefcase, 'contractor': Briefcase,
-    paralegal: FileText, receptionist: Phone, secretary: UserCheck,
-    billing: DollarSign, 'office-manager': ClipboardList,
-  };
-
-  return (
-    <>
-      <h2 className="onboarding-step-title">Who's on your team?</h2>
-      <p className="onboarding-step-desc">
-        Add every person at your firm. Each person gets their own <strong>personal AI Agent</strong> trained
-        for their role. Partners also get access to the <strong>Super Agent</strong> — your firm's AI Chief of Staff.
-      </p>
-
-      {/* Summary bar */}
-      <div style={{
-        display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap',
-      }}>
-        <div style={{
-          padding: '8px 14px', background: 'var(--bg-card-hover)',
-          border: '1px solid var(--db-border)', borderRadius: '8px',
-          fontSize: '0.8125rem', fontWeight: 600, color: 'var(--db-text-secondary)',
-          display: 'flex', alignItems: 'center', gap: '6px',
-        }}>
-          <Bot size={14} /> {totalAgents} Agent{totalAgents !== 1 ? 's' : ''} will be created
-        </div>
-        {partners.length > 0 && (
-          <div style={{
-            padding: '8px 14px', background: 'var(--bg-card-hover)',
-            border: '1px solid var(--db-border)', borderRadius: '8px',
-            fontSize: '0.8125rem', fontWeight: 600, color: 'var(--db-text-secondary)',
-            display: 'flex', alignItems: 'center', gap: '6px',
-          }}>
-            <Crown size={14} /> {partners.length} Partner{partners.length !== 1 ? 's' : ''} → Super Agent access
-          </div>
-        )}
-      </div>
-
-      {/* Employee list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
-        {data.employees.map((emp, i) => {
-          const RoleIcon = ROLE_ICONS[emp.role] || Briefcase;
-          const roleConfig = EMPLOYEE_ROLES.find(r => r.value === emp.role);
-          const subAgentCount = AGENT_SUB_AGENTS[roleConfig?.agentType || 'associate']?.length || 0;
-
-          return (
-            <div key={i} style={{
-              border: '1px solid var(--db-border)', borderRadius: 'var(--db-radius-lg)',
-              padding: '16px 18px', background: 'var(--db-surface)',
-              transition: 'border-color 0.15s',
-            }}>
-              {/* Row 1: Name + Email */}
-              <div className="ob-form-row" style={{ marginBottom: '10px' }}>
-                <div className="ob-form-group" style={{ marginBottom: 0 }}>
-                  <input
-                    className="ob-form-input"
-                    type="text"
-                    placeholder="Full name"
-                    value={emp.name}
-                    onChange={e => updateEmployee(i, 'name', e.target.value)}
-                  />
-                </div>
-                <div className="ob-form-group" style={{ marginBottom: 0 }}>
-                  <input
-                    className="ob-form-input"
-                    type="email"
-                    placeholder="Email address"
-                    value={emp.email}
-                    onChange={e => updateEmployee(i, 'email', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: Role + Partner selector + info + delete */}
-              <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <select
-                  className="ob-form-select"
-                  value={emp.role}
-                  onChange={e => updateEmployee(i, 'role', e.target.value)}
-                  style={{ flex: '0 0 180px' }}
-                >
-                  {EMPLOYEE_ROLES.map(r => r.value === EMPLOYEE_ROLES.find(x => x.division === 'business')?.value ? null : null)}
-                  <optgroup label="Practice of Law">
-                    {EMPLOYEE_ROLES.filter(r => r.division === 'practice').map(r => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Business of Law">
-                    {EMPLOYEE_ROLES.filter(r => r.division === 'business').map(r => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
-                  </optgroup>
-                </select>
-
-                {!['partner', 'managing-partner', 'solo-partner'].includes(emp.role) && partners.length > 0 && (
-                  <select
-                    className="ob-form-select"
-                    value={emp.supervisingPartnerId || ''}
-                    onChange={e => updateEmployee(i, 'supervisingPartnerId', e.target.value || null)}
-                    style={{ flex: '0 0 180px' }}
-                  >
-                    <option value="">Supervising Partner...</option>
-                    {partners.map((p, pi) => (
-                      <option key={pi} value={p.email}>{p.name || `Partner ${pi + 1}`}</option>
-                    ))}
-                  </select>
-                )}
-
-                <div style={{
-                  flex: 1, display: 'flex', alignItems: 'center', gap: '6px',
-                  fontSize: '0.6875rem', color: 'var(--db-text-muted)',
-                }}>
-                  <RoleIcon size={12} />
-                  <span>{roleConfig?.agentType} agent · {subAgentCount} sub-agents</span>
-                  {roleConfig?.superAgentAccess && (
-                    <span style={{
-                      padding: '2px 6px', background: 'var(--bg-card-hover)',
-                      borderRadius: '4px', border: '1px solid var(--db-border)', fontSize: '0.5625rem', fontWeight: 700,
-                      color: 'var(--db-text-secondary)', textTransform: 'uppercase',
-                    }}>Super Agent</span>
-                  )}
-                </div>
-
-                <button
-                  onClick={() => removeEmployee(i)}
-                  disabled={data.employees.length <= 1}
-                  style={{
-                    background: 'none', border: 'none', cursor: data.employees.length <= 1 ? 'default' : 'pointer',
-                    color: data.employees.length <= 1 ? 'var(--db-border)' : 'var(--db-text-muted)',
-                    padding: '4px', transition: 'color 0.15s',
-                  }}
-                  title="Remove team member"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-              
-              {/* Row 3: Agent Naming (Personalization feature) */}
-              <div className="ob-form-row" style={{ marginTop: '10px' }}>
-                <div className="ob-form-group" style={{ marginBottom: 0, flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Bot size={14} style={{ color: 'var(--db-text-muted)', flexShrink: 0 }} />
-                  
-                  <select
-                    className="ob-form-select"
-                    style={{ 
-                      flex: (!emp.agentName || AGENT_NAME_SUGGESTIONS.find(a => a.name === emp.agentName)) ? '1' : '0 0 180px', 
-                      marginBottom: 0 
-                    }}
-                    value={
-                      !emp.agentName ? '' :
-                      AGENT_NAME_SUGGESTIONS.find(a => a.name === emp.agentName) ? emp.agentName :
-                      'Custom'
-                    }
-                    onChange={e => {
-                      if (e.target.value === 'Custom') {
-                        updateEmployee(i, 'agentName', 'Custom Name');
-                      } else {
-                        updateEmployee(i, 'agentName', e.target.value);
-                      }
-                    }}
-                  >
-                    <option value="">Chief of Staff (Default)</option>
-                    <optgroup label="Law-Centric Names">
-                      {AGENT_NAME_SUGGESTIONS.map(s => (
-                        <option key={s.name} value={s.name}>{s.name} — {s.desc}</option>
-                      ))}
-                    </optgroup>
-                    <option value="Custom">Other (Type custom name)...</option>
-                  </select>
-
-                  {(emp.agentName && !AGENT_NAME_SUGGESTIONS.find(a => a.name === emp.agentName)) && (
-                    <input
-                      className="ob-form-input"
-                      style={{ flex: 1, marginBottom: 0 }}
-                      type="text"
-                      placeholder="e.g. JARVIS"
-                      value={emp.agentName === 'Custom Name' ? '' : emp.agentName}
-                      onChange={e => updateEmployee(i, 'agentName', e.target.value)}
-                      autoFocus
-                    />
-                  )}
-                </div>
-              </div>
-
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Add button */}
-      <button
-        className="db-btn db-btn-secondary"
-        onClick={addEmployee}
-        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-      >
-        <Plus size={14} /> Add Team Member
-      </button>
-
-      <p className="ob-form-hint" style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        <Lightbulb size={14} /> You can add or remove team members later from Firm Settings <ChevronRight size={12} /> Team Management
-      </p>
-    </>
-  );
-}
 
 /* Step 3: Knowledge Base */
 function StepKnowledgeBase({ data, updateData }) {
@@ -1139,12 +947,8 @@ function StepAgentSelection({ data, toggleAgent }) {
       <div style={{ marginBottom: '16px', fontSize: '0.8125rem', color: 'var(--db-text-secondary)' }}>
         <strong>{data.selectedAgents.length}</strong> agents selected
         {data.selectedAgents.length > 0 && (
-          <span style={{ marginLeft: '12px', color: data.firmSize === '10+' ? '#f59e0b' : 'var(--db-text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-            {data.firmSize === '10+' ? (
-              <><AlertCircle size={14} /> Token usage billed at cost for 10+ firms</>
-            ) : (
-              <><InfinityIcon size={14} /> Unlimited tokens included</>
-            )}
+          <span style={{ marginLeft: '12px', color: 'var(--db-text-muted)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+            <InfinityIcon size={14} /> Unlimited tokens included for solo-to-20 small-firm workspaces
           </span>
         )}
       </div>
@@ -1242,7 +1046,7 @@ function StepReview({ data, launching, clientSecret, firmId, onPaymentSuccess, s
           <div>
             <h2 className="onboarding-step-title" style={{ marginBottom: '8px' }}>Review your configuration</h2>
             <p className="onboarding-step-desc" style={{ marginBottom: '0' }}>
-              Everything looks good. You are about to launch your secure, solo AI workspace.
+              Everything looks good. You are about to launch your secure Agentic OS workspace, solo-first and ready for small-firm growth.
             </p>
           </div>
 
@@ -1254,7 +1058,7 @@ function StepReview({ data, launching, clientSecret, firmId, onPaymentSuccess, s
             </div>
             <div className="ob-review-row">
               <span className="ob-review-label">Role</span>
-              <span className="ob-review-value" style={{ color: '#2563eb' }}>Sole Managing Partner</span>
+              <span className="ob-review-value" style={{ color: '#2563eb' }}>Solo Practitioner</span>
             </div>
             <div className="ob-review-row">
               <span className="ob-review-label">State Bar</span>
@@ -1266,7 +1070,7 @@ function StepReview({ data, launching, clientSecret, firmId, onPaymentSuccess, s
             <div className="ob-review-section-title">AI Workforce</div>
             <div className="ob-review-row">
               <span className="ob-review-label">Personal Agent</span>
-              <span className="ob-review-value">Managing Partner Bundle (Active)</span>
+              <span className="ob-review-value">Agentic OS Partner Agent (Active)</span>
             </div>
             <div className="ob-review-row">
               <span className="ob-review-label">Knowledge Base</span>
@@ -1379,7 +1183,7 @@ function AIConcierge({ step, data }) {
     `Hey ${firstName}! I'm Nemo — yes, the clownfish. I know, I know… a clownfish running an Agentic OS for law firms. Trust me, I've heard every "Finding Nemo" joke in the book. Speaking of jokes — being a clownfish, I've got hundreds. But let's get your firm set up first, and I'll tell you my best law joke when we're done. Deal? Start with your name below, then search for your firm.`,
     `${data.practiceAreas?.length > 0 ? `${data.practiceAreas.slice(0, 2).join(' and ')} — excellent choices.` : 'Pick your practice areas so I can calibrate your knowledge base.'} Now upload a retainer template or motion brief — I'll learn your firm's drafting style faster than any summer associate. And unlike that associate, I don't need coffee breaks or a parking spot.`,
     `Security time — and yes, I see the irony. My species literally hides inside anemones for protection. But I've enabled AES-256 encryption, PII auto-redaction, and full ABA-compliant audit trails. Your client data is safer with me than a clownfish in the Great Barrier Reef. (That's actually very safe — we have a symbiotic relationship with anemones. Google it.)`,
-    `${firstName}, we're at the finish line! Your firm qualifies for the $297/mo Founder Price-Lock. Once you launch, I'll provision your Managing Partner agent and start indexing. As promised — here's your law joke. You've earned it. 🐠`
+    `${firstName}, we're at the finish line! Your firm qualifies for the $297/mo Founder Price-Lock. Once you launch, I'll provision your AI agent and start indexing. As promised — here's your law joke. You've earned it. 🐠`
   ], [data.practiceAreas, firstName]);
 
   const currentJoke = DEFAULT_LAW_JOKE;

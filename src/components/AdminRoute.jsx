@@ -2,21 +2,31 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 
 /**
- * Admin email whitelist.
- * Only these emails can access /admin routes.
- * Add your email(s) here.
+ * Admin access check.
+ *
+ * Two layers:
+ *  1. user.isAdmin — set via Firestore /users/{uid}.isAdmin: true
+ *     Add new admins by writing that field in Firestore; no redeploy needed.
+ *  2. Hardcoded fallback for the initial platform owner so the admin panel
+ *     is accessible before any Firestore admin documents exist.
+ *
+ * To add a new admin without redeployment:
+ *   firebase firestore:update users/<uid> --data '{"isAdmin": true}'
  */
-const ADMIN_EMAILS = [
+const BOOTSTRAP_ADMIN_EMAILS = [
   'peterkilaba@gmail.com',
   'peterkilaba@nemoc-law.ai',
   'peterkilaba@nemo-law.ai',
-  'partners@davislegal.com',
-  // Add more admin emails as needed
+  'peterkilaba.developer@gmail.com',
 ];
 
 export function isAdminUser(user) {
   if (!user?.email) return false;
-  return user.emailVerified === true && ADMIN_EMAILS.includes(user.email.toLowerCase());
+  if (!user.emailVerified) return false;
+  // Firestore-driven flag (no redeploy needed)
+  if (user.isAdmin === true) return true;
+  // Bootstrap fallback for initial setup
+  return BOOTSTRAP_ADMIN_EMAILS.includes(user.email.toLowerCase());
 }
 
 export default function AdminRoute({ children }) {
@@ -43,9 +53,7 @@ export default function AdminRoute({ children }) {
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
+  if (!user) return <Navigate to="/login" replace />;
 
   if (!isAdminUser(user)) {
     return (
@@ -62,7 +70,8 @@ export default function AdminRoute({ children }) {
       }}>
         <div style={{
           width: '64px', height: '64px', borderRadius: '16px',
-          background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+          background: 'rgba(239,68,68,0.12)',
+          border: '1px solid rgba(239,68,68,0.25)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: '28px', marginBottom: '20px',
         }}>🔒</div>
@@ -73,9 +82,10 @@ export default function AdminRoute({ children }) {
           fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)',
           textAlign: 'center', maxWidth: '400px', lineHeight: 1.6, marginBottom: '24px',
         }}>
-          This area is restricted to NemoC platform administrators.
-          You're signed in as <strong style={{ color: '#76b900' }}>{user.email}</strong>,
-          which is not a verified authorized admin account.
+          This area is restricted to NemoC LAW AI platform administrators.
+          You are signed in as{' '}
+          <strong style={{ color: '#76b900' }}>{user.email}</strong>,
+          which does not have admin access.
         </p>
         <div style={{ display: 'flex', gap: '10px' }}>
           <a href="/dashboard" style={{

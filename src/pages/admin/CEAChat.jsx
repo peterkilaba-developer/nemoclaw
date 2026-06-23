@@ -57,7 +57,7 @@ async function gatherLiveContext() {
       timestamp: new Date().toISOString(),
       prospects: { total: prospects.length, ...statusCounts, withEmail, withPhone, withWebsite },
       enrichment: enrichStatus,
-      pricing: { base: '$297/mo', seat: '$149/mo', autonomous: '$2,497/mo', trial: '7 days' },
+      pricing: { base: '$297/mo', seat: '$149/mo', autonomous: '$2,497/mo', trial: '30 days' },
       tools: {
         hunterIO: enrichStatus.hunter.configured ? 'ACTIVE' : 'OFF',
         apolloIO: enrichStatus.apollo.configured ? 'ACTIVE' : 'OFF',
@@ -207,7 +207,7 @@ export default function CEAChat() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 0 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -266,7 +266,7 @@ export default function CEAChat() {
         {/* Chat panel */}
         <div style={{
           background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          borderRadius: '12px', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden',
         }}>
           {/* Chat header */}
           <div style={{
@@ -294,7 +294,7 @@ export default function CEAChat() {
           </div>
 
           {/* Messages area */}
-          <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, minHeight: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
             {/* Welcome message */}
             {messages.length === 0 && (
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -453,7 +453,7 @@ export default function CEAChat() {
         </div>
 
         {/* Command Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0, overflowY: 'auto' }}>
           {/* Quick Commands */}
           <div style={{
             background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',

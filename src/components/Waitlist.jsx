@@ -63,13 +63,13 @@ export default function Waitlist() {
           {/* Glow removed for restrained design */}
           
           <div className="waitlist-header">
-            <span className="section-label text-nvidia">Get Started</span>
+            <span className="section-label text-nvidia">Solo Attorneys — Get Started</span>
             <h2 className="section-title">
-              Claim Your <span className="text-nvidia">Agentic</span> HITL OS
+              Start Your <span className="text-nvidia">30-Day Free Trial</span>
             </h2>
             <p className="section-subtitle">
               {location.isUS || location.loading
-                ? `Sign up and lock in founder pricing before the first 100 firms in ${location.state} are filled.`
+                ? `Lock in founder pricing before the first 100 firms in ${location.state} are filled. No charge until day 31.`
                 : `We are currently rolling out state-by-state in the US before expanding to ${location.country}.`}
               <br />
               <br />
@@ -165,7 +165,7 @@ export default function Waitlist() {
             
             <p className="waitlist-note" style={{ marginTop: '20px' }}>
               <Lock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-              Your data is secured by NVIDIA NemoClaw.
+              30-day free trial · Card required · No charge until day 31 · Secured by NVIDIA NemoClaw
             </p>
           </div>
         </div>

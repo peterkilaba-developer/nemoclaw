@@ -148,7 +148,7 @@ export const LINKEDIN_POST_TEMPLATES = [
   {
     id: 'product-launch',
     label: '🚀 Product Update',
-    template: 'We just shipped something big.\n\nNemoClaw AI now pairs every human team member in your firm with a dedicated HITL agent \u2014 legal research, client intake, billing, compliance, and more.\n\nEvery agent reports to a human. Attorneys approve, escalate, override.\n\nOne OS. One subscription. Every team member upgraded.\n\nThis isn\u2019t AI replacing lawyers. It\u2019s AI making every lawyer 10x more effective.\n\n#HITL #BornAgentic #LegalTech #UpgradedNotReplaced',
+    template: 'We just shipped something big.\n\nNemoC LAW AI now pairs every human team member in your firm with a dedicated HITL agent \u2014 legal research, client intake, billing, compliance, and more.\n\nEvery agent reports to a human. Attorneys approve, escalate, override.\n\nOne OS. One subscription. Every team member upgraded.\n\nThis isn\u2019t AI replacing lawyers. It\u2019s AI making every lawyer 10x more effective.\n\n#HITL #BornAgentic #LegalTech #UpgradedNotReplaced',
   },
   {
     id: 'thought-leadership',
@@ -163,7 +163,7 @@ export const LINKEDIN_POST_TEMPLATES = [
   {
     id: 'hiring',
     label: '\uD83E\uDD1D We\'re Hiring',
-    template: 'We\u2019re building the operating system for the future of law.\n\nNemoClaw AI is hiring engineers who believe AI should upgrade professionals, not replace them.\n\nOur model: every human team member gets a dedicated HITL agent. The human stays in command. The agent handles the grunt work.\n\nIf you want to build AI that makes people better at their jobs (not obsolete), we should talk.\n\nDM me or check nemoc-law.ai/careers\n\n#Hiring #AIJobs #HITL #LegalTech',
+    template: 'We\u2019re building the operating system for the future of law.\n\nNemoC LAW AI is hiring engineers who believe AI should upgrade professionals, not replace them.\n\nOur model: every human team member gets a dedicated HITL agent. The human stays in command. The agent handles the grunt work.\n\nIf you want to build AI that makes people better at their jobs (not obsolete), we should talk.\n\nDM me or check nemoc-law.ai/careers\n\n#Hiring #AIJobs #HITL #LegalTech',
   },
   {
     id: 'founder-story',

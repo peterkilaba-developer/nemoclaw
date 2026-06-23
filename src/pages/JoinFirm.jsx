@@ -48,7 +48,7 @@ export default function JoinFirm() {
       });
       setSuccess(true);
       setTimeout(() => {
-        navigate('/pmi');
+        navigate('/dashboard');
       }, 1500);
     } catch (err) {
       console.error('Accept invite error:', err);

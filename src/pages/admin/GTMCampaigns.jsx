@@ -502,7 +502,7 @@ export default function GTMCampaigns() {
                 </div>
               </div>
               <div style={{ fontSize: '0.6875rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.6, marginBottom: '12px' }}>
-                Autonomous AI agent that calls prospects, introduces NemoC Law AI,
+                Autonomous AI agent that calls prospects, introduces NemoC LAW AI,
                 pitches the Agentic OS in under 90 seconds, and asks for signup interest.
                 Calls are recorded and transcribed.
               </div>

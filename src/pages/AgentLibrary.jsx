@@ -79,7 +79,7 @@ export default function AgentLibrary() {
               fontSize: '0.75rem',
               fontWeight: 600,
               textTransform: 'capitalize',
-              color: filter === cat ? 'var(--db-surface)' : 'var(--db-text-secondary)',
+              color: filter === cat ? 'var(--text-on-brand)' : 'var(--db-text-secondary)',
               background: filter === cat ? 'var(--db-nvidia-green)' : 'var(--db-bg)',
               border: filter === cat ? '1px solid var(--db-nvidia-green)' : '1px solid var(--db-border)',
               borderRadius: '99px',

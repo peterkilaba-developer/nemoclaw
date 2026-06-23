@@ -634,7 +634,7 @@ export default function GTMAgent() {
               Email Template
             </div>
             <div style={{ fontSize: '0.875rem', fontWeight: 700, color: '#fff', marginBottom: '4px' }}>
-              🚀 NemoC Law AI is Live — Founder Access Ready
+              🚀 NemoC LAW AI is Live — Founder Access Ready
             </div>
             <div style={{ fontSize: '0.6875rem', color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>
               Personalized HTML email with founder pricing ($297/mo locked), unique signup link per lead, pre-configured agent tasks based on interests.

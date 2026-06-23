@@ -113,7 +113,7 @@ export default function CorporateStrategy() {
             basePlatform: '$297/mo (founder) → $997/mo (standard)',
             outputSeat: '$149/mo per human role (founder) → $497/mo (standard)',
             autonomousRole: '$2,497/mo per firm role (founder) → $4,997/mo (standard)',
-            trialDuration: '7-day founder pricing window',
+            trialDuration: '30-day free trial (card required, no charge until day 31)',
             payingFirms: 0,
           },
           toolStatus: {

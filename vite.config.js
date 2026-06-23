@@ -9,6 +9,22 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
+        // Keep Firebase Hosting function rewrites available during local browser testing.
+        '/api/runConflictCheck': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
+          changeOrigin: true,
+          secure: true,
+        },
+        '/api/getSignatureRequest': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
+          changeOrigin: true,
+          secure: true,
+        },
+        '/api/signSignatureRequest': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
+          changeOrigin: true,
+          secure: true,
+        },
         // Proxy inference through the Firebase Function gateway so provider keys stay server-side.
         '/api/nvidia': {
           target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',

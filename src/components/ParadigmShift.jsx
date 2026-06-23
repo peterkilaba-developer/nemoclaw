@@ -12,7 +12,7 @@ export default function ParadigmShift() {
             <div className="paradigm-card-header">
               <span className="section-label">Ease of Use</span>
               <h2 className="paradigm-title">Zero Learning Curve.</h2>
-              <p className="paradigm-subtitle">Stop forcing your partners to learn new software. NemoC Law AI isn't a tool you operate — it's a digital teammate you delegate to in plain English.</p>
+              <p className="paradigm-subtitle">Stop juggling five different apps solo. NemoC LAW AI isn't a tool you operate — it's an AI workforce you delegate to in plain English.</p>
             </div>
             <div className="paradigm-features">
               <div className="p-feature">

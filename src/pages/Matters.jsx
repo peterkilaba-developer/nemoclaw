@@ -18,7 +18,9 @@ export default function Matters() {
   const firmId = firm?.id || user?.firmId;
 
   // Pending agentic intake proposals (populated by Intake Agent)
-  const [pendingIntakes, _setPendingIntakes] = useState([]);
+  const [pendingIntakes, setPendingIntakes] = useState([]);
+  const [matterSearch, setMatterSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   const [provisionStep, setProvisionStep] = useState(1);
   const [newMatter, setNewMatter] = useState({
@@ -85,6 +87,18 @@ export default function Matters() {
       console.error('Error creating matter:', err);
     }
   }
+
+  const visibleMatters = matters.filter(matter => {
+    const queryText = matterSearch.trim().toLowerCase();
+    const matchesSearch = !queryText || [matter.title, matter.client, matter.type]
+      .some(value => String(value || '').toLowerCase().includes(queryText));
+    const matchesStatus = statusFilter === 'all' || String(matter.status || '').toLowerCase() === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  const cycleStatusFilter = () => {
+    setStatusFilter(current => current === 'all' ? 'active' : current === 'active' ? 'closed' : 'all');
+  };
 
   return (
     <div className="db-viewport-workspace" style={{ overflow: 'auto' }}>
@@ -162,7 +176,7 @@ export default function Matters() {
                       >
                         Review & Provision
                       </button>
-                      <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '6px 12px', fontSize: '0.7rem' }}>Dismiss</button>
+                      <button type="button" className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '6px 12px', fontSize: '0.7rem' }} onClick={() => setPendingIntakes(prev => prev.filter(item => item.id !== pi.id))}>Dismiss</button>
                     </div>
                   </div>
                 ))}
@@ -184,18 +198,20 @@ export default function Matters() {
             </div>
             
             <div className="db-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--db-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fafafa' }}>
+              <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--db-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--db-surface-elevated)' }}>
                 <div style={{ position: 'relative', width: '300px' }}>
                   <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--db-text-muted)' }} />
                   <input 
                     type="text" 
                     placeholder="Search workspaces..." 
-                    style={{ width: '100%', background: '#fff', border: '1px solid var(--db-border)', borderRadius: '6px', padding: '6px 12px 6px 36px', fontSize: '0.8rem', color: 'var(--db-text-primary)' }}
+                    value={matterSearch}
+                    onChange={event => setMatterSearch(event.target.value)}
+                    style={{ width: '100%', background: 'var(--db-bg)', border: '1px solid var(--db-border)', borderRadius: '6px', padding: '6px 12px 6px 36px', fontSize: '0.8rem', color: 'var(--db-text-primary)' }}
                   />
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '6px 12px' }}><Filter size={14} /></button>
-                  <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '6px 12px' }}><Settings size={14} /></button>
+                  <button type="button" aria-label={`Matter status filter: ${statusFilter}`} title={`Showing ${statusFilter} matters`} className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '6px 12px', color: statusFilter === 'all' ? undefined : 'var(--db-nvidia-green)' }} onClick={cycleStatusFilter}><Filter size={14} /></button>
+                  <button type="button" aria-label="Open matter settings" className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '6px 12px' }} onClick={() => navigate('/dashboard/settings')}><Settings size={14} /></button>
                 </div>
               </div>
               
@@ -208,13 +224,13 @@ export default function Matters() {
                   </tr>
                 </thead>
                 <tbody>
-                  {matters.length === 0 ? (
+                  {visibleMatters.length === 0 ? (
                     <tr>
                       <td colSpan="5" style={{ padding: '60px 20px', textAlign: 'center' }}>
                         <div style={{ marginBottom: '16px', opacity: 0.1 }}>
                           <Briefcase size={48} style={{ margin: '0 auto' }} />
                         </div>
-                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--db-text-primary)', marginBottom: '4px' }}>No Matters Found</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--db-text-primary)', marginBottom: '4px' }}>{matters.length ? 'No Matching Matters' : 'No Matters Found'}</div>
                         <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', maxWidth: '300px', margin: '0 auto' }}>
                           {firm?.isConfigured 
                             ? "Once the Intake Agent identifies new matters, they will appear here or as pending proposals above."
@@ -222,7 +238,7 @@ export default function Matters() {
                         </p>
                       </td>
                     </tr>
-                  ) : matters.map(m => (
+                  ) : visibleMatters.map(m => (
                     <tr key={m.id} className="db-table-row" onClick={() => navigate(`/dashboard/matters/${m.id}`)}>
                       <td style={{ padding: '14px 20px' }}>
                         <div style={{ fontWeight: 750, color: 'var(--db-text-primary)', fontSize: '0.85rem' }}>{m.title}</div>
@@ -258,7 +274,7 @@ export default function Matters() {
       </div>
 
       {/* 30% INTELLIGENCE SIDEBAR */}
-      <div className="db-context-sidebar" style={{ background: '#f8f9fa' }}>
+      <div className="db-context-sidebar" style={{ background: 'var(--db-bg)' }}>
         <div style={{ padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
             <Shield size={16} color="var(--db-text-primary)" />
@@ -266,7 +282,7 @@ export default function Matters() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div className="db-card" style={{ padding: '20px', background: '#fff' }}>
+            <div className="db-card" style={{ padding: '20px', background: 'var(--db-surface)' }}>
               <div style={{ color: 'var(--db-text-muted)', fontSize: '0.65rem', marginBottom: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Active Pipelines</div>
               <div style={{ fontSize: '1.75rem', fontWeight: 800 }}>{matters.length}</div>
               <div style={{ height: '4px', width: '100%', background: 'var(--db-bg)', borderRadius: '2px', marginTop: '16px' }}>
@@ -274,7 +290,7 @@ export default function Matters() {
               </div>
             </div>
 
-            <div className="db-card" style={{ padding: '20px', background: '#fff' }}>
+            <div className="db-card" style={{ padding: '20px', background: 'var(--db-surface)' }}>
               <div style={{ color: 'var(--db-text-muted)', fontSize: '0.65rem', marginBottom: '12px', fontWeight: 700, textTransform: 'uppercase' }}>Expertise Distribution</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {matters.length === 0 ? (

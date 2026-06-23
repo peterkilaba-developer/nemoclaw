@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { getFirm, getAgentConfig, getSecurityConfig, getKnowledgeBase, getWebsiteRedesignConfig } from '../lib/firestore';
-import { getEmployees, getAgents, getSuperAgent, addEmployee, updateEmployee } from '../lib/agentHierarchy';
+import { addEmployee, getAgents, getEmployees, getSuperAgent, removeEmployee, updateEmployee } from '../lib/agentHierarchy';
 import { collection, query, where, limit, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
@@ -20,26 +20,24 @@ export function FirmProvider({ children }) {
   const [security, setSecurity] = useState({ policies: {}, approvedServices: {} });
   const [knowledgeBase, setKnowledgeBase] = useState({ files: [] });
   const [websiteRedesign, setWebsiteRedesign] = useState(null);
-  // NEW — Agent hierarchy state
-  const [employees, setEmployees] = useState([]);
   const [personalAgents, setPersonalAgents] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [superAgent, setSuperAgent] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const healingRef = useRef(false);
 
   useEffect(() => {
+    if (user?.isPartial) return;
+
     if (!user?.firmId) {
       if (healingRef.current) return;
-      // 2a. Self-healing: Look for a firm where user is the owner if link is missing
       const findMyFirm = async () => {
         try {
           healingRef.current = true;
           const firmsRef = collection(db, 'firms');
           const ownerQ = query(firmsRef, where('ownerId', '==', user.uid), limit(1));
-          const memberQ = query(firmsRef, where('members', 'array-contains', user.uid), limit(1));
-          const [ownerSnap, memberSnap] = await Promise.all([getDocs(ownerQ), getDocs(memberQ)]);
-          const snap = !ownerSnap.empty ? ownerSnap : memberSnap;
+          const snap = await getDocs(ownerQ);
           
           if (!snap.empty) {
             const foundFirmId = snap.docs[0].id;
@@ -69,14 +67,14 @@ export function FirmProvider({ children }) {
 
     async function loadFirmData() {
       try {
-        const [firmData, agentData, secData, kbData, webData, empData, agData, saData] = await Promise.all([
+        const [firmData, agentData, secData, kbData, webData, agData, empData, saData] = await Promise.all([
           getFirm(user.firmId),
           getAgentConfig(user.firmId),
           getSecurityConfig(user.firmId),
           getKnowledgeBase(user.firmId),
           getWebsiteRedesignConfig(user.firmId).catch(() => null),
-          getEmployees(user.firmId).catch(() => []),
           getAgents(user.firmId).catch(() => []),
+          getEmployees(user.firmId).catch(() => []),
           getSuperAgent(user.firmId).catch(() => null),
         ]);
 
@@ -86,8 +84,8 @@ export function FirmProvider({ children }) {
           setSecurity(secData);
           setKnowledgeBase(kbData);
           setWebsiteRedesign(webData);
-          setEmployees(empData);
           setPersonalAgents(agData);
+          setEmployees(empData);
           setSuperAgent(saData);
         }
       } catch (err) {
@@ -99,19 +97,19 @@ export function FirmProvider({ children }) {
 
     loadFirmData();
     return () => { cancelled = true; };
-  }, [user?.firmId, user?.uid, user?.displayName]);
+  }, [user?.firmId, user?.uid, user?.displayName, user?.isPartial]);
 
   const refreshFirm = useCallback(async () => {
     if (!user?.firmId) return;
     setLoading(true);
-    const [firmData, agentData, secData, kbData, webData, empData, agData, saData] = await Promise.all([
+    const [firmData, agentData, secData, kbData, webData, agData, empData, saData] = await Promise.all([
       getFirm(user.firmId),
       getAgentConfig(user.firmId),
       getSecurityConfig(user.firmId),
       getKnowledgeBase(user.firmId),
       getWebsiteRedesignConfig(user.firmId).catch(() => null),
-      getEmployees(user.firmId).catch(() => []),
       getAgents(user.firmId).catch(() => []),
+      getEmployees(user.firmId).catch(() => []),
       getSuperAgent(user.firmId).catch(() => null),
     ]);
     setFirm(firmData);
@@ -119,35 +117,35 @@ export function FirmProvider({ children }) {
     setSecurity(secData);
     setKnowledgeBase(kbData);
     setWebsiteRedesign(webData);
-    setEmployees(empData);
     setPersonalAgents(agData);
+    setEmployees(empData);
     setSuperAgent(saData);
     setLoading(false);
   }, [user?.firmId]);
 
-  const addTeamMember = useCallback(async (employeeData) => {
-    const targetFirmId = user?.firmId || firm?.id;
-    if (!targetFirmId) {
-      console.warn('Cannot add team member: no firmId available');
-      return;
-    }
-    await addEmployee(targetFirmId, employeeData);
+  const targetFirmId = user?.firmId || firm?.id;
+  const addTeamMember = async data => {
+    if (!targetFirmId) throw new Error('No firm is available.');
+    await addEmployee(targetFirmId, data);
     await refreshFirm();
-  }, [firm?.id, refreshFirm, user?.firmId]);
-
-  const updateTeamMember = useCallback(async (employeeId, employeeData) => {
-    const targetFirmId = user?.firmId || firm?.id;
-    if (!targetFirmId) return;
-    await updateEmployee(targetFirmId, employeeId, employeeData);
+  };
+  const updateTeamMember = async (employeeId, data) => {
+    if (!targetFirmId) throw new Error('No firm is available.');
+    await updateEmployee(targetFirmId, employeeId, data);
     await refreshFirm();
-  }, [firm?.id, refreshFirm, user?.firmId]);
+  };
+  const removeTeamMember = async employeeId => {
+    if (!targetFirmId) throw new Error('No firm is available.');
+    await removeEmployee(targetFirmId, employeeId);
+    await refreshFirm();
+  };
 
   return (
     <FirmContext.Provider value={{
       firm, agents, security, knowledgeBase, websiteRedesign,
-      employees, personalAgents, superAgent,
+      personalAgents, employees, superAgent,
       firmId: user?.firmId || firm?.id || null,
-      loading, refreshFirm, addTeamMember, updateTeamMember,
+      loading, refreshFirm, addTeamMember, updateTeamMember, removeTeamMember,
     }}>
       {children}
     </FirmContext.Provider>

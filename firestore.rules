@@ -237,6 +237,12 @@ service cloud.firestore {
         allow write: if isFirmOwner(firmId);
       }
 
+      // INTAKE LEADS
+      match /leads/{leadId} {
+        allow read, create, update: if isFirmOwner(firmId) || (isFirmMember(firmId) && isIntakeDivision());
+        allow delete: if isFirmOwner(firmId);
+      }
+
       // CLIENT PORTAL CHANNELS
       match /clientChannels/{channelId} {
         allow read, write: if isFirmOwner(firmId) || (isFirmMember(firmId) && isClientCommsUser());

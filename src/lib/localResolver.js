@@ -19,7 +19,7 @@ export function resolveFromLocalData(userMessage) {
   // What problems do you solve
   if (msg.includes('problem') || msg.includes('solve') || msg.includes('pain point') || msg.includes('challenges')) {
     return appendFollowUps(
-`NemoC Law AI addresses the core operational challenges that consume a managing partner's time and margin.
+`NemoC LAW AI addresses the core operational challenges that consume a managing partner's time and margin.
 
 Time Leakage \u2014 The Billing Automation sub-agent tracks billable activity in real time. It detects unbilled work and auto-generates time entries, eliminating the 15-30% revenue loss most firms experience from missed billing.
 
@@ -44,17 +44,17 @@ Every sub-agent operates under your supervision inside the NVIDIA NemoClaw secur
   // ChatGPT / Copilot differentiation
   if (msg.includes('chatgpt') || msg.includes('copilot') || msg.includes('different') || msg.includes('why not just use') || msg.includes('compared to')) {
     return appendFollowUps(
-`The difference between NemoC Law AI and general-purpose tools like ChatGPT is the difference between a legal associate and a search engine.
+`The difference between NemoC LAW AI and general-purpose tools like ChatGPT is the difference between a legal associate and a search engine.
 
-Ethical Walls \u2014 ChatGPT has no concept of attorney-client privilege or matter isolation. Every query becomes training data. NemoC Law AI runs in an isolated NVIDIA NemoClaw sandbox. Your data never leaves your container and is never used for model training.
+Ethical Walls \u2014 ChatGPT has no concept of attorney-client privilege or matter isolation. Every query becomes training data. NemoC LAW AI runs in an isolated NVIDIA NemoClaw sandbox. Your data never leaves your container and is never used for model training.
 
-Role-Based Access \u2014 ChatGPT gives everyone the same access. NemoC Law AI enforces ethical walls by role. Your Associate Agent sees assigned matters only. Your Paralegal Agent cannot generate legal advice. Your Receptionist Agent has zero access to case files.
+Role-Based Access \u2014 ChatGPT gives everyone the same access. NemoC LAW AI enforces ethical walls by role. Your Associate Agent sees assigned matters only. Your Paralegal Agent cannot generate legal advice. Your Receptionist Agent has zero access to case files.
 
-Sub-Agent Architecture \u2014 ChatGPT is a single conversation. NemoC Law AI deploys 7 specialist sub-agents under your Managing Partner Agent, each trained for a specific function: Legal Research, Contract Review, Drafting, Case Analytics, Business Intelligence, Knowledge Search, and Communication Drafting.
+Sub-Agent Architecture \u2014 ChatGPT is a single conversation. NemoC LAW AI deploys 19 specialist capabilities inside Agentic OS, then maps those capabilities through role-aware personal agents for each supervised human.
 
 Audit Trail \u2014 Every action taken by every sub-agent is logged immutably. You can reproduce exactly what the AI did, when, and why. This matters when a malpractice insurer asks.
 
-Firm Knowledge \u2014 NemoC Law AI trains on your uploaded templates, standard terms, and internal documents. ChatGPT knows nothing about your firm.`,
+Firm Knowledge \u2014 NemoC LAW AI trains on your uploaded templates, standard terms, and internal documents. ChatGPT knows nothing about your firm.`,
       [
         'How does the audit trail work in practice?',
         'Is my data really never used for training?',
@@ -94,7 +94,7 @@ Audit Trail \u2014 Every agent action, sub-agent dispatch, and document access i
     return appendFollowUps(
 `Here is the financial case for a small firm.
 
-Agentic OS costs $297/mo for the managing partner seat. Additional seats are $149/mo each.
+Agentic OS is $297/mo for the first 100 firms in a state and includes the onboarding partner's personal agent. As the firm grows, each additional human role + agent mapping is $149/mo during the founder window.
 
 Time Recovery \u2014 Most attorneys lose 2-4 hours per day to administrative work, research overhead, and document formatting. The Legal Research, Drafting, and Contract Review sub-agents recover a significant portion of that time. At $350/hr, recovering even 1 hour per day adds $7,000/mo in billing capacity.
 
@@ -102,9 +102,9 @@ Billing Capture \u2014 The Billing Automation sub-agent detects unbilled work in
 
 Intake Conversion \u2014 The Client Intake sub-agent qualifies leads and runs conflict checks 24/7. Firms that respond within 5 minutes are 21 times more likely to convert. The agent responds instantly.
 
-Net ROI \u2014 For a solo practitioner at $297/mo, recovering 1 additional billable hour per week already generates a 4:1 return. For a 5-attorney firm, the math compounds significantly.`,
+Net ROI \u2014 For a solo practitioner at $297/mo, recovering 1 additional billable hour per week already generates a 4:1 return. For a 5-attorney or 20-person small firm, the math compounds across attorneys, paralegals, intake, billing, and operations.`,
       [
-        'Does the 7-day trial give me full access?',
+        'Does the 30-day trial give me full access?',
         'What if I am a solo practitioner?',
         'How do existing firms transition their documents?',
         'I am ready to set up my firm'
@@ -115,15 +115,15 @@ Net ROI \u2014 For a solo practitioner at $297/mo, recovering 1 additional billa
   // Solo practitioner
   if (msg.includes('solo') || msg.includes('just me') || msg.includes('one attorney') || msg.includes('small firm') || msg.includes('by myself')) {
     return appendFollowUps(
-`NemoC Law AI was designed with solo practitioners as a primary use case.
+`NemoC LAW AI was designed with solo practitioners as the primary starting point, then scales as those firms grow.
 
-At $297/mo, you receive the full Managing Partner Agent with 7 specialist sub-agents. There is no reduced version. You get the same Legal Research, Contract Review, Drafting, Case Analytics, Business Intelligence, Knowledge Search, and Communication Drafter capabilities that a larger firm would deploy.
+At $297/mo, Agentic OS gives the onboarding partner a personal agent and access to 19 specialist capabilities covering research, drafting, intake, billing, scheduling, contract review, compliance, eDiscovery, court filing, and more.
 
 The difference for a solo practitioner is that these sub-agents effectively function as your staff. Instead of hiring a paralegal for research, a legal secretary for document formatting, or a billing clerk for time tracking, your sub-agents handle those functions.
 
 The Client Intake sub-agent screens and qualifies leads through your website around the clock. The Billing Automation sub-agent tracks your time and generates invoices. The Compliance Monitor sub-agent watches deadlines you might miss when working alone.
 
-Additional seats are only needed when you add human team members. As a solo practitioner, the single $297/mo seat covers your complete agent workforce.`,
+When the firm grows, partners can add human role + agent mappings for attorneys, paralegals, legal assistants, case managers, intake, billing, docketing, records, marketing, and operations roles up to 20 total humans.`,
       [
         'Can the agents actually do intake from my website?',
         'What practice areas do you support?',
@@ -136,9 +136,9 @@ Additional seats are only needed when you add human team members. As a solo prac
   // Trial / free trial
   if (msg.includes('trial') || msg.includes('try') || msg.includes('test') || msg.includes('before committing') || msg.includes('before paying')) {
     return appendFollowUps(
-`Every account includes a 7-day trial with full Agentic OS access.
+`Every account includes a 30-day free trial with full Agentic OS access.
 
-During the trial, you receive the complete Managing Partner Agent with all 7 specialist sub-agents active. There are no feature restrictions during the trial period.
+During the trial, you receive Agentic OS with all 19 specialist capabilities active. There are no feature restrictions during the trial period.
 
 You can upload your firm's documents and templates, create matters, test Legal Research queries, run Contract Review on real agreements, and use the Drafting sub-agent to generate motions or briefs.
 
@@ -159,23 +159,22 @@ To start the trial with full access, [SETUP_LINK].`,
   // Pricing questions
   if (msg.includes('pricing') || msg.includes('cost') || msg.includes('how much') || msg.includes('price') || (msg.includes('297') && msg.includes('month'))) {
     return appendFollowUps(
-`NemoC Law AI Pricing \u2014 Founder Edition
+`NemoC LAW AI Pricing \u2014 Founder Edition
 
-Agentic OS: $297/mo (Founder Rate \u2014 this rate is locked in for life)
-Includes the full Agentic OS, 1 Managing Partner seat, and unlimited inference tokens.
+Solo-first, small-firm-ready pricing:
 
-Additional seats are $149/mo per human role. Each seat provisions a personal AI agent with role-specific sub-agents.
+Agentic OS: $297/mo (founder) / $497/mo (standard)
+\u2014 Firm operating system with the onboarding partner's personal agent included.
 
-What every seat includes:
-- A dedicated personal agent trained for the employee's role
-- Specialist sub-agents scoped to that role's responsibilities
+Human Role + Agent: $149/mo (founder) / $297/mo (standard)
+\u2014 One dedicated personal agent mapped to each additional human role, up to 20 total humans per small-firm workspace.
+
+Agentic OS includes:
 - NVIDIA NemoClaw security sandbox with zero data leak guarantee
 - IOLTA compliance monitoring and full audit trail
-- Website Builder Agent included free with every account
-
-A 7-day trial is included. No credit card required to explore the Agentic OS.`,
+- 30-day free trial (card required day 1, no charge until day 31)`,
       [
-        'What is included in the 7-day trial?',
+        'What is included in the 30-day trial?',
         'Is this worth it for a solo practitioner?',
         'What do the sub-agents actually do day to day?',
         'I want to start the setup now'
@@ -186,19 +185,19 @@ A 7-day trial is included. No credit card required to explore the Agentic OS.`,
   // Setup / how to get started
   if (msg.includes('setup') || msg.includes('set up') || msg.includes('get started') || msg.includes('onboard') || msg.includes('walk me through') || msg.includes('ready')) {
     return appendFollowUps(
-`Getting Started with NemoC Law AI
+`Getting Started with NemoC LAW AI
 
 The setup takes about 3 minutes and provisions your entire AI workforce.
 
 Step 1 \u2014 Firm Profile
 [SETUP_LINK] to begin. Enter your firm name (auto-fills from Google Places), select your state bar, and choose from 74 practice categories.
 
-Step 2 \u2014 Team Roster
-Add each person at your firm. Every team member receives their own personal AI agent:
+Step 2 \u2014 Human + Agent Role Mapping
+Add each person at your firm, from the solo owner to a 20-person small-firm team. Every team member receives their own personal AI agent:
 - Partners: Legal Research, Contract Review, Drafting, Case Analytics, Business Intelligence, Knowledge Search, Communication Drafter sub-agents, plus Super Agent access.
 - Associates: Legal Research, Contract Review, Drafting, eDiscovery, Deposition Prep, Knowledge Search.
-- Paralegals: eDiscovery, Document Formatting, Knowledge Search with UPL guardrails.
-- Support staff: Role-appropriate sub-agents (Scheduling, Client Intake, Billing).
+- Practice staff: Paralegals, legal assistants, case managers, law clerks, and docketing roles receive least-privilege practice support with UPL guardrails.
+- Business staff: Intake, receptionist, billing, bookkeeping, records, marketing, HR, IT, and operations roles receive role-appropriate business-of-law agents.
 
 Step 3 \u2014 Launch
 Configure security preferences, select sub-agents to activate, and we provision your sandbox in seconds.
@@ -216,7 +215,7 @@ Configure security preferences, select sub-agents to activate, and we provision 
   // Security questions
   if (msg.includes('security') || msg.includes('privacy') || msg.includes('hipaa') || msg.includes('iolta') || msg.includes('compliance') || msg.includes('pii')) {
     return appendFollowUps(
-`NemoC Law AI Security Architecture
+`NemoC LAW AI Security Architecture
 
 NVIDIA NemoClaw Sandbox
 Every firm operates in an isolated, containerized environment. No shared databases.
@@ -251,31 +250,49 @@ Access Control by Agent Role
   // Capabilities
   if (msg.includes('what can you do') || msg.includes('capabilities') || msg.includes('features') || msg.includes('everything') || msg.includes('show me')) {
     return appendFollowUps(
-`NemoC Law AI \u2014 Agent Capabilities
+`NemoC LAW AI \u2014 Agent Capabilities
 
-Your Managing Partner Agent comes with 7 specialist sub-agents:
+Agentic OS includes the core specialist capabilities:
 
 Legal Research \u2014 Case law search, precedent finding, Bluebook citations. State-specific scoping available.
 
-Contract Review \u2014 Redlines NDAs, MSAs, vendor agreements. Flags risk clauses and missing provisions.
-
 Drafting \u2014 Pleadings, motions, briefs, demand letters using your firm's templates and style.
+
+Client Intake & Lead Qualification \u2014 Lead screening, conflict checks, matter qualification, 24/7 intake.
+
+Billing & Time Capture \u2014 Time entries, LEDES invoicing, IOLTA reconciliation.
+
+Deadline & Calendar Management \u2014 SOL tracking, court dates, filing deadlines.
+
+Document Review & Knowledge Search \u2014 Full-text search across uploaded documents, templates, and knowledge base.
+
+Advanced practice and business-of-law capabilities include:
+
+Contract Review \u2014 Redlines NDAs, MSAs, vendor agreements. Flags risk clauses and missing provisions.
 
 Case Analytics \u2014 Matter health analysis, timeline risks, deadline monitoring, outcome evaluation.
 
 Business Intelligence \u2014 Revenue pipeline, utilization metrics, performance dashboards, billing trends.
 
-Knowledge Search \u2014 Full-text search across uploaded documents, templates, and knowledge base.
-
 Communication Drafter \u2014 Client emails, internal memos, settlement correspondence in your firm's tone.
 
-Additional sub-agents for your team:
-- eDiscovery: Document review, privilege tagging, relevance scoring
-- Deposition Prep: Witness outlines, exhibit identification, question frameworks
-- Billing Automation: Time entries, LEDES invoicing, IOLTA reconciliation
-- Client Intake: Lead screening, conflict checks, matter qualification
-- Compliance Monitor: Regulatory deadlines, filing requirements, CLE tracking
-- Website Builder: Firm website analysis and redesign (included free)`,
+eDiscovery \u2014 Document review, privilege tagging, relevance scoring, Bates numbering.
+
+Deposition Prep \u2014 Witness outlines, exhibit identification, question frameworks.
+
+Compliance Monitor \u2014 Regulatory deadlines, filing requirements, CLE tracking.
+
+Due Diligence \u2014 Data room analysis, risk assessment, deal checklists.
+
+Trust Accounting \u2014 IOLTA reconciliation, three-way matching, bar compliance.
+
+Court Filing \u2014 ECF/PACER preparation, service calculation, filing calendar.
+
+Scheduling \u2014 Calendar management, meeting coordination, availability routing.
+
+Lead Qualification \u2014 Prospect scoring, intake routing, follow-up automation.
+
+Document Formatting \u2014 Bluebook compliance, citation checking, exhibit formatting.`,
       [
         'How does research compare to Westlaw?',
         'Can the Drafting Agent use my templates?',
@@ -288,7 +305,7 @@ Additional sub-agents for your team:
   // Practice areas
   if (msg.includes('practice area') || msg.includes('type of law') || msg.includes('specialt') || msg.includes('what areas')) {
     return appendFollowUps(
-`NemoC Law AI supports 74 practice categories across Individual and Business matters.
+`NemoC LAW AI supports 74 practice categories across Individual and Business matters.
 
 Individual categories include: Adoption, Bankruptcy (Personal), Child Custody, Civil Rights, Consumer Protection, Criminal Defense, Disability / ADA, Divorce, DUI / DWI, Elder Law, Employment (Employee Side), Estate Planning, Family Law, Guardianship, Immigration, Insurance Claims, Juvenile Law, Landlord-Tenant (Tenant Side), Medical Malpractice, Military / Veterans Law, Personal Injury, Product Liability, Social Security Disability, Traffic Violations, Trusts and Wills, Workers Compensation, Wrongful Death, and more.
 
@@ -307,7 +324,7 @@ When you set up your firm, you select your categories. Your AI agents are then c
   // Audit trail
   if (msg.includes('audit') || msg.includes('trail') || msg.includes('log') || msg.includes('track')) {
     return appendFollowUps(
-`The audit trail in NemoC Law AI records every agent interaction immutably.
+`The audit trail in NemoC LAW AI records every agent interaction immutably.
 
 Each entry includes: the user who initiated the action, the agent and sub-agents dispatched, the full input query (after PII redaction), the complete output, a timestamp, and the matter context if scoped.
 
@@ -334,7 +351,7 @@ The sub-agent excels at rapid case law search, precedent identification, and Blu
 
 Where Westlaw provides the authoritative database, the Legal Research sub-agent provides the analytical layer. It reads, synthesizes, and presents research in a fraction of the time it takes to manually search, read, and cite.
 
-Many firms use NemoC Law AI alongside their existing research subscriptions. The sub-agent drafts the initial research memo, and the attorney validates citations against Westlaw or Lexis.
+Many firms use NemoC LAW AI alongside their existing research subscriptions. The sub-agent drafts the initial research memo, and the attorney validates citations against Westlaw or Lexis.
 
 Agentic OS also integrates with CourtListener for federal case law access at no additional cost.`,
       [
@@ -349,7 +366,7 @@ Agentic OS also integrates with CourtListener for federal case law access at no 
   // Clio / existing tools
   if (msg.includes('clio') || msg.includes('practice management') || msg.includes('existing tool') || msg.includes('integrat')) {
     return appendFollowUps(
-`NemoC Law AI integrates with existing practice management tools rather than replacing them.
+`NemoC LAW AI integrates with existing practice management tools rather than replacing them.
 
 Current integrations include:
 - Clio: Practice management synchronization for matters, contacts, and billing

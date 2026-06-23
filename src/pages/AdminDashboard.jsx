@@ -194,7 +194,7 @@ export default function AdminDashboard() {
   });
 
   return (
-    <div style={{ display: 'flex', height: '100vh', background: '#0a0e17', color: '#e2e8f0', fontFamily: "'Inter', -apple-system, sans-serif" }}>
+    <div style={{ display: 'flex', height: '100vh', minHeight: 0, minWidth: 0, background: '#0a0e17', color: '#e2e8f0', fontFamily: "'Inter', -apple-system, sans-serif", overflow: 'hidden' }}>
       <div style={{
         width: sidebarOpen ? '240px' : '60px', minWidth: sidebarOpen ? '240px' : '60px',
         background: '#0d1117', borderRight: '1px solid rgba(255,255,255,0.06)',
@@ -214,7 +214,7 @@ export default function AdminDashboard() {
           )}
         </div>
 
-        <div style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+        <div style={{ flex: 1, minHeight: 0, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: '2px', overflowY: 'auto' }}>
           {NAV_ITEMS.map(item => (
             <button key={item.id} onClick={() => setPage(item.id)} style={{
               display: 'flex', alignItems: 'center', gap: '10px',
@@ -244,7 +244,7 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>
         <div style={{
           padding: '12px 24px', borderBottom: '1px solid rgba(255,255,255,0.06)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',

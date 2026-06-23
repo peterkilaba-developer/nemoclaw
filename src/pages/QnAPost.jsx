@@ -122,9 +122,9 @@ export default function QnAPost() {
           </div>
           
           <div style={{ marginTop: '3rem', paddingTop: '2rem', borderTop: '1px solid var(--border)' }}>
-             <h3>Build a resilient firm.</h3>
-             <p style={{ marginTop: '0.5rem', marginBottom: '1.5rem', opacity: 0.8 }}>Join the vanguard of Agentic HITL Law Firms today.</p>
-             <Link to="/v2" className="btn btn-primary">Explore the Agentic OS</Link>
+             <h3>Practice law. Let AI handle the rest.</h3>
+             <p style={{ marginTop: '0.5rem', marginBottom: '1.5rem', opacity: 0.8 }}>Join the vanguard of solo attorneys running on Agentic AI.</p>
+             <Link to="/" className="btn btn-primary">Explore the Agentic OS</Link>
           </div>
         </article>
       </main>

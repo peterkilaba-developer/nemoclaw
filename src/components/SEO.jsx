@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 
 const SITE_URL = 'https://nemoc-law.ai';
-const SITE_NAME = 'NemoC Law AI';
+const SITE_NAME = 'NemoC LAW AI';
 const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
 
 /**
@@ -64,7 +64,7 @@ export const structuredDataTemplates = {
   organization: () => ({
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'NemoC Law AI',
+    name: 'NemoC LAW AI',
     url: SITE_URL,
     logo: `${SITE_URL}/logos/wordmark.svg`,
     description: "The first Agentic-as-a-Service (AgaaS) platform for law firms. An Agentic HITL OS secured by NVIDIA NemoClaw.",
@@ -80,7 +80,7 @@ export const structuredDataTemplates = {
   softwareApplication: () => ({
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
-    name: 'NemoC Law AI',
+    name: 'NemoC LAW AI',
     applicationCategory: 'BusinessApplication',
     operatingSystem: 'Web',
     description: "We built an Agentic AI Operating System and secured an entire law firm inside it.",

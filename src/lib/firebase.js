@@ -26,5 +26,6 @@ appleProvider.addScope('name');
  */
 export const createCheckoutSession = httpsCallable(functions, 'createCheckoutSession');
 export const createPortalSession = httpsCallable(functions, 'createPortalSession');
+export const setHumanAgentSeatCount = httpsCallable(functions, 'setHumanAgentSeatCount');
 
 export default app;

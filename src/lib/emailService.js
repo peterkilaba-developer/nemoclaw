@@ -589,7 +589,7 @@ export async function sendBulkOutreach(prospects, templateType = 'cold') {
 }
 
 /* ═══════════════════════════════════════════════
-   WELCOME SIGNUP (7-Day Urgency Hook)
+   WELCOME SIGNUP (30-Day Free Trial)
    ═══════════════════════════════════════════════ */
 
 export function getSignupWelcomeEmailTemplate(email, name) {
@@ -615,17 +615,18 @@ export function getSignupWelcomeEmailTemplate(email, name) {
       <h1>Welcome aboard, <span>${name || 'Founder'}</span></h1>
 
       <p>
-        Your enterprise-grade <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> sandbox is successfully provisioned. You now have complete access to the 
-        Agent Library, the Command Center, and your AI Chief of Staff for your 7-day free trial.
+        Your enterprise-grade <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> sandbox is successfully provisioned. You now have complete access to the
+        Agent Library, the Command Center, and your AI Chief of Staff — free for 30 days.
       </p>
 
       <div class="highlight">
-        <div class="highlight-title">ACTION REQUIRED: 7-Day Founder Lock</div>
+        <div class="highlight-title">30-Day Free Trial — No Charge Until Day 31</div>
         <p class="text-muted-md">
           As an early adopter, you have successfully claimed a spot for our <strong class="text-strong">$${pricing.current}/mo Founder Pricing</strong> (Standard: $${pricing.future}/mo).
+          Add your card now — you won't be charged for 30 days.
         </p>
         <p class="text-warning">
-          You must finalize your firm's onboarding and activate your payment method within 7 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
+          Activate your payment method within 30 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
         </p>
       </div>
 
@@ -652,11 +653,11 @@ export function getSignupWelcomeEmailTemplate(email, name) {
   const text = `
 Welcome aboard, ${name || 'Founder'}!
 
-Your NemoC LAW AI sandbox is successfully provisioned. You now have complete access for your 7-day free trial.
+Your NemoC LAW AI sandbox is successfully provisioned. You now have complete access — free for 30 days.
 
-*** ACTION REQUIRED: 7-Day Founder Lock ***
+*** 30-Day Free Trial — No Charge Until Day 31 ***
 As an early adopter, you have successfully claimed a spot for our $${pricing.current}/mo Founder Pricing (Standard: $${pricing.future}/mo).
-You must finalize your firm's onboarding and activate your payment method within 7 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
+Add your card now and you won't be charged for 30 days. Activate within 30 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
 
 Log in to your command center to assign your first matter:
 ${dashboardLink}
