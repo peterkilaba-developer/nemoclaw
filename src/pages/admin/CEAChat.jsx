@@ -61,7 +61,7 @@ async function gatherLiveContext() {
       tools: {
         hunterIO: enrichStatus.hunter.configured ? 'ACTIVE' : 'OFF',
         apolloIO: enrichStatus.apollo.configured ? 'ACTIVE' : 'OFF',
-        sendgrid: 'NOT DEPLOYED',
+        sendgrid: 'ACTIVE - Firestore mail queue + SendGrid Cloud Functions deployed',
         blandAI: 'BACKEND-MANAGED',
       },
     };

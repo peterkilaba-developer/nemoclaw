@@ -176,6 +176,9 @@ axios.interceptors.response.use(
 // Config
 const FROM_EMAIL = 'outreach@nemoc-law.ai';
 const FROM_NAME = 'NemoC LAW AI';
+const MAIL_SENDABLE_STATUS = 'queued';
+const MAIL_DEFERRED_STATUS = 'deferred';
+const MAIL_SENDING_STATUS = 'sending';
 
 function getClientPayload(req) {
   return req.body?.data || req.body || {};
@@ -205,6 +208,16 @@ exports.processMailQueue = onDocumentCreated('mail/{mailId}', async (event) => {
 
   logger.info(`Mail ${mailId}: Processing email to ${mailData.to}`);
 
+  const mailStatus = mailData.status || MAIL_SENDABLE_STATUS;
+  if (mailStatus === MAIL_DEFERRED_STATUS) {
+    logger.info(`Mail ${mailId}: Deferred for scheduled dispatch`);
+    return;
+  }
+  if (mailStatus !== MAIL_SENDABLE_STATUS) {
+    logger.info(`Mail ${mailId}: Ignoring non-sendable status '${mailStatus}'`);
+    return;
+  }
+
   // Validate required fields
   if (!mailData.to || !mailData.message) {
     logger.error(`Mail ${mailId}: Missing 'to' or 'message' field`);
@@ -227,6 +240,11 @@ exports.processMailQueue = onDocumentCreated('mail/{mailId}', async (event) => {
   logger.info(`Mail ${mailId}: API key found, sending via SendGrid...`);
 
   sgMail.setApiKey(apiKey);
+  await snap.ref.update({
+    status: MAIL_SENDING_STATUS,
+    processingStartedAt: new Date(),
+    triggerReason: 'created',
+  });
 
   const msg = {
     to: mailData.to,
@@ -252,6 +270,8 @@ exports.processMailQueue = onDocumentCreated('mail/{mailId}', async (event) => {
       processedAt: new Date(),
       sentAt: new Date(),
     });
+
+    await _markProspectOutreachSent(admin.firestore(), mailData.prospectId, mailId, mailData);
   } catch (error) {
     const errorMessage = error.response?.body?.errors?.[0]?.message || error.message;
     logger.error(`Mail ${mailId}: ❌ Failed to send to ${mailData.to}`, { error: errorMessage });
@@ -264,6 +284,99 @@ exports.processMailQueue = onDocumentCreated('mail/{mailId}', async (event) => {
     });
   }
 });
+
+exports.processQueuedMailUpdate = onDocumentUpdated('mail/{mailId}', async (event) => {
+  const before = event.data?.before?.data();
+  const afterSnap = event.data?.after;
+  const after = afterSnap?.data();
+  const mailId = event.params.mailId;
+
+  if (!before || !afterSnap || !after) {
+    logger.warn(`Mail ${mailId}: Missing update snapshot data`);
+    return;
+  }
+
+  if (before.status === after.status || after.status !== MAIL_SENDABLE_STATUS) {
+    return;
+  }
+
+  logger.info(`Mail ${mailId}: Status changed ${before.status || 'unset'} -> ${after.status}; dispatching`);
+  await _sendPromotedQueuedMail(afterSnap, mailId, after);
+});
+
+async function _markProspectOutreachSent(db, prospectId, mailId, mailData) {
+  if (!prospectId) return;
+
+  await db.collection('prospects').doc(prospectId).set({
+    status: 'outreach_sent',
+    outreach_sent: admin.firestore.FieldValue.increment(1),
+    outreachCount: admin.firestore.FieldValue.increment(1),
+    lastOutreachAt: admin.firestore.FieldValue.serverTimestamp(),
+    lastEmailId: mailId,
+    lastEmailType: mailData.purpose || 'outreach',
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function _sendPromotedQueuedMail(snap, mailId, mailData) {
+  await snap.ref.update({
+    status: MAIL_SENDING_STATUS,
+    processingStartedAt: new Date(),
+    triggerReason: 'status_update',
+  });
+
+  const apiKey = process.env.SENDGRID_API_KEY;
+  if (!apiKey) {
+    logger.error(`Mail ${mailId}: SENDGRID_API_KEY not found in environment`);
+    await snap.ref.update({
+      status: 'error',
+      error: 'SendGrid API key not configured',
+      processedAt: new Date(),
+    });
+    return;
+  }
+
+  if (!mailData.to || !mailData.message) {
+    logger.error(`Mail ${mailId}: Missing 'to' or 'message' field`);
+    await snap.ref.update({ status: 'error', error: 'Missing required fields' });
+    return;
+  }
+
+  sgMail.setApiKey(apiKey);
+
+  const msg = {
+    to: mailData.to,
+    from: { email: FROM_EMAIL, name: FROM_NAME },
+    subject: mailData.message.subject,
+    html: mailData.message.html,
+    ...(mailData.message.text ? { text: mailData.message.text } : {}),
+    trackingSettings: {
+      clickTracking: { enable: true },
+      openTracking: { enable: true },
+    },
+  };
+
+  try {
+    const [response] = await sgMail.send(msg);
+    const statusCode = response.statusCode;
+    await snap.ref.update({
+      status: 'sent',
+      sendgridStatusCode: statusCode,
+      processedAt: new Date(),
+      sentAt: new Date(),
+    });
+    await _markProspectOutreachSent(admin.firestore(), mailData.prospectId, mailId, mailData);
+  } catch (error) {
+    const errorMessage = error.response?.body?.errors?.[0]?.message || error.message;
+    logger.error(`Mail ${mailId}: Failed to send promoted queued mail`, { error: errorMessage });
+    await snap.ref.update({
+      status: 'error',
+      error: errorMessage,
+      processedAt: new Date(),
+      retryCount: (mailData.retryCount || 0) + 1,
+    });
+  }
+}
 
 /**
  * Cloud Function: nvidiaInference
@@ -4112,6 +4225,7 @@ exports.forgeSystemMonitor = onSchedule('every 10 minutes', async (_event) => {
       };
       await sgMail.send(msg);
       await doc.ref.update({ status: 'sent', processedAt: new Date(), sentAt: new Date(), forgeHealed: true });
+      await _markProspectOutreachSent(db, data.prospectId, doc.id, data);
       healedCount++;
     } catch(err) {
       await doc.ref.update({ status: 'error', error: err.response?.body?.errors?.[0]?.message || err.message, forgeHealed: false });
@@ -4288,6 +4402,7 @@ exports.forceForgeHealing = onRequest({ timeoutSeconds: 300, memory: '512Mi', co
        };
        await sgMail.send(msg);
        await doc.ref.update({ status: 'sent', processedAt: new Date(), sentAt: new Date(), forgeHealed: true });
+       await _markProspectOutreachSent(db, data.prospectId, doc.id, data);
        count++;
      } catch(_err) {
         // Ignored in manual mode
