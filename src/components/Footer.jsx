@@ -8,7 +8,7 @@ export default function Footer() {
           <div className="footer-brand">
             <div className="footer-logo">
               <img src="/logos/claw-64-transparent.png" alt="" className="footer-icon" />
-              <img src="/logos/wordmark.svg" alt="NemoC Law AI" className="footer-wordmark" />
+              <img src="/logos/wordmark.svg" alt="NemoC LAW AI" className="footer-wordmark" />
             </div>
             <p className="footer-tagline">
               The first Agentic OS for law firms.<br/>
@@ -19,7 +19,7 @@ export default function Footer() {
           <div className="footer-links-grid">
             <div className="footer-col">
               <h4>Platform</h4>
-              <a href="/#workforce">AI Workforce</a>
+              <a href="/#hitl-os">Platform</a>
               <a href="/#security">Security</a>
               <a href="/#pricing">Pricing</a>
               <a href="/login">Get Access</a>
@@ -35,6 +35,7 @@ export default function Footer() {
               <h4>Company</h4>
               <a href="/about">About</a>
               <a href="/blog">Blog</a>
+              <a href="/answers">Knowledge Base / FAQ</a>
               <a href="/careers">Careers</a>
               <a href="mailto:contact@nemoc-law.ai">Contact</a>
             </div>
@@ -51,7 +52,7 @@ export default function Footer() {
         <div className="divider"></div>
 
         <div className="footer-bottom">
-          <p>© 2026 NemoC Law AI. Agentic-as-a-Service. All rights reserved.</p>
+          <p>© 2026 NemoC LAW AI. Agentic-as-a-Service. All rights reserved.</p>
           <div className="footer-powered">
             <span>Powered by</span>
             <span className="footer-nvidia">NVIDIA</span>

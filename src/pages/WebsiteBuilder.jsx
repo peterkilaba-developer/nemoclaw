@@ -1,17 +1,16 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   Globe, Search, Loader, CheckCircle2, AlertTriangle,
-  Smartphone, Monitor, Zap, Shield, BarChart3, Palette,
-  Eye, ShoppingCart, Download, RefreshCw, Tablet,
+  Smartphone, Monitor, Zap, Shield, BarChart3, Palette, Download, RefreshCw, Tablet,
   User, Image, MessageSquare, Save, Bot, ToggleLeft, ToggleRight,
-  Settings2, ChevronDown, ChevronUp, PanelLeftClose, PanelLeft,
-  MapPin, Plus, Lightbulb, ArrowRight, Trash2
+  Settings2, ChevronDown, ChevronUp, PanelLeftClose, Plus, ArrowRight, Trash2
 } from 'lucide-react';
 import { generateCustomWebsite } from '../lib/websiteGenerator';
 import { generateFirmContent } from '../lib/firmContentEngine';
 import { scrapeFirmWebsite } from '../lib/prospectService';
 import { useFirm } from '../contexts/FirmContext';
-
+import { db } from '../lib/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 const ANALYSIS_STEPS = [
   { label: 'Crawling website pages', icon: Search },
   { label: 'Analyzing design & layout', icon: Palette },
@@ -65,6 +64,17 @@ const TABS = [
   { id: 'agent', Icon: MessageSquare, label: 'AI Agent' },
 ];
 
+// Maps each detected content gap to the customizer tab that resolves it,
+// so "Add in Customizer" deep-links to the right editor instead of just opening the panel.
+const GAP_TAB = {
+  practice_areas_missing: 'profile',
+  attorneys_missing: 'profile',
+  reviews_missing: 'profile',
+  contact_missing: 'profile',
+  schema_missing: 'profile',
+  contact_form_missing: 'agent',
+};
+
 const fieldStyle = {
   width: '100%', padding: '10px 12px', border: '1.5px solid var(--db-border)',
   borderRadius: '8px', fontSize: '0.8125rem', fontFamily: 'var(--db-font)',
@@ -74,6 +84,105 @@ const labelStyle = {
   display: 'block', fontSize: '0.75rem', fontWeight: 600,
   color: 'var(--db-text-secondary)', marginBottom: '4px',
 };
+
+function buildScoresFromDiagnostics(liveData) {
+  const diagnostics = liveData?.diagnostics;
+  if (!diagnostics) return null;
+
+  const seoSignals = [diagnostics.hasSchemaMarkup, diagnostics.hasPracticeAreaPages, (liveData.practiceAreas || []).length > 0];
+  const conversionSignals = [diagnostics.hasContactForm, diagnostics.hasReviews, diagnostics.hasChatWidget, !!liveData.phone, !!liveData.email];
+  const contentSignals = [(liveData.attorneys || []).length > 0, (liveData.practiceAreas || []).length > 0, !!liveData.description, !!liveData.address];
+
+  const scoreFromSignals = (signals) => Math.round((signals.filter(Boolean).length / signals.length) * 100);
+
+  return {
+    mobile: diagnostics.hasViewport ? 100 : 35,
+    seo: scoreFromSignals(seoSignals),
+    security: diagnostics.hasSsl ? 100 : 25,
+    conversion: scoreFromSignals(conversionSignals),
+    content: scoreFromSignals(contentSignals),
+  };
+}
+
+function buildIssuesFromLiveData(liveData, error = '') {
+  if (error) {
+    return [{ severity: 'warning', text: `Live crawl failed: ${error}` }];
+  }
+
+  const diagnostics = liveData?.diagnostics;
+  if (!diagnostics) return [];
+
+  const issues = [];
+  if (!diagnostics.hasViewport) issues.push({ severity: 'critical', text: 'No responsive viewport meta tag detected in crawled HTML' });
+  if (!diagnostics.hasSsl) issues.push({ severity: 'critical', text: 'Crawled URL did not use HTTPS' });
+  if (!diagnostics.hasSchemaMarkup) issues.push({ severity: 'warning', text: 'No structured data markup detected' });
+  if (!diagnostics.hasPracticeAreaPages) issues.push({ severity: 'warning', text: 'No dedicated practice area links detected' });
+  if (!diagnostics.hasContactForm) issues.push({ severity: 'info', text: 'No contact form detected in crawled pages' });
+  if (!diagnostics.hasReviews) issues.push({ severity: 'info', text: 'No reviews or testimonials section detected' });
+  if (!liveData?.phone) issues.push({ severity: 'warning', text: 'No phone number detected in crawled pages' });
+  if (!liveData?.email) issues.push({ severity: 'info', text: 'No public email detected in crawled pages' });
+  if (!(liveData?.attorneys || []).length) issues.push({ severity: 'info', text: 'No attorney roster detected in crawled pages' });
+
+  return issues;
+}
+
+function buildImprovementsFromIssues(issues) {
+  if (!issues.length) return ['Preserve verified firm content and keep monitoring site diagnostics'];
+  return issues.map((issue) => issue.text.replace(/^No /, 'Add ').replace(/ detected.*$/, ''));
+}
+
+function buildAnalysisReport({ url, domain, liveData = null, error = '', autoSeeded = false }) {
+  const issues = buildIssuesFromLiveData(liveData, error);
+  return {
+    url,
+    domain,
+    autoSeeded,
+    scores: buildScoresFromDiagnostics(liveData),
+    issues,
+    improvements: buildImprovementsFromIssues(issues),
+    pagesScraped: liveData?.pagesScraped || 0,
+    dataSource: liveData ? 'live_crawl' : 'firm_profile',
+    analysisUnavailable: !liveData,
+    scrapedAt: liveData?.scrapedAt || null,
+  };
+}
+
+function normalizeReceptionistCapabilities(capabilities = []) {
+  const supported = new Set(['text', 'voice', 'scheduling', 'documents']);
+  const normalized = capabilities
+    .map(item => String(item).toLowerCase())
+    .map(item => {
+      if (item.includes('voice')) return 'voice';
+      if (item.includes('schedul') || item.includes('appointment')) return 'scheduling';
+      if (item.includes('document') || item.includes('upload')) return 'documents';
+      if (item.includes('chat') || item.includes('text') || item.includes('message')) return 'text';
+      return item;
+    })
+    .filter(item => supported.has(item));
+
+  return [...new Set(normalized.length ? normalized : ['text', 'voice', 'scheduling', 'documents'])];
+}
+
+function buildReceptionistAgent(content, seed = {}) {
+  const seededAgent = seed.chatAgent || seed.receptionist || {};
+  const firmName = content.firmName || seed.firmName || 'this firm';
+  const practiceNames = content.practiceAreaNames || seed.practiceAreas || [];
+  const primaryPractice = practiceNames[0] || 'legal services';
+  const secondaryPractice = practiceNames[1] ? ` and ${practiceNames[1]}` : '';
+
+  return {
+    enabled: seededAgent.enabled !== false,
+    name: seededAgent.name || `${firmName} Reception`,
+    role: seededAgent.role || 'AI receptionist',
+    greeting: seededAgent.greeting || `Hello, this is ${firmName}. I can help with ${primaryPractice}${secondaryPractice}, intake, scheduling, or connecting you with the firm.`,
+    primaryColor: seededAgent.primaryColor || content.colors?.primary || '#1a365d',
+    capabilities: normalizeReceptionistCapabilities(seededAgent.capabilities || []),
+    avatar: seededAgent.avatar || 'bot',
+    position: seededAgent.position || 'right',
+    voiceEnabled: seededAgent.voiceEnabled !== false,
+    chatEnabled: seededAgent.chatEnabled !== false,
+  };
+}
 
 export default function WebsiteBuilder() {
   const [url, setUrl] = useState('');
@@ -89,6 +198,9 @@ export default function WebsiteBuilder() {
   const [reportCollapsed, setReportCollapsed] = useState(true);
   const [gapsCollapsed, setGapsCollapsed] = useState(false);
   const [comparisonMode, setComparisonMode] = useState('redesign');
+  const [publishing, setPublishing] = useState(false);
+  const [publishedUrl, setPublishedUrl] = useState('');
+  const [publishError, setPublishError] = useState('');
 
   const initConfig = useCallback((d, seed = null) => {
     setDomain(d);
@@ -119,6 +231,7 @@ export default function WebsiteBuilder() {
       address: content.address,
       city: content.city,
       description: content.description,
+      heroImage: content.heroImage,
       hero: content.hero,
       stats: content.stats,
       testimonials: content.testimonials,
@@ -129,19 +242,11 @@ export default function WebsiteBuilder() {
       matchedCategory: content.matchedCategory,
       contentGaps: content.contentGaps || [],
       isKnownFirm: content.isKnownFirm || false,
-      attorneys: (content.attorneys || []).map(a => ({ name: a.name, title: a.title, initials: a.initials, bio: a.bio || '' })),
+      attorneys: (content.attorneys || []).map(a => ({ name: a.name, title: a.title, initials: a.initials, bio: a.bio || '', photoUrl: a.photoUrl || '' })),
       practiceAreas: content.practiceAreaNames || [],
       practiceAreasWithDesc: practiceAreasWithDesc || [],
       colors: { ...content.colors },
-      chatAgent: {
-        enabled: true,
-        name: `${content.firmName || 'NemoC'} AI`,
-        greeting: `Hello! I'm the AI assistant for ${content.firmName || 'this firm'}. I can answer questions about our services, schedule consultations, or connect you with an attorney.`,
-        primaryColor: (content.colors && content.colors.primary) || '#1a365d',
-        capabilities: ['Text-to-Legal-Advice', 'Intake Scheduling', 'Conflict Checks', 'Case Status'],
-        avatar: 'bot',
-        position: 'right',
-      },
+      chatAgent: buildReceptionistAgent(content, seed || {}),
     };
 
     setConfig(builtConfig);
@@ -149,7 +254,7 @@ export default function WebsiteBuilder() {
   }, []);
 
   // ═══ PERSISTENCE: Only analyze first visit, restore from cache after ═══
-  const { firm } = useFirm();
+  const { firm, firmId, websiteRedesign } = useFirm();
   const hasAutoSeeded = useRef(false);
 
   // Save built site to localStorage whenever config + report change
@@ -158,12 +263,11 @@ export default function WebsiteBuilder() {
       localStorage.setItem('nemoc_built_site', JSON.stringify({
         config: cfg, report: rpt, domain: d, savedAt: Date.now(),
       }));
-    } catch (e) { /* quota exceeded, ignore */ }
+    } catch (_e) { /* quota exceeded, ignore */ }
   }, []);
 
   useEffect(() => {
     if (hasAutoSeeded.current || report) return;
-    hasAutoSeeded.current = true;
 
     // ── Priority 0: Restore cached built site ──
     try {
@@ -171,6 +275,7 @@ export default function WebsiteBuilder() {
       if (cached) {
         const { config: cachedConfig, report: cachedReport, domain: cachedDomain } = JSON.parse(cached);
         if (cachedConfig && cachedReport) {
+          hasAutoSeeded.current = true;
           setConfig(cachedConfig);
           setReport(cachedReport);
           setDomain(cachedDomain);
@@ -178,16 +283,24 @@ export default function WebsiteBuilder() {
           return; // Skip analysis — use cached
         }
       }
-    } catch (e) { /* corrupted cache, continue */ }
+    } catch (_e) { /* corrupted cache, continue */ }
 
     // ── Priority 1: localStorage seed from frictionless onboarding ──
     let seed = null;
     try {
       const raw = localStorage.getItem('nemoc_website_seed');
       if (raw) seed = JSON.parse(raw);
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
 
     // ── Priority 2: Firm context from Firestore ──
+    if (!seed && websiteRedesign?.seed) {
+      seed = {
+        ...websiteRedesign.seed,
+        website: websiteRedesign.sourceUrl || websiteRedesign.seed.website,
+        chatAgent: websiteRedesign.chatReceptionist || websiteRedesign.seed.chatAgent,
+      };
+    }
+
     if (!seed && firm?.firmWebsite) {
       seed = {
         firmName: firm.firmName,
@@ -195,10 +308,12 @@ export default function WebsiteBuilder() {
         city: '',
         stateBar: firm.stateBar || '',
         website: firm.firmWebsite,
+        practiceAreas: firm.practiceAreas || [],
       };
     }
 
     if (!seed) return;
+    hasAutoSeeded.current = true;
 
     // Determine domain
     const siteUrl = seed.website || '';
@@ -213,58 +328,62 @@ export default function WebsiteBuilder() {
       console.log('🤖 Builder: Starting auto-seed analysis for', d);
       setAnalyzing(true);
       setCurrentStep(0);
+      let analysisReport = null;
 
       try {
         for (let i = 0; i < ANALYSIS_STEPS.length; i++) {
           setCurrentStep(i);
-          await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
+          await new Promise(r => setTimeout(r, 400));
+        }
+
+        let liveData = null;
+        let crawlError = '';
+        if (siteUrl) {
+          try {
+            liveData = await scrapeFirmWebsite(siteUrl);
+            seed = {
+              ...seed,
+              firmName: liveData.firmName || seed.firmName,
+              description: liveData.description || seed.description,
+              ...(liveData.practiceAreas?.length > 0 && { practiceAreas: liveData.practiceAreas }),
+              ...(liveData.attorneys?.length > 0 && { attorneys: liveData.attorneys }),
+              ...(liveData.colors && { scrapedColors: liveData.colors }),
+              ...(liveData.address && { address: liveData.address }),
+              ...(liveData.phone && { phone: liveData.phone }),
+              ...(liveData.email && { email: liveData.email }),
+              ...(liveData.city && { city: liveData.city }),
+              ...(liveData.state && { stateBar: liveData.state }),
+              ...(liveData.yearEstablished && { yearEstablished: liveData.yearEstablished }),
+              ...(liveData.diagnostics && { diagnostics: liveData.diagnostics }),
+            };
+          } catch (e) {
+            crawlError = e.message;
+          }
         }
 
         initConfig(d, seed);
 
-        const newReport = {
+        const newReport = buildAnalysisReport({
           url: siteUrl ? `https://${d}` : `https://${d}`,
           domain: d,
+          liveData,
+          error: crawlError,
           autoSeeded: true,
-          scores: {
-            design: Math.floor(28 + Math.random() * 25),
-            mobile: Math.floor(20 + Math.random() * 30),
-            seo: Math.floor(25 + Math.random() * 30),
-            speed: Math.floor(18 + Math.random() * 35),
-            security: Math.floor(35 + Math.random() * 25),
-            accessibility: Math.floor(22 + Math.random() * 30),
-          },
-          issues: [
-            { severity: 'critical', text: 'Not mobile-responsive \u2014 60% of legal searches happen on mobile' },
-            { severity: 'critical', text: 'Missing SSL certificate or HTTPS headers' },
-            { severity: 'warning', text: 'No structured data markup for local legal SEO' },
-            { severity: 'warning', text: 'Page load time exceeds 4 seconds' },
-            { severity: 'warning', text: 'Missing meta descriptions on practice area pages' },
-            { severity: 'info', text: 'No Google Business Profile integration detected' },
-            { severity: 'info', text: 'Contact form lacks CAPTCHA protection' },
-            { severity: 'info', text: 'Missing attorney bio schema markup' },
-          ],
-          improvements: [
-            'Modern, mobile-first responsive design', 'ADA-compliant accessibility (WCAG 2.1)', 'Legal-specific SEO optimization',
-            'Sub-2-second page load times', 'Integrated contact forms with CAPTCHA', 'Attorney bio pages with schema markup',
-            'Practice area landing pages', 'Client testimonial sections', 'Secure HTTPS with proper headers', 'Google Analytics & conversion tracking',
-          ],
-        };
+        });
 
+        analysisReport = newReport;
         setReport(newReport);
         console.log('✅ Builder: Auto-seed complete.');
       } catch (err) {
         console.error('❌ Builder: Auto-seed failed', err);
-        // Provision a fallback so we don't land on an empty splash
-        setReport({
-          url: siteUrl,
+        analysisReport = buildAnalysisReport({
+          url: siteUrl || `https://${d}`,
           domain: d,
-          isFallback: true,
-          scores: { design: 30, mobile: 20, seo: 25, speed: 15, security: 40, accessibility: 28 },
-          issues: [{ severity: 'warning', text: 'Intelligence engine connection interrupted' }],
-          improvements: ['Retry manual analysis for deeper insights'],
+          error: err.message,
+          autoSeeded: true,
         });
-        initConfig(d, null);
+        setReport(analysisReport);
+        initConfig(d, seed);
       } finally {
         setAnalyzing(false);
         setCurrentStep(-1);
@@ -273,7 +392,7 @@ export default function WebsiteBuilder() {
       // Persist for future visits — wait a tick for config state to settle
       setTimeout(() => {
         try {
-          const raw = localStorage.getItem('nemoc_built_site');
+          const _raw = localStorage.getItem('nemoc_built_site');
           // Config was set via initConfig which uses setConfig, so we need to grab it from the content engine directly
           const content = generateFirmContent(seed);
           const practiceAreasWithDesc = content.practiceAreas.map(area => {
@@ -283,26 +402,22 @@ export default function WebsiteBuilder() {
           const builtConfig = {
             firmName: content.firmName, tagline: content.tagline, phone: content.phone, email: content.email,
             address: content.address, city: content.city, description: content.description,
+            heroImage: content.heroImage,
             hero: content.hero, stats: content.stats, testimonials: content.testimonials,
             googleReviews: content.googleReviews, serviceAreas: content.serviceAreas,
             yearEstablished: content.yearEstablished, stateContext: content.stateContext,
             matchedCategory: content.matchedCategory, contentGaps: content.contentGaps,
             isKnownFirm: content.isKnownFirm,
-            attorneys: content.attorneys.map(a => ({ name: a.name, title: a.title, initials: a.initials, bio: a.bio || '' })),
+            attorneys: (content.attorneys || []).map(a => ({ name: a.name, title: a.title, initials: a.initials, bio: a.bio || '' })),
             practiceAreas: content.practiceAreaNames, practiceAreasWithDesc,
             colors: { ...content.colors },
-            chatAgent: {
-              name: `${content.firmName} AI`,
-              greeting: `Hello! I'm the AI assistant for ${content.firmName}. I can answer questions about our ${content.practiceAreaNames[0]} and ${content.practiceAreaNames[1]} services, schedule consultations, or connect you with an attorney.`,
-              primaryColor: content.colors.primary,
-              capabilities: ['Chat', 'Schedule', 'FAQ'],
-            },
+            chatAgent: buildReceptionistAgent(content, seed),
           };
-          localStorage.setItem('nemoc_built_site', JSON.stringify({ config: builtConfig, report: newReport, domain: d, savedAt: Date.now() }));
-        } catch (e) { /* ignore */ }
+          localStorage.setItem('nemoc_built_site', JSON.stringify({ config: builtConfig, report: analysisReport, domain: d, savedAt: Date.now() }));
+        } catch (_e) { /* ignore */ }
       }, 100);
     })();
-  }, [firm, initConfig]);
+  }, [firm, websiteRedesign, initConfig, report]);
 
   const updateConfig = (key, value) => { setConfig(prev => ({ ...prev, [key]: value })); setSaved(false); };
   const updateColors = (colors) => {
@@ -331,6 +446,49 @@ export default function WebsiteBuilder() {
     catch { return '<html><body style="padding:40px;font-family:sans-serif;color:#999"><h2>Preview loading...</h2></body></html>'; }
   }, [config, domain]);
 
+  const handleDownloadHtml = () => {
+    const objectUrl = URL.createObjectURL(new Blob([generatedHtml], { type: 'text/html;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = `${domain || 'law-firm-website'}.html`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  };
+
+  const handlePublishSite = async () => {
+    if (!firmId) { setPublishError('No firm ID found. Please complete onboarding first.'); return; }
+    if (!generatedHtml || !config) { setPublishError('Generate a website preview before publishing.'); return; }
+    setPublishing(true);
+    setPublishError('');
+    setPublishedUrl('');
+    try {
+      const siteConfig = { ...config, firmId };
+      const htmlWithFirmId = generateCustomWebsite(siteConfig, domain);
+      await setDoc(doc(db, 'firmSites', firmId), {
+        firmId,
+        firmName: config.firmName || '',
+        phone: config.phone || '',
+        email: config.email || '',
+        address: config.address || '',
+        city: config.city || '',
+        practiceAreas: Array.isArray(config.practiceAreas) ? config.practiceAreas : [],
+        html: htmlWithFirmId,
+        config: siteConfig,
+        domain: domain || '',
+        status: 'published',
+        publishedAt: serverTimestamp(),
+      }, { merge: true });
+      setPublishedUrl(`https://nemoc-law.ai/site/${firmId}`);
+    } catch (err) {
+      console.error('Publish error:', err);
+      setPublishError(err.message || 'Failed to publish. Please try again.');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
   const handleAnalyze = async () => {
     if (!url.trim() || analyzing) return;
     hasAutoSeeded.current = true; // Block the mount effect from competing
@@ -342,7 +500,7 @@ export default function WebsiteBuilder() {
     try {
       localStorage.removeItem('nemoc_built_site');
       localStorage.removeItem('nemoc_website_seed');
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
 
     setAnalyzing(true);
     setReport(null);
@@ -352,7 +510,7 @@ export default function WebsiteBuilder() {
     try {
       for (let i = 0; i < ANALYSIS_STEPS.length; i++) {
         setCurrentStep(i);
-        await new Promise(r => setTimeout(r, 800 + Math.random() * 500));
+        await new Promise(r => setTimeout(r, 500));
       }
 
       const d = cleanUrl.replace(/https?:\/\//, '').split('/')[0];
@@ -360,9 +518,11 @@ export default function WebsiteBuilder() {
       const brandName = parts[0] === 'www' ? (parts[1] || parts[0]) : parts[0];
       
       let enrichedSeed = { firmName: brandName.replace(/[-_]/g, ' '), website: cleanUrl };
+      let liveData = null;
+      let crawlError = '';
       try {
-        const liveData = await scrapeFirmWebsite(cleanUrl);
-        if (liveData && !liveData.error && !liveData.simulated) {
+        liveData = await scrapeFirmWebsite(cleanUrl);
+        if (liveData && !liveData.error) {
           console.log(`🌐 DeepCrawl: Scraped ${liveData.pagesScraped || 1} pages, ${liveData.practiceAreas?.length || 0} practice areas, ${liveData.attorneys?.length || 0} attorneys`);
           enrichedSeed = {
             ...enrichedSeed,
@@ -379,6 +539,7 @@ export default function WebsiteBuilder() {
             ...(liveData.state && { stateBar: liveData.state }),
             ...(liveData.yearEstablished && { yearEstablished: liveData.yearEstablished }),
             ...(liveData.socialLinks && { socialLinks: liveData.socialLinks }),
+            ...(liveData.heroImage && { heroImage: liveData.heroImage }),
             ...(liveData.diagnostics && { diagnostics: liveData.diagnostics }),
           };
         }
@@ -388,46 +549,25 @@ export default function WebsiteBuilder() {
 
       initConfig(d, enrichedSeed);
 
-      const newReport = {
-        url: cleanUrl, domain: d,
-        scores: {
-          design: Math.floor(35 + Math.random() * 30),
-          mobile: Math.floor(25 + Math.random() * 35),
-          seo: Math.floor(30 + Math.random() * 35),
-          speed: Math.floor(20 + Math.random() * 40),
-          security: Math.floor(40 + Math.random() * 30),
-          accessibility: Math.floor(25 + Math.random() * 35),
-        },
-        issues: [
-          { severity: 'critical', text: 'Not mobile-responsive \u2014 60% of legal searches happen on mobile' },
-          { severity: 'critical', text: 'Missing SSL certificate or HTTPS headers' },
-          { severity: 'warning', text: 'No structured data markup for local legal SEO' },
-          { severity: 'warning', text: 'Page load time exceeds 4 seconds' },
-          { severity: 'warning', text: 'Missing meta descriptions on practice area pages' },
-          { severity: 'info', text: 'No Google Business Profile integration detected' },
-          { severity: 'info', text: 'Contact form lacks CAPTCHA protection' },
-          { severity: 'info', text: 'Missing attorney bio schema markup' },
-        ],
-        improvements: [
-          'Modern, mobile-first responsive design', 'ADA-compliant accessibility (WCAG 2.1)', 'Legal-specific SEO optimization',
-          'Sub-2-second page load times', 'Integrated contact forms with CAPTCHA', 'Attorney bio pages with schema markup',
-          'Practice area landing pages', 'Client testimonial sections', 'Secure HTTPS with proper headers', 'Google Analytics & conversion tracking',
-        ],
-      };
+      const newReport = buildAnalysisReport({
+        url: cleanUrl,
+        domain: d,
+        liveData,
+        error: crawlError || (!liveData ? 'Live crawl did not return data.' : ''),
+      });
 
       setReport(newReport);
     } catch (err) {
       console.error('Builder: Analysis crash', err);
-      alert('Analysis encountered an error. Proceeding with simulated data.');
       const d = cleanUrl.replace(/https?:\/\//, '').split('/')[0] || 'firm.ai';
       const fallbackReport = {
         url: cleanUrl, domain: d, isFallback: true,
-        scores: { design: 45, mobile: 30, seo: 40, speed: 35, security: 50, accessibility: 32 },
-        issues: [{ severity: 'warning', text: 'Scraper timeout — using estimated practice data' }],
-        improvements: ['Full mobile speed optimization', 'SEO metadata synchronization'],
+        scores: null,
+        issues: [{ severity: 'warning', text: `Live crawl failed: ${err.message}` }],
+        improvements: ['Resolve crawl error before relying on site audit results'],
       };
       setReport(fallbackReport);
-      initConfig(d, null);
+      initConfig(d, { firmName: d.replace(/[-_]/g, ' '), website: cleanUrl });
     } finally {
       setAnalyzing(false);
       setCurrentStep(-1);
@@ -438,7 +578,7 @@ export default function WebsiteBuilder() {
     try {
       localStorage.removeItem('nemoc_built_site');
       localStorage.removeItem('nemoc_website_seed');
-    } catch (e) { /* ignore */ }
+    } catch (_e) { /* ignore */ }
     setReport(null);
     setConfig(null);
     setUrl('');
@@ -453,10 +593,26 @@ export default function WebsiteBuilder() {
     }
   }, [config, report, domain, persistBuiltSite]);
 
-  const overallScore = report?.scores
-    ? Math.round(Object.values(report.scores).reduce((a, b) => a + b, 0) / Object.keys(report.scores).length)
-    : 0;
-  const scoreColor = (s) => s >= 80 ? '#16a34a' : s >= 50 ? '#d97706' : '#dc2626';
+  const scoreValues = report?.scores
+    ? Object.values(report.scores).filter((value) => typeof value === 'number')
+    : [];
+  const overallScore = scoreValues.length
+    ? Math.round(scoreValues.reduce((a, b) => a + b, 0) / scoreValues.length)
+    : null;
+  const scoreColor = (s) => (s ?? 0) >= 80 ? '#16a34a' : (s ?? 0) >= 50 ? '#d97706' : '#dc2626';
+
+  // Content-gap analysis state — used to keep the section header honest about
+  // what was actually auto-fixed vs. what still needs the user's input.
+  const contentGaps = config?.contentGaps || [];
+  const autoFixedCount = contentGaps.filter(g => g.autoFixed).length;
+  const needsInputCount = contentGaps.filter(g => !g.autoFixed).length;
+  const gapsTitle = autoFixedCount > 0
+    ? (needsInputCount > 0 ? 'Issues Found — Some Auto-Fixed' : 'Issues Found & Auto-Fixed')
+    : 'Issues Found in Your Analysis';
+  const openGapInCustomizer = (gap) => {
+    setActiveTab(GAP_TAB[gap?.id] || 'profile');
+    setShowCustomizer(true);
+  };
 
   // Mobile: scale the content down so users see the full-width site at mobile dimensions
   const getIframeStyle = () => {
@@ -492,12 +648,12 @@ export default function WebsiteBuilder() {
   // ═══ CUSTOMIZER ACTIVE: split-pane layout ═══
   if (report && !analyzing && showCustomizer && config) {
     return (
-      <div style={{ display: 'flex', gap: 0, margin: '-24px', height: 'calc(100vh - 60px)' }}>
+      <div style={{ display: 'flex', gap: 0, margin: '-24px', height: 'calc(100vh - 60px)', minHeight: 0, minWidth: 0, overflow: 'hidden' }}>
         {/* ── LEFT: CUSTOMIZATION PANEL ── */}
         <div style={{
           width: '320px', minWidth: '320px', background: 'var(--db-surface)',
           borderRight: '1px solid var(--db-border)', display: 'flex', flexDirection: 'column',
-          overflow: 'hidden',
+          minHeight: 0, overflow: 'hidden',
         }}>
           {/* Panel Header */}
           <div style={{
@@ -535,16 +691,16 @@ export default function WebsiteBuilder() {
           </div>
 
           {/* Tab Content */}
-          <div style={{ flex: 1, overflow: 'auto', padding: '14px 16px' }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '14px 16px' }}>
             {activeTab === 'profile' && <ProfileTab config={config} updateConfig={updateConfig} updateAttorney={updateAttorney} />}
             {activeTab === 'colors' && <ColorsTab config={config} updateColors={updateColors} />}
-            {activeTab === 'photos' && <PhotosTab config={config} />}
+            {activeTab === 'photos' && <PhotosTab config={config} updateConfig={updateConfig} updateAttorney={updateAttorney} />}
             {activeTab === 'agent' && <AgentTab config={config} updateAgent={updateAgent} />}
           </div>
         </div>
 
         {/* ── RIGHT: LIVE PREVIEW ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#e5e7eb' }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', background: '#e5e7eb' }}>
           <PreviewToolbar 
             domain={domain} 
             previewMode={previewMode} setPreviewMode={setPreviewMode} 
@@ -554,16 +710,17 @@ export default function WebsiteBuilder() {
           <div style={{
             flex: 1, padding: previewMode === 'desktop' ? 0 : '20px',
             display: 'flex', justifyContent: 'center', alignItems: previewMode === 'desktop' ? 'stretch' : 'flex-start',
-            overflow: 'auto', gap: previewMode === 'desktop' ? '2px' : '40px', background: '#d1d5db'
+            minHeight: 0, overflow: 'auto', gap: previewMode === 'desktop' ? '2px' : '40px', background: '#d1d5db'
           }}>
             {/* Original Site Frame */}
             {(comparisonMode === 'original' || comparisonMode === 'split') && (
               <div style={{ ...getPreviewContainerStyle(), display: 'flex', flexDirection: 'column' }}>
-                {comparisonMode === 'split' && (
-                  <div style={{ padding: '6px 12px', background: 'var(--db-surface)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-muted)', borderBottom: '1px solid var(--db-border)' }}>
-                    Original Site ({domain})
-                  </div>
-                )}
+                <div style={{ padding: '6px 12px', background: 'var(--db-surface)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-muted)', borderBottom: '1px solid var(--db-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Original Site ({domain})</span>
+                  <a href={`https://${domain}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--db-accent)', textDecoration: 'none', background: 'rgba(59, 130, 246, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                    Open in new tab ↗
+                  </a>
+                </div>
                 <iframe src={`https://${domain}`} title="Original Website" style={{ ...getIframeStyle(), flex: 1, width: '100%', background: '#fff' }} />
               </div>
             )}
@@ -696,11 +853,12 @@ export default function WebsiteBuilder() {
               {/* Original Site Frame */}
               {(comparisonMode === 'original' || comparisonMode === 'split') && (
                 <div style={{ ...getPreviewContainerStyle(), display: 'flex', flexDirection: 'column' }}>
-                  {comparisonMode === 'split' && (
-                    <div style={{ padding: '6px 12px', background: 'var(--db-surface)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-muted)', borderBottom: '1px solid var(--db-border)' }}>
-                      Original Site ({domain})
-                    </div>
-                  )}
+                  <div style={{ padding: '6px 12px', background: 'var(--db-surface)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-muted)', borderBottom: '1px solid var(--db-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Original Site ({domain})</span>
+                    <a href={`https://${domain}`} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--db-accent)', textDecoration: 'none', background: 'rgba(59, 130, 246, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                      Open in new tab ↗
+                    </a>
+                  </div>
                   <iframe src={`https://${domain}`} title="Original Website" style={{ ...getIframeStyle(), flex: 1, width: '100%', background: '#fff' }} />
                 </div>
               )}
@@ -720,7 +878,7 @@ export default function WebsiteBuilder() {
             </div>
           </div>
 
-          {/* Purchase CTA */}
+          {/* Publish CTA */}
           <div className="db-card" style={{
             background: 'linear-gradient(160deg, #0f1a0f 0%, #111827 60%)',
             border: '1px solid rgba(118, 185, 0, 0.2)', color: '#fff', marginBottom: '24px',
@@ -728,24 +886,41 @@ export default function WebsiteBuilder() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '24px' }}>
               <div style={{ flex: '1 1 400px' }}>
                 <div style={{ fontSize: '0.6875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#76b900', marginBottom: '8px' }}>
-                  Ready to Go Live?
+                  {publishedUrl ? 'Site Published' : 'Publish Your Firm Website'}
                 </div>
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '6px' }}>
-                  Love this design? Deploy it for <span style={{ color: '#76b900' }}>$500</span>
-                </div>
-                <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)', maxWidth: '520px' }}>
-                  One-time fee. Firebase Hosting, custom domain, SSL certificate, Google Analytics. Includes 30 days of free revisions.
-                </p>
+                {publishedUrl ? (
+                  <>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '8px' }}>
+                      Your site is live at:
+                    </div>
+                    <a href={publishedUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#76b900', fontSize: '0.9rem', fontWeight: 700, wordBreak: 'break-all' }}>
+                      {publishedUrl}
+                    </a>
+                    <p style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.5)', marginTop: '8px' }}>
+                      Includes AI chat, intake form, and voice callback. Indexed by search engines and AI assistants.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '6px' }}>
+                      Go live with AI intake, SEO, AEO & GEO
+                    </div>
+                    <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.5)', maxWidth: '520px' }}>
+                      Publish your site instantly — included in your subscription. Clients can chat, submit intake forms, or request an AI voice callback 24/7.
+                    </p>
+                  </>
+                )}
+                {publishError && <p style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '8px' }}>{publishError}</p>}
               </div>
               <div style={{ display: 'flex', gap: '12px', flexShrink: 0, flexWrap: 'wrap' }}>
                 <button onClick={() => setShowCustomizer(true)} className="db-btn db-btn-secondary" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>
-                  <Settings2 size={16} /> Customize First
+                  <Settings2 size={16} /> Customize
                 </button>
-                <button className="db-btn db-btn-secondary" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>
+                <button onClick={handleDownloadHtml} className="db-btn db-btn-secondary" style={{ background: 'rgba(255,255,255,0.08)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)' }}>
                   <Download size={16} /> Download HTML
                 </button>
-                <button className="db-btn db-btn-accent db-btn-lg">
-                  <ShoppingCart size={16} /> Purchase & Deploy
+                <button onClick={handlePublishSite} disabled={publishing} className="db-btn db-btn-accent db-btn-lg" style={{ opacity: publishing ? 0.7 : 1 }}>
+                  <Globe size={16} /> {publishing ? 'Publishing…' : publishedUrl ? 'Republish' : 'Publish Site'}
                 </button>
               </div>
             </div>
@@ -765,9 +940,9 @@ export default function WebsiteBuilder() {
                 </span>
                 <span style={{
                   padding: '2px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: 700,
-                  background: `${scoreColor(overallScore)}20`, color: scoreColor(overallScore),
+                  background: `${overallScore === null ? '#64748b' : scoreColor(overallScore)}20`, color: overallScore === null ? '#64748b' : scoreColor(overallScore),
                 }}>
-                  {overallScore}/100
+                  {overallScore === null ? 'No live score' : `${overallScore}/100`}
                 </span>
               </div>
               {reportCollapsed ? <ChevronDown size={16} color="var(--db-text-muted)" /> : <ChevronUp size={16} color="var(--db-text-muted)" />}
@@ -775,7 +950,7 @@ export default function WebsiteBuilder() {
             {!reportCollapsed && (
               <div style={{ padding: '0 20px 20px' }}>
                 <div className="db-stats-grid" style={{ marginBottom: '20px' }}>
-                  {report.scores && Object.entries(report.scores).map(([key, value]) => (
+                  {report.scores ? Object.entries(report.scores).map(([key, value]) => (
                     <div key={key} className="db-stat-card">
                       <div className="db-stat-label">{key.charAt(0).toUpperCase() + key.slice(1)}</div>
                       <div className="db-stat-value" style={{ color: scoreColor(value) }}>{value}</div>
@@ -783,7 +958,12 @@ export default function WebsiteBuilder() {
                         <div style={{ width: `${value}%`, height: '100%', background: scoreColor(value), borderRadius: '2px' }} />
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="db-stat-card">
+                      <div className="db-stat-label">Live Crawl</div>
+                      <div className="db-stat-value" style={{ color: '#64748b', fontSize: '0.875rem' }}>Unavailable</div>
+                    </div>
+                  )}
                 </div>
                 <div className="db-two-col">
                   <div>
@@ -832,22 +1012,26 @@ export default function WebsiteBuilder() {
                 justifyContent: 'space-between',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <CheckCircle2 size={16} color="#16a34a" />
+                  {autoFixedCount > 0
+                    ? <CheckCircle2 size={16} color="#16a34a" />
+                    : <AlertTriangle size={16} color="#d97706" />}
                   <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--db-text-primary)' }}>
-                    Issues Found & Auto-Fixed
+                    {gapsTitle}
                   </span>
-                  <span style={{
-                    padding: '2px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: 700,
-                    background: '#16a34a20', color: '#16a34a',
-                  }}>
-                    {config.contentGaps.filter(g => g.autoFixed).length} fixed automatically
-                  </span>
-                  {config.contentGaps.filter(g => !g.autoFixed).length > 0 && (
+                  {autoFixedCount > 0 && (
+                    <span style={{
+                      padding: '2px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: 700,
+                      background: '#16a34a20', color: '#16a34a',
+                    }}>
+                      {autoFixedCount} fixed automatically
+                    </span>
+                  )}
+                  {needsInputCount > 0 && (
                     <span style={{
                       padding: '2px 8px', borderRadius: '4px', fontSize: '0.6875rem', fontWeight: 700,
                       background: '#d9770620', color: '#d97706',
                     }}>
-                      {config.contentGaps.filter(g => !g.autoFixed).length} needs your input
+                      {needsInputCount} need{needsInputCount === 1 ? 's' : ''} your input
                     </span>
                   )}
                 </div>
@@ -856,9 +1040,11 @@ export default function WebsiteBuilder() {
               {!gapsCollapsed && (
                 <div style={{ padding: '0 20px 20px' }}>
                 <p style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', marginBottom: '16px', lineHeight: 1.5 }}>
-                  {config.isKnownFirm
-                    ? 'We scraped your website and Google Business profile, preserved your real content, and automatically fixed all identified issues in your redesign.'
-                    : 'We analyzed your online presence and automatically fixed all identified issues. Your redesign includes Google Reviews, service areas, schema markup, and more.'
+                  {autoFixedCount > 0 && needsInputCount > 0
+                    ? `We analyzed your online presence and auto-fixed ${autoFixedCount} technical issue${autoFixedCount === 1 ? '' : 's'} in your redesign. The ${needsInputCount} item${needsInputCount === 1 ? '' : 's'} below need verified content from you before publishing — we never fabricate firm details.`
+                    : autoFixedCount > 0
+                    ? 'We analyzed your online presence and automatically fixed every issue we detected in your redesign — schema markup, responsive layout, and more.'
+                    : 'We analyzed your online presence. The items below need verified content from you before publishing — we never fabricate attorneys, reviews, or contact details.'
                   }
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -906,7 +1092,7 @@ export default function WebsiteBuilder() {
                             </span>
                           ) : (
                             <button
-                              onClick={() => setShowCustomizer(true)}
+                              onClick={() => openGapInCustomizer(gap)}
                               style={{
                                 padding: '4px 10px', borderRadius: '6px', fontSize: '0.625rem', fontWeight: 700,
                                 background: 'var(--db-nvidia-green-subtle)', color: '#76b900', border: '1px solid rgba(118,185,0,0.3)',
@@ -1079,7 +1265,14 @@ function ColorsTab({ config, updateColors }) {
   );
 }
 
-function PhotosTab({ config }) {
+function PhotosTab({ config, updateConfig, updateAttorney }) {
+  const loadImage = (file, onLoad) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => onLoad(reader.result);
+    reader.readAsDataURL(file);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
       <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-muted)' }}>Website Photos</div>
@@ -1088,10 +1281,15 @@ function PhotosTab({ config }) {
           padding: '14px', background: 'var(--db-bg)', borderRadius: '8px',
           border: '1.5px dashed var(--db-border)', textAlign: 'center',
         }}>
-          <Image size={20} color="var(--db-text-muted)" style={{ opacity: 0.4, marginBottom: '6px' }} />
+          {config.photos?.[slot.id]
+            ? <img src={config.photos[slot.id]} alt={`${slot.label} preview`} style={{ width: '100%', height: '72px', objectFit: 'cover', borderRadius: '6px', marginBottom: '8px' }} />
+            : <Image size={20} color="var(--db-text-muted)" style={{ opacity: 0.4, marginBottom: '6px' }} />}
           <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>{slot.label}</div>
           <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)', marginBottom: '8px' }}>{slot.desc}</div>
-          <button className="db-btn db-btn-secondary db-btn-sm">Upload</button>
+          <label className="db-btn db-btn-secondary db-btn-sm" style={{ cursor: 'pointer' }}>
+            Upload
+            <input type="file" accept="image/*" hidden onChange={event => loadImage(event.target.files?.[0], image => updateConfig('photos', { ...(config.photos || {}), [slot.id]: image }))} />
+          </label>
         </div>
       ))}
       <div style={{ fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--db-text-muted)', marginTop: '4px' }}>Attorney Headshots</div>
@@ -1104,12 +1302,17 @@ function PhotosTab({ config }) {
             width: '40px', height: '40px', borderRadius: '50%', background: config.colors.primary,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: '#fff', fontSize: '0.75rem', fontWeight: 700, flexShrink: 0,
-          }}>{atty.initials}</div>
+          }}>
+            {atty.photo ? <img src={atty.photo} alt="" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} /> : atty.initials}
+          </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 600 }}>{atty.name}</div>
             <div style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)' }}>{atty.title}</div>
           </div>
-          <button className="db-btn db-btn-secondary db-btn-sm">Upload</button>
+          <label className="db-btn db-btn-secondary db-btn-sm" style={{ cursor: 'pointer' }}>
+            Upload
+            <input type="file" accept="image/*" hidden onChange={event => loadImage(event.target.files?.[0], image => updateAttorney(i, 'photo', image))} />
+          </label>
         </div>
       ))}
     </div>

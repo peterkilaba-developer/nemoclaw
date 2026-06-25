@@ -1,7 +1,7 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
 import './LegalPage.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
 
 export default function DataProcessing() {
   return (
@@ -10,7 +10,7 @@ export default function DataProcessing() {
       <SEO
         title="Data Processing Agreement"
         path="/data-processing"
-        description="NemoC Law AI DPA. How we process firm data inside NVIDIA NemoClaw sandboxes — isolation architecture, sub-processors, PII redaction, and breach notification policy."
+        description="NemoC LAW AI DPA. How we process firm data inside NVIDIA NemoClaw sandboxes — isolation architecture, sub-processors, PII redaction, and breach notification policy."
       />
       <main className="legal-page">
         <div className="container">
@@ -19,7 +19,7 @@ export default function DataProcessing() {
 
           <section>
             <h2>1. Scope</h2>
-            <p>This Data Processing Agreement (DPA) governs the processing of personal data by NemoC Law AI on behalf of your law firm ("Data Controller") in connection with the Agentic OS.</p>
+            <p>This Data Processing Agreement (DPA) governs the processing of personal data by NemoC LAW AI on behalf of your law firm ("Data Controller") in connection with the Agentic OS.</p>
           </section>
 
           <section>
@@ -35,7 +35,7 @@ export default function DataProcessing() {
 
           <section>
             <h2>3. Sub-processors</h2>
-            <p>NemoC Law AI uses the following sub-processors:</p>
+            <p>NemoC LAW AI uses the following sub-processors:</p>
             <ul>
               <li><strong>NVIDIA (NemoClaw/OpenShell):</strong> Infrastructure provider for sandboxed AI runtime</li>
               <li><strong>Google Cloud Platform:</strong> Authentication and account management</li>
@@ -45,7 +45,7 @@ export default function DataProcessing() {
 
           <section>
             <h2>4. Data Subject Rights</h2>
-            <p>NemoC Law AI will assist the Data Controller in responding to data subject requests, including access, rectification, erasure, and data portability requests, within 30 days of receipt.</p>
+            <p>NemoC LAW AI will assist the Data Controller in responding to data subject requests, including access, rectification, erasure, and data portability requests, within 30 days of receipt.</p>
           </section>
 
           <section>
@@ -62,8 +62,8 @@ export default function DataProcessing() {
 
           <section>
             <h2>6. Breach Notification & Limitation of Liability</h2>
-            <p>In the unlikely event of a data breach affecting your firm's data, NemoC Law AI will notify the Data Controller within 72 hours of discovery, in accordance with applicable privacy regulations.</p>
-            <p><strong>Important Disclaimer:</strong> While we guarantee that our architecture is designed to prevent data leaks (via isolated NemoClaw sandboxes), NemoC Law AI expressly disclaims any financial liability, indemnification, or liability for legal malpractice suits arising from a data breach, unauthorized access, or AI-generated output. Security and legal compliance ultimately remain the responsibility of the Data Controller (the law firm).</p>
+            <p>In the unlikely event of a data breach affecting your firm's data, NemoC LAW AI will notify the Data Controller within 72 hours of discovery, in accordance with applicable privacy regulations.</p>
+            <p><strong>Important Disclaimer:</strong> While we guarantee that our architecture is designed to prevent data leaks (via isolated NemoClaw sandboxes), NemoC LAW AI expressly disclaims any financial liability, indemnification, or liability for legal malpractice suits arising from a data breach, unauthorized access, or AI-generated output. Security and legal compliance ultimately remain the responsibility of the Data Controller (the law firm).</p>
           </section>
 
           <section>

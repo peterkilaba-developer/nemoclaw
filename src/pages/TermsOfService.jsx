@@ -1,7 +1,7 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
 import './LegalPage.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
 
 export default function TermsOfService() {
   return (
@@ -10,7 +10,7 @@ export default function TermsOfService() {
       <SEO
         title="Terms of Service"
         path="/terms"
-        description="NemoC Law AI Terms of Service. Lifetime price lock guarantee, AI output disclaimer, per-firm subscription details, and data ownership rights for law firms."
+        description="NemoC LAW AI Terms of Service. Lifetime price lock guarantee, AI output disclaimer, per-firm subscription details, and data ownership rights for law firms."
       />
       <main className="legal-page">
         <div className="container">
@@ -19,12 +19,12 @@ export default function TermsOfService() {
 
           <section>
             <h2>1. Acceptance of Terms</h2>
-            <p>By accessing or using NemoC Law AI's Agentic Operating System (AgaaS), you agree to be bound by these Terms of Service. If you are using the Agentic OS on behalf of a law firm or organization, you represent that you have authority to bind that entity.</p>
+            <p>By accessing or using NemoC LAW AI's Agentic Operating System (AgaaS), you agree to be bound by these Terms of Service. If you are using the Agentic OS on behalf of a law firm or organization, you represent that you have authority to bind that entity.</p>
           </section>
 
           <section>
             <h2>2. Service Description</h2>
-            <p>NemoC Law AI provides AI-powered workforce agents for law firms, including but not limited to: AI Associate, AI Paralegal, AI Receptionist, AI Secretary, AI Billing, AI Operations, and AI Strategy agents. All agents operate within isolated NVIDIA NemoClaw sandbox environments.</p>
+            <p>NemoC LAW AI provides AI-powered workforce agents for law firms, including but not limited to: AI Associate, AI Paralegal, AI Receptionist, AI Secretary, AI Billing, AI Operations, and AI Strategy agents. All agents operate within isolated NVIDIA NemoClaw sandbox environments.</p>
           </section>
 
           <section>
@@ -35,7 +35,7 @@ export default function TermsOfService() {
 
           <section>
             <h2>4. Data Ownership</h2>
-            <p>You retain full ownership of all data, documents, and materials uploaded to or processed by the Agentic OS. NemoC Law AI claims no ownership interest in your firm data. Your data is processed exclusively within your private NemoClaw sandbox and is never used to train AI models.</p>
+            <p>You retain full ownership of all data, documents, and materials uploaded to or processed by the Agentic OS. NemoC LAW AI claims no ownership interest in your firm data. Your data is processed exclusively within your private NemoClaw sandbox and is never used to train AI models.</p>
           </section>
 
           <section>
@@ -51,12 +51,12 @@ export default function TermsOfService() {
 
           <section>
             <h2>6. AI Output Disclaimer</h2>
-            <p>AI agent outputs are generated assistive tools and do not constitute legal advice. Attorneys remain responsible for reviewing, validating, and approving all AI-generated work product before use in any legal proceeding or client communication. NemoC Law AI is not a law firm and does not provide legal services.</p>
+            <p>AI agent outputs are generated assistive tools and do not constitute legal advice. Attorneys remain responsible for reviewing, validating, and approving all AI-generated work product before use in any legal proceeding or client communication. NemoC LAW AI is not a law firm and does not provide legal services.</p>
           </section>
 
           <section>
             <h2>7. Limitation of Liability</h2>
-            <p>To the maximum extent permitted by law, NemoC Law AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Agentic OS. We expressly disclaim any financial liability, indemnification, or liability for legal malpractice suits in the event of a data breach, system failure, or AI hallucination. The "Zero Data Leak Guarantee" refers to our architectural sandbox containment, not a financial insurance policy.</p>
+            <p>To the maximum extent permitted by law, NemoC LAW AI shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Agentic OS. We expressly disclaim any financial liability, indemnification, or liability for legal malpractice suits in the event of a data breach, system failure, or AI hallucination. The "Zero Data Leak Guarantee" refers to our architectural sandbox containment, not a financial insurance policy.</p>
           </section>
 
           <section>

@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   NemoC Law AI — Dashboard Design System
+   NemoC LAW AI — Dashboard Design System
    Lawyer-grade visual standards: authority through restraint.
    Subtle 0.02 opacity backgrounds, invisible 0.03 borders.
    Only black/white, primary green, and semantic colors.
@@ -46,22 +46,113 @@
   --db-shadow-md: var(--shadow-md);
 }
 
+.dashboard-mode-toggle {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--db-border, rgba(255, 255, 255, 0.12));
+  border-radius: 9px;
+  background: var(--db-surface, rgba(255, 255, 255, 0.06));
+  color: var(--db-text-muted, rgba(255, 255, 255, 0.58));
+}
+
+.dashboard-mode-toggle button {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 750;
+  padding: 0 10px;
+}
+
+.dashboard-mode-toggle button:hover {
+  background: var(--db-bg, rgba(255, 255, 255, 0.06));
+  color: var(--db-text-primary, #fff);
+}
+
+.dashboard-mode-toggle button.is-active {
+  background: var(--db-bg, rgba(255, 255, 255, 0.1));
+  color: var(--db-text-primary, #fff);
+  box-shadow: inset 0 0 0 1px var(--db-border-light, rgba(255, 255, 255, 0.06));
+}
+
 /* ── Light Mode Overrides ── */
-@media (prefers-color-scheme: light) {
-  :root {
-    --db-sidebar: #111827; /* Dark navy sidebar even in light mode for authority */
-    --db-border-light: rgba(0, 0, 0, 0.03);
-  }
+:root[data-theme='light'] {
+  --db-sidebar: #111827; /* Dark navy sidebar even in light mode for authority */
+  --db-border-light: rgba(0, 0, 0, 0.03);
+}
+
+.theme-toggle {
+  border: 1px solid var(--db-border, rgba(255, 255, 255, 0.12));
+  background: var(--db-surface, rgba(255, 255, 255, 0.06));
+  color: var(--db-text-secondary, rgba(255, 255, 255, 0.68));
+  font-family: var(--db-font);
+}
+
+.theme-toggle-compact {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--db-radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.theme-toggle-compact:hover {
+  background: var(--db-bg, rgba(255, 255, 255, 0.1));
+  color: var(--db-text-primary, #fff);
+}
+
+.theme-toggle-segmented {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.theme-toggle-segmented button {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 750;
+  padding: 0 12px;
+}
+
+.theme-toggle-segmented button:hover,
+.theme-toggle-segmented button.is-active {
+  background: var(--db-bg, rgba(255, 255, 255, 0.1));
+  color: var(--db-text-primary, #fff);
 }
 
 
 /* ── Dashboard Layout ── */
 .dashboard-layout {
   display: flex;
+  min-width: 0;
   min-height: 100vh;
   background: var(--db-bg);
   font-family: var(--db-font);
   color: var(--db-text-primary);
+  overflow: hidden;
 }
 
 /* ── Sidebar ── */
@@ -265,7 +356,12 @@
 .db-main {
   flex: 1;
   margin-left: 260px;
+  min-width: 0;
   min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .db-topbar {
@@ -361,7 +457,18 @@
 }
 
 .db-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 32px;
+}
+
+.db-page-container,
+.db-chat-container {
+  min-width: 0;
 }
 
 .db-page-header {
@@ -387,6 +494,8 @@
   background: var(--db-surface);
   border: 1px solid var(--db-border);
   border-radius: var(--db-radius-lg);
+  min-width: 0;
+  min-height: 0;
   padding: 24px;
   box-shadow: var(--db-shadow-sm);
 }
@@ -413,13 +522,14 @@
 
 /* ── Stats Grid ── */
 .db-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 16px;
   margin-bottom: 24px;
 }
 
 .db-stat-card {
+  flex: 1;
+  min-width: 0;
   background: var(--db-surface);
   border: 1px solid var(--db-border);
   border-radius: var(--db-radius-lg);
@@ -657,12 +767,27 @@
 }
 
 .db-btn-primary {
-  background: var(--db-text-primary);
-  color: var(--text-on-dark);
+  background: var(--db-nvidia-green);
+  color: var(--text-on-brand);
+  border: 1px solid var(--db-nvidia-green);
 }
 
-.db-btn-primary:hover {
-  background: var(--bg-tertiary);
+.db-btn-primary:hover:not(:disabled) {
+  background: var(--nvidia-green-light);
+  color: var(--text-on-brand);
+  border-color: var(--nvidia-green-light);
+}
+
+.db-btn:disabled,
+.db-btn-primary:disabled,
+.db-btn-secondary:disabled,
+.db-btn-outline:disabled {
+  background: var(--db-surface-elevated);
+  color: var(--db-text-secondary);
+  border-color: var(--db-border);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .db-btn-secondary {
@@ -799,6 +924,15 @@
   /* 70% Chat / 30% Context with tight gap */
   grid-template-columns: minmax(0, 70fr) minmax(0, 30fr);
   gap: 16px;
+  min-width: 0;
+  min-height: 0;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.db-two-col > * {
+  min-width: 0;
+  min-height: 0;
 }
 
 /* Context column — tighter padding for usable space */
@@ -807,6 +941,12 @@
 }
 .db-two-col > *:last-child .db-card-header {
   margin-bottom: 12px;
+}
+
+/* The Chief of Staff context rail scrolls as a unit; its cards must retain
+   their content height so payment controls cannot overlap the next card. */
+.my-agent-context-panel > .db-card {
+  flex: 0 0 auto;
 }
 
 /* ── Responsive ── */
@@ -829,12 +969,28 @@
 .db-viewport-workspace {
   margin: -32px; /* Negate the 32px parent content padding */
   height: calc(100vh - 64px);
+  min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   position: relative;
   background: var(--db-bg);
   padding: 8px 32px 20px;
+}
+
+.db-viewport-workspace [style*="display: flex"],
+.db-viewport-workspace [style*="display: grid"],
+.db-viewport-workspace [style*="flex-direction: column"] {
+  min-width: 0;
+  min-height: 0;
+}
+
+.db-viewport-workspace [style*="overflow-y: auto"],
+.db-viewport-workspace [style*="overflow: auto"] {
+  min-height: 0;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ══════════════════════════════════════════════════════════════

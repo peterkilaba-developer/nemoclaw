@@ -1,5 +1,5 @@
 import {
-  collection, addDoc, getDocs, query, where, orderBy,
+  collection, addDoc, getDocs, query, orderBy,
   serverTimestamp, doc, updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -10,10 +10,10 @@ const SITE_URL = 'https://nemoc-law.ai';
 // Pricing tiers — must match Pricing.jsx exactly
 // Founder pricing = first 100 firms; future = standard pricing after
 const PRICING = {
-  'base': { current: 297, future: 497, label: 'Agentic OS' }
+  'base': { current: 297, future: 997, label: 'Agentic HITL OS' }
 };
 
-function getPricing(firmSize) {
+function getPricing(_firmSize) {
   return PRICING['base'];
 }
 
@@ -23,44 +23,42 @@ function getPricing(firmSize) {
 
 const EMAIL_STYLES = `
   body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f9fafb; margin: 0; padding: 0; color: #111827; }
-  .container { max-width: 600px; margin: 0 auto; padding: 20px 12px; }
-  .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 32px 16px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
-  .logo { display: block; max-width: 180px; height: auto; margin-bottom: 24px; }
-  .tagline { color: #6b7280; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 32px; border-bottom: 1px solid #f3f4f6; padding-bottom: 12px; }
-  h1 { color: #111827; font-size: 24px; font-weight: 700; margin: 0 0 16px; line-height: 1.3; }
+  .container { max-width: 600px; margin: 0 auto; padding: 24px 8px; }
+  .card { background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.05); }
+  .logo { display: block; max-width: 160px; height: auto; margin-bottom: 24px; }
+  .tagline { color: #6b7280; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 32px; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px; }
+  h1 { color: #111827; font-size: 26px; font-weight: 800; margin: 0 0 24px; line-height: 1.4; letter-spacing: -0.02em; }
   h1 span { color: #166534; }
-  p { color: #4b5563; font-size: 14px; line-height: 1.6; margin: 0 0 16px; }
+  p { color: #4b5563; font-size: 15px; line-height: 1.7; margin: 0 0 20px; }
   
   .text-strong { color: #111827; font-weight: 700; }
-  .text-muted-sm { font-size: 12px; color: #6b7280; font-weight: 500; }
-  .text-muted-md { font-size: 13px; color: #4b5563; }
+  .text-muted-sm { font-size: 13px; color: #6b7280; font-weight: 500; }
+  .text-muted-md { font-size: 14px; color: #4b5563; }
   .text-warning { font-size: 13px; color: #b45309; font-weight: 600; margin: 0; }
   .text-center { text-align: center; }
 
-  .highlight { background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.06); border-radius: 8px; padding: 20px; margin: 24px 0; border-left: 4px solid #76b900; }
-  .highlight-title { color: #76b900; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
-  .price-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .highlight { background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.06); border-radius: 8px; padding: 24px; margin: 32px 0; border-left: 4px solid #76b900; }
+  .highlight-title { color: #76b900; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 16px; }
+  .price-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
   .price-future { color: #9ca3af; text-decoration: line-through; font-size: 16px; }
   .price-highlight { color: #16a34a; font-size: 24px; font-weight: 800; }
   .price-label { color: #6b7280; font-size: 12px; }
   
   .tasks { margin: 16px 0; }
-  .task-tag { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; color: #4b5563; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 4px; margin: 3px 4px 3px 0; }
-  .agents-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 24px; }
-  .agent-tag { display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 4px; }
-  .benefit-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; color: #4b5563; font-size: 13px; }
+  .task-tag { display: inline-block; background: #f3f4f6; border: 1px solid #e5e7eb; color: #4b5563; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 6px; margin: 4px 6px 4px 0; }
+  .agents-grid { margin: 24px 0 32px; display: block; text-align: left; }
+  .agent-tag { display: inline-block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e3a8a; font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 6px; margin: 0 8px 10px 0; }
+  .benefit-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; color: #4b5563; font-size: 14px; }
   
-  .cta { display: inline-block; background: #76b900; color: #111; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 6px; text-decoration: none; margin: 24px 0 16px; text-align: center; }
+  .cta { display: inline-block; background: #76b900; color: #111; font-size: 15px; font-weight: 700; padding: 16px 36px; border-radius: 6px; text-decoration: none; margin: 32px 0 16px; text-align: center; }
   .cta:hover { background: #65a300; }
-  .footer { text-align: center; padding: 24px 0; color: #9ca3af; font-size: 11px; }
+  .footer { text-align: center; padding: 32px 0 16px; color: #9ca3af; font-size: 12px; line-height: 1.6; }
   .footer a { color: #6b7280; text-decoration: underline; }
-  .divider { height: 1px; background: #e5e7eb; margin: 24px 0; }
+  .divider { height: 1px; background: #e5e7eb; margin: 32px 0; }
   
-  .audio-player-email { display: block; text-decoration: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
-  .audio-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #166534; margin-bottom: 3px; }
-  .audio-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 2px; }
-  .audio-duration { font-size: 11px; color: #6b7280; }
-  .audio-play-btn { display: inline-block; width: 44px; height: 44px; border-radius: 50%; background: #16a34a; text-align: center; line-height: 44px; }
+  .video-block { margin: 32px 0; border-radius: 8px; overflow: hidden; border: 1px solid #e5e7eb; background: #000; }
+  .video-footer { background: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb; }
+  .video-footer-link { color: #166534; font-size: 14px; font-weight: 700; text-decoration: none; display: inline-block; }
   
   @media (prefers-color-scheme: dark) {
     body { background: #0a0e17; color: #f3f4f6; }
@@ -89,59 +87,46 @@ const EMAIL_STYLES = `
     .footer a { color: #9ca3af; }
     .divider { background: #1f2937; }
     
-    .audio-player-email { background: rgba(118,185,0,0.06); border-color: rgba(118,185,0,0.2); }
-    .audio-label { color: #76b900; }
-    .audio-title { color: #ffffff; }
-    .audio-duration { color: rgba(255,255,255,0.35); }
-    .audio-play-btn { background: linear-gradient(135deg, #76b900, #4a7a00); }
+    .video-block { border-color: #374151; }
+    .video-footer { background: #1f2937 !important; border-top-color: #374151 !important; }
+    .video-footer-link { color: #76b900 !important; }
   }
 `;
 
-const AUDIO_PLAYER_BLOCK = `
-  <!-- Audio Player -->
-  <div class="audio-player-email">
-    <table cellpadding="0" cellspacing="0" border="0" width="100%"><tr>
-      <td style="vertical-align:middle;">
-        <div class="audio-label">Listen Now — 25 min Deep Dive</div>
-        <div class="audio-title">AI and the Agentic Legal Revolution</div>
-        <div class="audio-duration">How NemoC LAW AI is reshaping legal work with autonomous agents</div>
-      </td>
-    </tr></table>
-
-    <audio controls preload="none" style="width:100%; height:40px; border-radius:8px; outline:none; margin-top:8px;" src="${SITE_URL}/nemoc-law-ai-deep-dive.mp3">
-      Your email client does not support audio playback.
-    </audio>
-
-    <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-top:12px;"><tr>
-      <td width="44" style="vertical-align:middle;">
-        <a href="${SITE_URL}/nemoc-law-ai-deep-dive.mp3" target="_blank" style="text-decoration:none;">
-          <div class="audio-play-btn">
-            <span style="font-size:18px; color:#ffffff;">▶</span>
-          </div>
-        </a>
-      </td>
-      <td style="vertical-align:middle; padding-left:12px;">
-        <a href="${SITE_URL}/nemoc-law-ai-deep-dive.mp3" target="_blank" style="text-decoration:none;" class="audio-label">
-          ▶ Click to play in browser
-        </a>
-        <div class="audio-duration" style="margin-top:2px;">Opens in a new tab if your email client doesn't support inline audio</div>
-      </td>
-    </tr></table>
+const VIDEO_PLAYER_BLOCK = `
+  <!-- Video Player Block -->
+  <div class="video-block">
+    <!-- Inline video for supported clients (Apple Mail) -->
+    <video width="100%" controls poster="${SITE_URL}/video-poster.jpg" style="width: 100%; max-width: 100%; display: block; background: #000;">
+      <source src="${SITE_URL}/NemoClaw_Agentic_OS.mp4" type="video/mp4">
+      
+      <!-- Fallback image + link for unsupported clients (Gmail, Outlook) -->
+      <a href="${SITE_URL}/?play_demo=true" target="_blank" style="display:block;">
+        <img border="0" src="${SITE_URL}/video-poster.jpg" alt="Play NemoC LAW AI Agentic OS Demo" width="100%" style="width: 100%; max-width: 100%; display: block;" />
+      </a>
+    </video>
+    
+    <!-- Universal footer link -->
+    <div class="video-footer">
+      <a href="${SITE_URL}/?play_demo=true" target="_blank" class="video-footer-link">
+        ▶ Watch the 7-Minute Agentic OS Demo
+      </a>
+    </div>
   </div>
 `;
 
 const EMAIL_FOOTER = `
   <div class="footer">
-    <p>NemoC LAW AI · Agentic as a Service for Lawyers</p>
-    <p>Built on OpenClaw · NemoClaw · OpenShell</p>
+    <p>NemoC LAW AI · Agentic HITL OS for Law Firms</p>
+    <p>Powered by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> & OpenShell Enterprise Technology</p>
     <p><a href="${SITE_URL}">nemoc-law.ai</a></p>
   </div>
 `;
 
 const EMAIL_FOOTER_OUTREACH = (firmName) => `
   <div class="footer">
-    <p>NemoC LAW AI · Agentic as a Service for Lawyers</p>
-    <p>Built on OpenClaw · NemoClaw · OpenShell</p>
+    <p>NemoC LAW AI · Agentic HITL OS for Law Firms</p>
+    <p>Powered by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> & OpenShell Enterprise Technology</p>
     <p>You're receiving this because ${firmName} is in our target market of innovative law firms.</p>
     <p><a href="${SITE_URL}">nemoc-law.ai</a> · <a href="mailto:unsubscribe@nemoc-law.ai">Unsubscribe</a></p>
   </div>
@@ -203,7 +188,7 @@ export function getLaunchEmailTemplate(lead) {
   <div class="container">
     <div class="card">
       <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" />
-      <div class="tagline">Born Agentic for Law Firms</div>
+      <div class="tagline">Agentic HITL OS for Law Firms</div>
 
       <h1>Your Founder Access is <span>Ready</span></h1>
 
@@ -256,7 +241,7 @@ export function getLaunchEmailTemplate(lead) {
         <strong class="text-strong">What's included in Founder Access:</strong><br/>
         ✓ One personal AI agent — delegates to 15+ specialized sub-agents<br/>
         ✓ Unlimited AI tokens — no per-query charges, ever<br/>
-        ✓ Zero data leak — secured by OpenClaw · NemoClaw · OpenShell<br/>
+        ✓ Enterprise Zero-Trust Data Isolation — secured by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> & OpenShell<br/>
         ✓ Continuous learning — your agent adapts to your writing style<br/>
         ✓ Lifetime price lock guarantee
       </p>
@@ -282,7 +267,7 @@ This link is unique to your email. Your founder pricing will be automatically ap
 What's included:
 - One personal AI agent that orchestrates 15+ specialized sub-agents
 - Unlimited AI tokens — no per-query charges
-- Zero data leak — secured by OpenClaw · NemoClaw · OpenShell
+- Enterprise Zero-Trust Data Isolation — secured by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> & OpenShell
 - Continuous learning — your agent adapts to your writing style
 - Lifetime price lock guarantee
 
@@ -306,7 +291,7 @@ export function getColdOutreachTemplate(prospect) {
   const signupLink = `${SITE_URL}/login`;
   const pricing = getPricing(prospect.firmSize);
 
-  const subject = `${firmName} — One AI agent that runs your entire firm`;
+  const subject = `${firmName} — Your Secured Agentic HITL OS is Ready`;
 
   const html = `
 <!DOCTYPE html>
@@ -320,23 +305,24 @@ export function getColdOutreachTemplate(prospect) {
   <div class="container">
     <div class="card">
       <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" />
-      <div class="tagline">Born Agentic for Law Firms</div>
+      <div class="tagline">Agentic HITL OS for Law Firms</div>
 
-      <h1>What if <span>${firmName}</span> had a private AI workforce that never sleeps?</h1>
+      <h1>We've provisioned your Secured Agentic HITL OS for <span>${firmName}</span>.</h1>
+
+      ${VIDEO_PLAYER_BLOCK}
 
       <p>
-        Hi — I'm reaching out because ${locationStr ? `law firms in ${locationStr}` : 'firms like yours'} are exactly who we built NemoC LAW AI for.
+        Hi — I'm reaching out because we are dynamically prospecting fast-growing law firms in ${locationStr ? locationStr : 'your area'}, and we identified ${firmName} as a strong candidate. We have already pre-provisioned a secure <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> enterprise sandbox specifically for your firm.
       </p>
 
       <p>
-        We've created the first <strong style="color:#fff">Agentic OS</strong> purpose-built for law firms.
-        Every employee gets <strong style="color:#fff">one personal AI agent</strong> that handles legal research,
-        contract review, client intake, document drafting, billing, and more — all through plain English conversation.
-        Not a chatbot. Not a search tool. <strong style="color:#fff">A private AI workforce built on OpenClaw · NemoClaw · OpenShell.</strong>
+        We've built the first <strong class="text-strong">Agentic HITL OS</strong> strictly for law firms.
+        Your team remains in complete control while agents natively accelerate their most tedious workflows—legal research, contract review, client intake, document drafting, and billing. 
+        Not a chatbot. Not a search tool. <strong class="text-strong">An enterprise-grade orchestration layer powered by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> & OpenShell Architecture.</strong>
       </p>
 
       <p style="font-size:12px; color:rgba(255,255,255,0.5); margin-bottom:8px;">
-        <strong>Roles covered by your AI workforce:</strong>
+        <strong>Roles accelerated by your Agentic OS:</strong>
       </p>
       <div class="agents-grid">
         <span class="agent-tag">Partner / Managing Partner</span>
@@ -351,37 +337,27 @@ export function getColdOutreachTemplate(prospect) {
       </div>
 
       <div class="highlight">
-        <div class="highlight-title">Why Firms Are Switching</div>
-        <div class="benefit-row">✓ One personal agent per employee — zero learning curve</div>
+        <div class="highlight-title">Why Fast-Growing Firms Are Switching</div>
+        <div class="benefit-row">✓ Agency without replacement — strict HITL control</div>
         <div class="benefit-row">✓ Unlimited AI tokens — no per-query billing</div>
-        <div class="benefit-row">✓ Zero data leak — secured by OpenClaw · NemoClaw · OpenShell</div>
-        <div class="benefit-row">✓ Your agent learns your writing style over time</div>
-        <div class="benefit-row">✓ 10x your team or fill roles you haven't hired yet</div>
+        <div class="benefit-row">✓ Enterprise Zero-Trust Isolation — secured by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span></div>
+        <div class="benefit-row">✓ The system reliably learns your writing style over time</div>
+        <div class="benefit-row">✓ 10x your team scale dynamically</div>
         <div class="benefit-row">✓ Founder pricing: <strong style="color:#76b900">from $${pricing.current}/mo — locked for life</strong></div>
       </div>
 
       <p>
-        We're currently accepting the first 100 founding firms per state — those who join now lock in
-        the founder price <strong style="color:#fff">permanently</strong>. After 100 firms, standard pricing applies.
+        To force scarcity and ensure maximum local impact, we strictly cap enrollment at the first 100 founding firms in ${state || 'your state'}. Those who claim their sandbox now lock in the founder price <strong class="text-strong">permanently</strong>. After 100 firms, standard pricing applies.
       </p>
 
-      ${AUDIO_PLAYER_BLOCK}
-
       <div style="text-align:center;">
-        <a href="${signupLink}" class="cta">Sign Up Now →</a>
+        <a href="${signupLink}" class="cta">Claim Sandbox & Lock Pricing →</a>
       </div>
 
       <p style="text-align:center; font-size:12px; color:rgba(255,255,255,0.3);">
         No credit card required. Reserve your founding spot in 2 minutes.
       </p>
 
-      <div class="divider"></div>
-
-      <div style="text-align:center;">
-        <div class="security-badge">
-          Built on OpenClaw · NemoClaw · OpenShell · ABA Ethics Compliant
-        </div>
-      </div>
     </div>
 
     ${EMAIL_FOOTER_OUTREACH(firmName)}
@@ -390,11 +366,11 @@ export function getColdOutreachTemplate(prospect) {
 </html>`;
 
   const text = `
-${firmName} — One AI Agent That Runs Your Entire Firm
+${firmName} — Your Secured Agentic HITL OS is Ready
 
 Hi — I'm reaching out because ${locationStr ? `law firms in ${locationStr}` : 'firms like yours'} are exactly who we built NemoC LAW AI for.
 
-Every employee gets one personal AI agent that handles everything — legal research, contracts, intake, drafting, billing — through plain English conversation. Built on OpenClaw · NemoClaw · OpenShell.
+Your team remains in complete control while agents natively accelerate their most tedious workflows—legal research, contracts, intake, drafting, billing. An enterprise-grade orchestration layer powered by NVIDIA NemoClaw.
 
 Roles covered:
 • Partner / Managing Partner
@@ -407,10 +383,10 @@ Roles covered:
 • Office Manager
 • Solo Hybrid Agent
 
-WHY FIRMS ARE SWITCHING:
+WHY FAST-GROWING FIRMS ARE SWITCHING:
 - One personal agent per employee — zero learning curve
 - Unlimited AI tokens — no per-query billing
-- Zero data leak — secured by OpenClaw · NemoClaw · OpenShell
+- Enterprise Zero-Trust Isolation — secured by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> & OpenShell
 - Your agent learns YOUR writing style over time
 - Founder pricing: from $${pricing.current}/mo — locked for life
 
@@ -419,7 +395,7 @@ First 100 firms per state lock in the founder price permanently.
 Sign up loop: ${signupLink}
 
 — The NemoC LAW AI Team
-Built on OpenClaw · NemoClaw · OpenShell · ABA Ethics Compliant
+Powered by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> · OpenShell Architecture · ABA Ethics Compliant
 `;
 
   return { subject, html, text, type: 'cold_outreach' };
@@ -460,8 +436,8 @@ export function getFollowUpTemplate(prospect) {
       </p>
 
       <p>
-        That's the difference between a chatbot and an <strong style="color:#76b900">agentic AI</strong>.
-        Your agent doesn't just answer questions — it plans, executes, and delivers finished work product.
+        That's the difference between a chatbot and an <strong style="color:#76b900">enterprise-grade agentic AI</strong>.
+        Powered by <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> technology, your agent doesn't just answer questions — it autonomously plans, safely executes, and securely delivers finished work product.
       </p>
 
       <p>
@@ -470,7 +446,7 @@ export function getFollowUpTemplate(prospect) {
         as long as you maintain your subscription. The founding window is filling up.
       </p>
 
-      ${AUDIO_PLAYER_BLOCK}
+      ${VIDEO_PLAYER_BLOCK}
 
       <div style="text-align:center;">
         <a href="${signupLink}" class="cta">Sign Up Now →</a>
@@ -613,7 +589,7 @@ export async function sendBulkOutreach(prospects, templateType = 'cold') {
 }
 
 /* ═══════════════════════════════════════════════
-   WELCOME SIGNUP (7-Day Urgency Hook)
+   WELCOME SIGNUP (30-Day Free Trial)
    ═══════════════════════════════════════════════ */
 
 export function getSignupWelcomeEmailTemplate(email, name) {
@@ -634,33 +610,36 @@ export function getSignupWelcomeEmailTemplate(email, name) {
   <div class="container">
     <div class="card">
       <img class="logo" src="${SITE_URL}/logos/wordmark-full-transparent.png" alt="NemoC LAW AI" />
-      <div class="tagline">Born Agentic for Law Firms</div>
+      <div class="tagline">Agentic HITL OS for Law Firms</div>
 
       <h1>Welcome aboard, <span>${name || 'Founder'}</span></h1>
 
       <p>
-        Your NemoC LAW AI sandbox is successfully provisioned. You now have complete access to the 
-        Agent Library, the Command Center, and your AI Chief of Staff for your 7-day free trial.
+        Your enterprise-grade <span style="color:#76b900; font-weight:700;">NVIDIA NemoClaw</span> sandbox is successfully provisioned. You now have complete access to the
+        Agent Library, the Command Center, and your AI Chief of Staff — free for 30 days.
       </p>
 
       <div class="highlight">
-        <div class="highlight-title">ACTION REQUIRED: 7-Day Founder Lock</div>
+        <div class="highlight-title">30-Day Free Trial — No Charge Until Day 31</div>
         <p class="text-muted-md">
           As an early adopter, you have successfully claimed a spot for our <strong class="text-strong">$${pricing.current}/mo Founder Pricing</strong> (Standard: $${pricing.future}/mo).
+          Add your card now — you won't be charged for 30 days.
         </p>
         <p class="text-warning">
-          You must finalize your firm's onboarding and activate your payment method within 7 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
+          Activate your payment method within 30 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
         </p>
       </div>
 
       <p>
-        Your AI workforce is waiting for its first delegation. Log in to your command center 
+        Your Agentic HITL OS is waiting for its first delegation. Log in to your command center 
         to assign your first matter or run a conflict check.
       </p>
 
       <div style="text-align:center;">
         <a href="${dashboardLink}" class="cta">Go to Command Center →</a>
       </div>
+
+      ${VIDEO_PLAYER_BLOCK}
 
     </div>
     <div class="footer">
@@ -674,11 +653,11 @@ export function getSignupWelcomeEmailTemplate(email, name) {
   const text = `
 Welcome aboard, ${name || 'Founder'}!
 
-Your NemoC LAW AI sandbox is successfully provisioned. You now have complete access for your 7-day free trial.
+Your NemoC LAW AI sandbox is successfully provisioned. You now have complete access — free for 30 days.
 
-*** ACTION REQUIRED: 7-Day Founder Lock ***
+*** 30-Day Free Trial — No Charge Until Day 31 ***
 As an early adopter, you have successfully claimed a spot for our $${pricing.current}/mo Founder Pricing (Standard: $${pricing.future}/mo).
-You must finalize your firm's onboarding and activate your payment method within 7 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
+Add your card now and you won't be charged for 30 days. Activate within 30 days to permanently lock in this lifetime rate. If not activated, your spot will be released to the waitlist.
 
 Log in to your command center to assign your first matter:
 ${dashboardLink}

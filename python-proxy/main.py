@@ -46,15 +46,19 @@ from dotenv import load_dotenv
 #  ENVIRONMENT BOOTSTRAP
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+# Try to load local .env, then fall back to root workspace .env
 load_dotenv()
+root_env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+if os.path.exists(root_env_path):
+    load_dotenv(root_env_path)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 NVIDIA_API_KEY = (
     os.environ.get("NVIDIA_API_KEY")
-    or os.environ.get("OPENAI_API_KEY")
     or os.environ.get("VITE_NVIDIA_API_KEY")
+    or os.environ.get("OPENAI_API_KEY")
     or ""
 )
 
@@ -66,7 +70,7 @@ NVIDIA_BASE_URL = os.environ.get(
 # Default model — the frontend sends its own model ID, but we enforce this as fallback
 DEFAULT_MODEL = os.environ.get(
     "NVIDIA_MODEL_ID",
-    "meta/llama-3.1-70b-instruct"
+    "nvidia/nemotron-3-super-120b-a12b"
 )
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -246,7 +250,14 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://nemoc-law.ai",
+        "https://www.nemoc-law.ai",
+        "https://nemoc-law-ai.web.app",
+        "https://nemoc-law-ai.firebaseapp.com"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -335,7 +346,7 @@ async def call_anthropic(request: InferenceRequest) -> dict:
             messages.append({"role": "assistant" if m.role == "assistant" else "user", "content": m.content})
     
     payload = {
-        "model": "claude-3-5-sonnet-20240620",
+        "model": "claude-3-5-sonnet-20241022",
         "max_tokens": request.max_tokens or 4096,
         "temperature": request.temperature,
         "system": system_text.strip(),
@@ -385,7 +396,7 @@ async def call_gemini(request: InferenceRequest) -> dict:
         payload["systemInstruction"] = system_instruction
 
     try:
-        url = f"/models/gemini-1.5-pro:generateContent?key={GEMINI_API_KEY}"
+        url = f"/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
         response = await gemini_client.post(url, json=payload)
         response.raise_for_status()
         data = response.json()
@@ -403,7 +414,7 @@ async def call_openai(request: InferenceRequest) -> dict:
         return {"error": "OPENAI_API_KEY not set"}
     
     payload = {
-        "model": "gpt-4o",
+        "model": "gpt-4o-mini",
         "messages": [{"role": m.role, "content": m.content} for m in request.messages],
         "max_tokens": request.max_tokens,
         "temperature": request.temperature,
@@ -448,22 +459,9 @@ async def chat_completions(req: InferenceRequest, request: Request):
         }
 
     # ── PHASE 2: Poly-Model Routing ──────────────
-    result = None
-    target_engine = "OpenAI (GPT-4o)"
-
-    if routing_profile == "ediscovery":
-        print("  [ROUTER] Intent: eDiscovery -> Dispatching to Gemini 1.5 Pro (Massive Context)")
-        result = await call_gemini(req)
-        target_engine = "Gemini"
-    elif routing_profile in ["contract-review", "drafting"]:
-        print("  [ROUTER] Intent: Drafting -> Dispatching to Anthropic Claude 3.5 Sonnet (Logic/Nuance)")
-        result = await call_anthropic(req)
-        target_engine = "Anthropic"
-    else:
-        # Default orchestrator profile -> GPT-4o
-        print("  [ROUTER] Intent: Orchestration -> Dispatching to OpenAI GPT-4o (Default Route)")
-        result = await call_openai(req)
-        target_engine = "OpenAI"
+    print(f"  [ROUTER] Dispatching to NVIDIA NIM ({req.model or DEFAULT_MODEL})")
+    result = await call_nvidia_nim(req)
+    target_engine = "NVIDIA NIM"
 
     # Evaluate routing success and fallback if needed
     if not result or result.get("error"):
@@ -539,17 +537,7 @@ async def scrape_practice_areas(req: ScrapeRequest):
             max_tokens=150
         )
         
-        result = {}
-        if OPENAI_API_KEY:
-            result = await call_openai(llm_req)
-        if not result or result.get("error"):
-            if ANTHROPIC_API_KEY:
-                result = await call_anthropic(llm_req)
-        if not result or result.get("error"):
-            if GEMINI_API_KEY:
-                result = await call_gemini(llm_req)
-        if not result or result.get("error"):
-            result = await call_nvidia_nim(llm_req)
+        result = await call_nvidia_nim(llm_req)
             
         content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
         print(f"[SCRAPER] Raw LLM output: {content}")
@@ -574,12 +562,9 @@ async def scrape_practice_areas(req: ScrapeRequest):
 def health_check():
     return {
         "status": "operational",
-        "service": "NemoClaw Poly-Model Inference Router v4.0",
+        "service": "NemoClaw NVIDIA NIM Inference Router v4.0",
         "routers": {
-            "gemini": bool(GEMINI_API_KEY),
-            "anthropic": bool(ANTHROPIC_API_KEY),
-            "openai": bool(OPENAI_API_KEY),
-            "nvidia_fallback": bool(NVIDIA_API_KEY)
+            "nvidia_nim": bool(NVIDIA_API_KEY)
         },
         "nvidia_endpoint": NVIDIA_BASE_URL,
         "timestamp": datetime.now().isoformat(),

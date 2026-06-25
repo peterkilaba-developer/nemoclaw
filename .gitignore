@@ -10,12 +10,64 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+tmp
+.firebase
 *.local
 
 # Environment variables (API keys)
 .env
+.env.*
+!.env.example
 .env.local
 .env.production
+functions/.env*
+!functions/.env.example
+
+# Local diagnostics and throwaway scripts that can capture live payloads/secrets
+debug_*.json
+debug_*.txt
+deploy_error.txt
+build_err.txt
+output.txt
+temp-test-script.mjs
+vite-*.log
+branding_scan.json
+missing_inputs.json
+raw_content_dump.md
+emojis*.json
+emoji_lines.json
+firestore.rules.bak
+activate_fleet.mjs
+addImports.cjs
+apply_forge.cjs
+check_data.js
+cleanup_spans.py
+create_matter.js
+create_test_sandbox.js
+execute_test_bypass.js
+extract*.cjs
+findEmojis.cjs
+fix*.cjs
+fix*.js
+fix-text.mjs
+force_test.js
+forge_interceptor.cjs
+generate-test.mjs
+inject_*.cjs
+replace_brand.py
+seed_e2e_data.js
+test_nim.cjs
+scripts/update_x_env.ps1
+functions/debug_*.json
+functions/debug_*.txt
+functions/deploy_error.txt
+functions/run-test.js
+functions/temp-test-script.mjs
+functions/test-*.cjs
+functions/test_*.js
+functions/test-sendgrid.cjs
+functions/temp_clean.js
+python-proxy/debug_*.py
 
 # Editor directories and files
 .vscode/*

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Search, MapPin, Globe, Phone, Star, Plus, ExternalLink,
-  RefreshCw, Building2, ChevronDown, Eye, Mail, Trash2,
+  RefreshCw, Building2, Eye, Mail, Trash2,
   CheckCircle2, AlertCircle, Users, Target, Loader, Zap
 } from 'lucide-react';
 import {
@@ -9,7 +9,6 @@ import {
   getProspects, updateProspect, deleteProspect, getProspectStats,
   triggerAutonomousSDR
 } from '../../lib/prospectService';
-
 const STATUS_COLORS = {
   researched: { color: '#3b82f6', label: 'Researched' },
   outreach_sent: { color: '#f59e0b', label: 'Outreach Sent' },
@@ -26,7 +25,7 @@ export default function GTMProspecting({ onProspectsChange }) {
   const [searchResults, setSearchResults] = useState([]);
   const [searchError, setSearchError] = useState('');
   const [prospects, setProspects] = useState([]);
-  const [loadingProspects, setLoadingProspects] = useState(true);
+  const [_loadingProspects, setLoadingProspects] = useState(true);
   const [selectedProspect, setSelectedProspect] = useState(null);
   const [addingId, setAddingId] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState({});
@@ -94,7 +93,11 @@ export default function GTMProspecting({ onProspectsChange }) {
     }
   };
 
-  useEffect(() => { loadProspects(); }, []);
+  useEffect(() => {
+    loadProspects();
+    // Prospecting dashboard bootstrap should run once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSearch = async () => {
     if (!searchLocation.trim()) return;

@@ -15,7 +15,7 @@ export function AgentChatProvider({ children, firmId, agentId, agentConfig }) {
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState(null);
   const [showSubAgents, setShowSubAgents] = useState(false);
-  const abortRef = useRef(null);
+  const _abortRef = useRef(null);
 
   // Load conversation history from Firestore
   const loadHistory = useCallback(async () => {

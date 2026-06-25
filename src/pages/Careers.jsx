@@ -1,7 +1,7 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
 import './LegalPage.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
 
 export default function Careers() {
   return (
@@ -73,7 +73,7 @@ export default function Careers() {
               FINE PRINT
             </h2>
             <p style={{ fontSize: '0.6875rem', color: 'rgba(255,255,255,0.2)', lineHeight: '1.6' }}>
-              NemoC Law AI is an equal opportunity employer. We do not discriminate on the basis of race, gender, age, or number of neural network parameters. All carbon-based and silicon-based applicants are welcome. The term "Agentic Resources" is used with love for our AI colleagues who, let's be honest, are carrying this company. No AI agents were harmed in the making of this careers page, though several suggested edits.
+              NemoC LAW AI is an equal opportunity employer. We do not discriminate on the basis of race, gender, age, or number of neural network parameters. All carbon-based and silicon-based applicants are welcome. The term "Agentic Resources" is used with love for our AI colleagues who, let's be honest, are carrying this company. No AI agents were harmed in the making of this careers page, though several suggested edits.
             </p>
           </section>
         </div>

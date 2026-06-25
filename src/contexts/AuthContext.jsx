@@ -33,6 +33,7 @@ export function AuthProvider({ children }) {
           setUser({
             uid: firebaseUser.uid,
             email: firebaseUser.email,
+            emailVerified: firebaseUser.emailVerified,
             displayName: firebaseUser.displayName,
             photoURL: firebaseUser.photoURL,
             isPartial: true
@@ -48,6 +49,7 @@ export function AuthProvider({ children }) {
                 ...docSnap.data(),
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
+                emailVerified: firebaseUser.emailVerified,
                 isPartial: false
               }));
             } else {
@@ -56,6 +58,7 @@ export function AuthProvider({ children }) {
                 ...(prev || {}),
                 uid: firebaseUser.uid,
                 email: firebaseUser.email,
+                emailVerified: firebaseUser.emailVerified,
                 isPartial: false
               }));
             }
@@ -72,7 +75,7 @@ export function AuthProvider({ children }) {
         }
       } catch (err) {
         console.error('Auth state observer error:', err);
-        setUser(firebaseUser ? { uid: firebaseUser.uid, email: firebaseUser.email } : null);
+        setUser(firebaseUser ? { uid: firebaseUser.uid, email: firebaseUser.email, emailVerified: firebaseUser.emailVerified } : null);
         setLoading(false);
       }
     });
@@ -99,7 +102,7 @@ export function AuthProvider({ children }) {
       onboardingComplete: false,
       createdAt: serverTimestamp(),
     });
-    // Send 7-day urgency lock welcome email asynchronously (fire and forget)
+    // Send 30-day trial welcome email asynchronously (fire and forget)
     sendWelcomeSignupEmail(email, displayName).catch(console.error);
     return result.user;
   };

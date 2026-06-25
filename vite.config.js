@@ -9,12 +9,27 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     server: {
       proxy: {
-        // Proxy NVIDIA API calls through the local Python NeMo Guardrails Sandbox
-        // Uses VITE_PYTHON_PROXY_URL if set in .env to bridge local frontend to remote Codespace backend
-        '/api/nvidia': {
-          target: env.VITE_PYTHON_PROXY_URL || 'http://127.0.0.1:8080',
+        // Keep Firebase Hosting function rewrites available during local browser testing.
+        '/api/runConflictCheck': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
           changeOrigin: true,
-          secure: false,
+          secure: true,
+        },
+        '/api/getSignatureRequest': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
+          changeOrigin: true,
+          secure: true,
+        },
+        '/api/signSignatureRequest': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
+          changeOrigin: true,
+          secure: true,
+        },
+        // Proxy inference through the Firebase Function gateway so provider keys stay server-side.
+        '/api/nvidia': {
+          target: env.VITE_FUNCTIONS_BASE_URL || 'https://nemoc-law-ai.web.app',
+          changeOrigin: true,
+          secure: true,
         },
         // Proxy Hunter.io API calls
         '/api/hunter': {

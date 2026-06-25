@@ -1,46 +1,52 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
-import { MessageSquare, Users, Link2, ExternalLink, Send, Shield, Lock, Bell, Search, UploadCloud, ShieldCheck } from 'lucide-react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { Link2, MessageSquare, Search, Send, Shield, ShieldCheck, UploadCloud, Users } from 'lucide-react';
 
 export default function ClientPortal() {
   const { user } = useAuth();
   const { firm } = useFirm();
-  const [activeTab, setActiveTab] = useState('messages');
+  const [_activeTab, _setActiveTab] = useState('messages');
   const [message, setMessage] = useState('');
 
   const [clients, setClients] = useState([]);
   const [activeClient, setActiveClient] = useState(null);
-  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [_showInviteModal, _setShowInviteModal] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [clientFilter, setClientFilter] = useState('');
 
   useEffect(() => {
-    const activeFirmId = firm?.id || user?.uid;
+    const activeFirmId = firm?.id || user?.firmId;
     if (!activeFirmId) return;
     const q = query(collection(db, 'firms', activeFirmId, 'clientChannels'), orderBy('updatedAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
-      setClients(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const nextClients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setClients(nextClients);
+      setActiveClient(current => {
+        if (!current) return nextClients[0] || null;
+        return nextClients.find(client => client.id === current.id) || nextClients[0] || null;
+      });
     });
     return () => unsub();
-  }, [firm?.id, user?.uid]);
+  }, [firm?.id, user?.firmId]);
 
   useEffect(() => {
-    const activeFirmId = firm?.id || user?.uid;
+    const activeFirmId = firm?.id || user?.firmId;
     if (!activeFirmId || !activeClient?.id) {
-      setMessages([]);
-      return;
+      const clearMessages = setTimeout(() => setMessages([]), 0);
+      return () => clearTimeout(clearMessages);
     }
     const q = query(collection(db, 'firms', activeFirmId, 'clientChannels', activeClient.id, 'messages'), orderBy('timestamp', 'asc'));
     const unsub = onSnapshot(q, (snap) => {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => unsub();
-  }, [firm?.id, user?.uid, activeClient?.id]);
+  }, [firm?.id, user?.firmId, activeClient?.id]);
 
   const handleSendMessage = async () => {
-    const activeFirmId = firm?.id || user?.uid;
+    const activeFirmId = firm?.id || user?.firmId;
     if (!message.trim() || !activeClient || !activeFirmId) return;
     try {
       await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels', activeClient.id, 'messages'), {
@@ -55,12 +61,52 @@ export default function ClientPortal() {
     }
   };
 
+  const filteredClients = clients.filter((client) => {
+    const needle = clientFilter.trim().toLowerCase();
+    if (!needle) return true;
+    return `${client.name || ''} ${client.matter || ''}`.toLowerCase().includes(needle);
+  });
+
+  const handleCreateChannel = async () => {
+    const activeFirmId = firm?.id || user?.firmId;
+    if (!activeFirmId) {
+      alert('Please authenticate first.');
+      return;
+    }
+
+    const name = window.prompt('Client name');
+    if (!name?.trim()) return;
+    const matter = window.prompt('Matter or engagement name') || 'General communication';
+
+    try {
+      const newChannelRef = await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels'), {
+        name: name.trim(),
+        matter: matter.trim() || 'General communication',
+        status: 'Active',
+        unread: 0,
+        updatedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
+        createdBy: user?.uid || null,
+      });
+      setActiveClient({
+        id: newChannelRef.id,
+        name: name.trim(),
+        matter: matter.trim() || 'General communication',
+        status: 'Active',
+        unread: 0,
+      });
+    } catch (e) {
+      console.error('Failed to create channel', e);
+      alert('Unable to create the client channel. Check your firm permissions and try again.');
+    }
+  };
+
   return (
     <div className="db-viewport-workspace">
       <div className="db-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--db-border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <h1 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, color: 'var(--db-text-primary)' }}>Client Communications</h1>
-          <span style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>Secure E2E Channels</span>
+          <span style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>Secure Client Channels</span>
         </div>
         <button className="db-btn db-btn-primary db-btn-sm" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }} onClick={() => {
           const link = `${window.location.origin}/portal/invite/${firm?.id || 'pending'}`;
@@ -72,7 +118,7 @@ export default function ClientPortal() {
 
       <div className="db-two-col" style={{ flex: 1, minHeight: 0 }}>
         {/* Chat interface */}
-        <div className="db-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', padding: 0 }}>
+        <div className="db-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 }}>
           <div className="db-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 28px' }}>
             <div>
               <div className="db-card-title">
@@ -80,7 +126,7 @@ export default function ClientPortal() {
                 Secure Portal: {activeClient?.name || 'Select Channel'}
               </div>
               <div className="db-card-subtitle">
-                {activeClient ? `Matter: ${activeClient.matter} · ` : ''}<span style={{ color: 'var(--db-accent)' }}>E2E Encrypted</span>
+                {activeClient ? `Matter: ${activeClient.matter} - ` : ''}<span style={{ color: 'var(--db-accent)' }}>Access Controlled</span>
               </div>
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -92,7 +138,7 @@ export default function ClientPortal() {
 
           {activeClient ? (
             <>
-              <div style={{ flex: 1, padding: '28px', overflowY: 'auto', background: 'var(--db-bg)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ flex: 1, minHeight: 0, padding: '28px', overflowY: 'auto', background: 'var(--db-bg)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ textAlign: 'center', margin: '10px 0' }}>
                   <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', background: 'rgba(0,0,0,0.05)', padding: '4px 12px', borderRadius: '20px' }}>
                     Secure communication established on {activeClient.createdAt?.toDate ? activeClient.createdAt.toDate().toLocaleDateString() : new Date().toLocaleDateString()}
@@ -142,7 +188,7 @@ export default function ClientPortal() {
                 <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
                   <span style={{ fontSize: '0.6875rem', background: 'var(--db-surface)', padding: '6px 16px', borderRadius: '20px', color: 'var(--db-text-muted)', border: '1px solid var(--db-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16a34a' }} />
-                    E2E Secure Channel Active
+                    Secure Channel Active
                   </span>
                 </div>
               </div>
@@ -199,7 +245,7 @@ export default function ClientPortal() {
         </div>
 
         {/* Right Col - Context Panels */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: 0, overflowY: 'auto' }}>
           <div className="db-card" style={{ padding: 0 }}>
             <div className="db-card-header" style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div className="db-card-title">
@@ -209,32 +255,9 @@ export default function ClientPortal() {
               <button 
                 className="db-btn db-btn-secondary db-btn-sm" 
                 style={{ fontSize: '0.625rem', padding: '4px 8px' }}
-                onClick={async () => {
-                  const activeFirmId = firm?.id || user?.uid;
-                  if (!activeFirmId) {
-                    alert('Please authenticate first.');
-                    return;
-                  }
-                  try {
-                    const newChannelRef = await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels'), {
-                      name: 'Test Client ' + Math.floor(Math.random() * 1000),
-                      matter: 'Simulated Matter',
-                      status: 'Active',
-                      unread: 1,
-                      updatedAt: serverTimestamp(),
-                      createdAt: serverTimestamp()
-                    });
-                    await addDoc(collection(db, 'firms', activeFirmId, 'clientChannels', newChannelRef.id, 'messages'), {
-                      text: 'Hello, I received your intake form. Is this the secure channel?',
-                      sender: 'client',
-                      timestamp: serverTimestamp()
-                    });
-                  } catch (e) {
-                    console.error('Failed to create channel', e);
-                  }
-                }}
+                onClick={handleCreateChannel}
               >
-                + Sandbox Client
+                + Channel
               </button>
             </div>
             <div style={{ padding: '0 24px 16px' }}>
@@ -243,15 +266,26 @@ export default function ClientPortal() {
                 <input 
                   type="text" 
                   placeholder="Filter clients..." 
+                  value={clientFilter}
+                  onChange={(e) => setClientFilter(e.target.value)}
                   style={{ width: '100%', background: 'var(--db-bg)', border: '1px solid var(--db-border)', borderRadius: '6px', padding: '10px 10px 10px 36px', color: 'var(--db-text-primary)', fontSize: '0.8125rem', outline: 'none' }}
                 />
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {clients.map(client => (
+              {filteredClients.map(client => (
                 <div 
                   key={client.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Open channel for ${client.name || 'client'}`}
                   onClick={() => setActiveClient(client)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      setActiveClient(client);
+                    }
+                  }}
                   style={{ 
                     padding: '12px 24px', 
                     cursor: 'pointer',
@@ -264,11 +298,11 @@ export default function ClientPortal() {
                   }}
                 >
                   <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'var(--db-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-muted)' }}>
-                    {client.name[0]}
+                    {(client.name || 'C')[0]}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, color: 'var(--db-text-primary)', fontSize: '0.8125rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{client.name}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{client.name || 'Unnamed client'}</span>
                       {client.unread > 0 && (
                         <span style={{ background: '#ef4444', color: '#fff', fontSize: '0.625rem', padding: '1px 5px', borderRadius: '10px', fontWeight: 700 }}>{client.unread}</span>
                       )}
@@ -278,7 +312,7 @@ export default function ClientPortal() {
                   <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: client.status === 'Active' ? '#16a34a' : '#f59e0b' }} />
                 </div>
               ))}
-              {clients.length === 0 && (
+              {filteredClients.length === 0 && (
                 <div style={{ padding: '20px', textAlign: 'center', fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>No messaging channels.</div>
               )}
             </div>
@@ -288,13 +322,13 @@ export default function ClientPortal() {
           <div className="db-card" style={{ background: 'rgba(118,185,0,0.03)', border: '1px solid rgba(118,185,0,0.15)' }}>
             <div style={{ padding: '16px', textAlign: 'center' }}>
               <div style={{ fontSize: '0.6875rem', fontWeight: 700, color: 'var(--db-nvidia-green)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                🔒 Zero Data Leak Guarantee
+                Secure Client Communications
               </div>
               <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', lineHeight: 1.5 }}>
-                All client communications are secured by NVIDIA NemoClaw sandbox. PII auto-redacted.
+                Client communications are access controlled and written to the firm's audit-ready workspace.
               </div>
               <div style={{ fontSize: '0.5625rem', color: 'var(--db-text-muted)', marginTop: '6px', opacity: 0.6 }}>
-                Audit Ready · SOC2 Compliant · HIPAA Ready
+                Audit Ready - SOC 2 Audit In Progress - HIPAA Review Required
               </div>
             </div>
           </div>

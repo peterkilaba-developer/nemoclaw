@@ -12,19 +12,27 @@
 
 import { db } from './firebase';
 import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // ═══════════════════════════════════════════════
 //  CONFIGURATION
 // ═══════════════════════════════════════════════
 
-const IS_DEV = import.meta.env.DEV;
+const SERVER_ENRICHMENT_ENDPOINT = '/api/enrichProspectEmail';
+const SERVER_ENRICHMENT_ENABLED = true;
+const HUNTER_API_KEY = '';
+const APOLLO_API_KEY = '';
+const HUNTER_BASE = 'https://api.hunter.io';
+const APOLLO_BASE = 'https://api.apollo.io';
 
-const HUNTER_API_KEY = import.meta.env.VITE_HUNTER_API_KEY || '';
-const APOLLO_API_KEY = import.meta.env.VITE_APOLLO_API_KEY || '';
-
-// In dev, use Vite proxy to avoid CORS. In prod, call directly.
-const HUNTER_BASE = IS_DEV ? '/api/hunter' : 'https://api.hunter.io';
-const APOLLO_BASE = IS_DEV ? '/api/apollo' : 'https://api.apollo.io';
+async function getServerAuthHeaders() {
+  const user = getAuth().currentUser;
+  const token = user ? await user.getIdToken() : '';
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
 // ═══════════════════════════════════════════════
 //  UTILITIES
@@ -50,9 +58,10 @@ export function extractDomain(url) {
  */
 export function getEnrichmentStatus() {
   return {
-    hunter: { configured: !!HUNTER_API_KEY, name: 'Hunter.io' },
-    apollo: { configured: !!APOLLO_API_KEY, name: 'Apollo.io' },
-    anyConfigured: !!HUNTER_API_KEY || !!APOLLO_API_KEY,
+    hunter: { configured: SERVER_ENRICHMENT_ENABLED, name: 'Hunter.io', mode: 'server-managed' },
+    apollo: { configured: SERVER_ENRICHMENT_ENABLED, name: 'Apollo.io', mode: 'server-managed' },
+    anyConfigured: SERVER_ENRICHMENT_ENABLED,
+    mode: 'server-managed',
   };
 }
 
@@ -68,40 +77,41 @@ export function getEnrichmentStatus() {
  * Free tier: 25 requests/month
  */
 export async function hunterDomainSearch(domain) {
-  if (!HUNTER_API_KEY || !domain) return null;
+  if (!domain) return null;
 
   try {
-    const url = `${HUNTER_BASE}/v2/domain-search?domain=${encodeURIComponent(domain)}&api_key=${HUNTER_API_KEY}&limit=10`;
-    const res = await fetch(url);
+    const res = await fetch(SERVER_ENRICHMENT_ENDPOINT, {
+      method: 'POST',
+      headers: await getServerAuthHeaders(),
+      body: JSON.stringify({ domain }),
+    });
 
     if (!res.ok) {
       const errText = await res.text();
-      console.warn(`Hunter.io error (${res.status}):`, errText);
+      console.warn(`Server enrichment error (${res.status}):`, errText);
       return null;
     }
 
     const data = await res.json();
-    const result = data?.data;
-
-    if (!result) return null;
+    if (!data?.email) return null;
 
     return {
-      source: 'hunter.io',
-      organization: result.organization || '',
-      pattern: result.pattern || '',
-      emails: (result.emails || []).map(e => ({
-        value: e.value,
-        type: e.type, // 'personal' or 'generic'
-        confidence: e.confidence,
-        firstName: e.first_name || '',
-        lastName: e.last_name || '',
-        position: e.position || '',
-        department: e.department || '',
-      })),
-      linkedDomain: result.domain || domain,
+      source: data.emailSource || 'server_vendor_enrichment',
+      organization: '',
+      pattern: '',
+      emails: [{
+        value: data.email,
+        type: 'unknown',
+        confidence: data.confidence || 90,
+        firstName: '',
+        lastName: '',
+        position: '',
+        department: '',
+      }],
+      linkedDomain: data.domain || domain,
     };
   } catch (err) {
-    console.warn('Hunter.io search failed:', err.message);
+    console.warn('Server enrichment failed:', err.message);
     return null;
   }
 }
@@ -259,7 +269,7 @@ export async function enrichProspect(prospect) {
   };
 
   // ── Stage 1: Hunter.io Domain Search ──
-  if (HUNTER_API_KEY) {
+  if (SERVER_ENRICHMENT_ENABLED) {
     const hunterResult = await hunterDomainSearch(domain);
     if (hunterResult && hunterResult.emails.length > 0) {
       result.emails = hunterResult.emails;

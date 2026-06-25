@@ -1,13 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFirm } from '../contexts/FirmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, collection, addDoc, serverTimestamp, getDocs, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { 
-  Upload, FileText, Trash2, Check, X, Key, Copy, Eye, EyeOff, 
-  MapPin, Phone, Globe, AlertCircle, Search, UserCheck, Bot, Crown, ArrowRight
-} from 'lucide-react';
+
 import '../styles/onboarding.css';
+import { Bot, Check, Copy, Eye, EyeOff, FileText, Key, MapPin, Trash2, Upload } from 'lucide-react';
+import ThemeToggle from '../components/ThemeToggle';
+
+// ═══════════════════════════════════════════════════════════════
+//  FEDERAL CIRCUIT JURISDICTION
+// ═══════════════════════════════════════════════════════════════
+
+const FEDERAL_CIRCUITS = [
+  { value: '1st', label: 'First Circuit', states: ['Maine', 'Massachusetts', 'New Hampshire', 'Rhode Island'] },
+  { value: '2nd', label: 'Second Circuit', states: ['Connecticut', 'New York', 'Vermont'] },
+  { value: '3rd', label: 'Third Circuit', states: ['Delaware', 'New Jersey', 'Pennsylvania'] },
+  { value: '4th', label: 'Fourth Circuit', states: ['Maryland', 'North Carolina', 'South Carolina', 'Virginia', 'West Virginia'] },
+  { value: '5th', label: 'Fifth Circuit', states: ['Louisiana', 'Mississippi', 'Texas'] },
+  { value: '6th', label: 'Sixth Circuit', states: ['Kentucky', 'Michigan', 'Ohio', 'Tennessee'] },
+  { value: '7th', label: 'Seventh Circuit', states: ['Illinois', 'Indiana', 'Wisconsin'] },
+  { value: '8th', label: 'Eighth Circuit', states: ['Arkansas', 'Iowa', 'Minnesota', 'Missouri', 'Nebraska', 'North Dakota', 'South Dakota'] },
+  { value: '9th', label: 'Ninth Circuit', states: ['Alaska', 'Arizona', 'California', 'Hawaii', 'Idaho', 'Montana', 'Nevada', 'Oregon', 'Washington'] },
+  { value: '10th', label: 'Tenth Circuit', states: ['Colorado', 'Kansas', 'New Mexico', 'Oklahoma', 'Utah', 'Wyoming'] },
+  { value: '11th', label: 'Eleventh Circuit', states: ['Alabama', 'Florida', 'Georgia'] },
+  { value: 'DC', label: 'D.C. Circuit', states: ['District of Columbia'] },
+  { value: 'Federal', label: 'Federal Circuit', states: [] },
+];
+import { useTheme } from '../contexts/ThemeContext';
 
 const PRACTICE_AREA_GROUPS = [
   {
@@ -45,10 +66,25 @@ const PRACTICE_AREA_GROUPS = [
   },
 ];
 
+const SETTINGS_TABS = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'knowledge', label: 'Knowledge Base' },
+  { id: 'team', label: 'AI Workforce' },
+  { id: 'api', label: 'API Keys' },
+  { id: 'appearance', label: 'Appearance' },
+];
+
+function normalizeSettingsTab(value) {
+  return SETTINGS_TABS.some(tab => tab.id === value) ? value : 'profile';
+}
+
 export default function FirmSettings() {
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const { firm, firmId, employees, refreshFirm } = useFirm();
-  const [activeTab, setActiveTab] = useState('profile');
+  const { firm, firmId, refreshFirm } = useFirm();
+  const { resolvedTheme, theme } = useTheme();
+  const activeTab = normalizeSettingsTab(searchParams.get('tab'));
   const [saving, setSaving] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [knowledgeDocs, setKnowledgeDocs] = useState([]);
@@ -64,8 +100,8 @@ export default function FirmSettings() {
     firmWebsite: firm?.firmWebsite || '',
     placeId: firm?.placeId || '',
     stateBar: firm?.stateBar || firm?.practiceArea || '',
+    federalCircuits: firm?.federalCircuits || [],
     practiceAreas: firm?.practiceAreas || [],
-    firmSize: firm?.firmSize || 'solo',
     firstName: nameParts[0] || '',
     lastName: nameParts.slice(1).join(' ') || '',
     email: user?.email || '',
@@ -73,20 +109,23 @@ export default function FirmSettings() {
 
   useEffect(() => {
     if (firm) {
-      const parts = (user?.displayName || '').split(' ');
-      setData({
-        firmName: firm?.firmName || firm?.name || '',
-        firmAddress: firm?.firmAddress || '',
-        firmPhone: firm?.firmPhone || '',
-        firmWebsite: firm?.firmWebsite || '',
-        placeId: firm?.placeId || '',
-        stateBar: firm?.stateBar || firm?.practiceArea || '',
-        practiceAreas: firm?.practiceAreas || [],
-        firmSize: firm?.firmSize || 'solo',
-        firstName: parts[0] || '',
-        lastName: parts.slice(1).join(' ') || '',
-        email: user?.email || '',
-      });
+      const syncForm = setTimeout(() => {
+        const parts = (user?.displayName || '').split(' ');
+        setData({
+          firmName: firm?.firmName || firm?.name || '',
+          firmAddress: firm?.firmAddress || '',
+          firmPhone: firm?.firmPhone || '',
+          firmWebsite: firm?.firmWebsite || '',
+          placeId: firm?.placeId || '',
+          stateBar: firm?.stateBar || firm?.practiceArea || '',
+          federalCircuits: firm?.federalCircuits || [],
+          practiceAreas: firm?.practiceAreas || [],
+          firstName: parts[0] || '',
+          lastName: parts.slice(1).join(' ') || '',
+          email: user?.email || '',
+        });
+      }, 0);
+      return () => clearTimeout(syncForm);
     }
   }, [firm, user]);
 
@@ -124,8 +163,9 @@ export default function FirmSettings() {
         firmWebsite: data.firmWebsite,
         placeId: data.placeId,
         stateBar: data.stateBar,
+        federalCircuits: data.federalCircuits,
         practiceAreas: data.practiceAreas,
-        firmSize: data.firmSize,
+        firmSize: 'solo',
         updatedAt: serverTimestamp(),
       });
       
@@ -216,12 +256,10 @@ export default function FirmSettings() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const tabs = [
-    { id: 'profile', label: 'Profile' },
-    { id: 'knowledge', label: 'Knowledge Base' },
-    { id: 'team', label: 'Team' },
-    { id: 'api', label: 'API Keys' },
-  ];
+  const handleTabSelect = (tabId) => {
+    const normalizedTab = normalizeSettingsTab(tabId);
+    setSearchParams(normalizedTab === 'profile' ? {} : { tab: normalizedTab }, { replace: true });
+  };
 
   return (
     <>
@@ -232,10 +270,10 @@ export default function FirmSettings() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '12px', marginBottom: '28px', borderBottom: '1px solid var(--db-border)', paddingBottom: '0' }}>
-        {tabs.map(tab => (
+        {SETTINGS_TABS.map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => handleTabSelect(tab.id)}
             style={{
               padding: '10px 16px',
               fontSize: '0.8125rem',
@@ -359,34 +397,15 @@ export default function FirmSettings() {
       {activeTab === 'team' && (
         <div className="db-card">
           <div className="db-card-header">
-            <div className="db-card-title">Team Members</div>
-            <button className="db-btn db-btn-primary db-btn-sm" onClick={() => window.location.href = '/dashboard/team'}>Manage in HR & AR</button>
+            <div className="db-card-title">Your AI Workforce</div>
+            <button className="db-btn db-btn-primary db-btn-sm" onClick={() => navigate('/dashboard/team')}>View AI Team</button>
           </div>
-          <div className="db-feed">
-            {employees?.length > 0 ? employees.map((member, i) => (
-              <div key={member.id || i} className="db-feed-item">
-                <div style={{
-                  width: '32px', height: '32px', borderRadius: '50%', background: 'var(--db-bg)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '0.75rem', fontWeight: 700, color: 'var(--db-text-secondary)', flexShrink: 0,
-                  overflow: 'hidden'
-                }}>
-                  {member.photoURL ? (
-                    <img src={member.photoURL} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} referrerPolicy="no-referrer" />
-                  ) : (
-                    (member.name || '?').split(' ').map(n => n[0]).join('')
-                  )}
-                </div>
-                <div className="db-feed-content">
-                  <div className="db-feed-title">{member.name} · <span style={{ fontWeight: 400, color: 'var(--db-text-muted)' }}>{member.role || 'Team Member'}</span></div>
-                  <div className="db-feed-desc">{member.email}</div>
-                </div>
-              </div>
-            )) : (
-              <div style={{ padding: '24px', textAlign: 'center', fontSize: '0.8125rem', color: 'var(--db-text-muted)' }}>
-                No team members configured. Add your team in <a href="/dashboard/team" style={{ color: 'var(--db-nvidia-green)' }}>HR & AR</a>.
-              </div>
-            )}
+          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <Bot size={32} style={{ color: 'var(--db-nvidia-green)', opacity: 0.6, marginBottom: '12px' }} />
+            <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)', marginBottom: '4px' }}>Solo-to-Small-Firm Role Mapping</div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)', maxWidth: '500px', margin: '0 auto' }}>
+              As a solo practitioner, you have full access to your personal AI agent and 19 specialized sub-agents. No additional team members needed — your AI workforce handles it all.
+            </p>
           </div>
         </div>
       )}
@@ -460,6 +479,33 @@ export default function FirmSettings() {
           </div>
         </div>
       )}
+
+      {activeTab === 'appearance' && (
+        <div className="db-card">
+          <div className="db-card-header">
+            <div>
+              <div className="db-card-title">Appearance</div>
+              <div className="db-card-subtitle">Choose how NemoC LAW AI renders across classic and command interfaces.</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: '18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', padding: '16px', border: '1px solid var(--db-border)', borderRadius: '10px', background: 'var(--db-bg)' }}>
+              <div>
+                <div style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--db-text-primary)', marginBottom: '4px' }}>Theme</div>
+                <div style={{ fontSize: '0.8125rem', color: 'var(--db-text-muted)' }}>
+                  Preference: {theme}. Rendering: {resolvedTheme}.
+                </div>
+              </div>
+              <ThemeToggle variant="segmented" />
+            </div>
+
+            <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', lineHeight: 1.6 }}>
+              System follows your operating system. Light and dark stay pinned until changed.
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -512,7 +558,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
         if (firmId && user) {
           try {
             let websiteName = place.website;
-            try { websiteName = new URL(place.website).hostname; } catch(e) {}
+            try { websiteName = new URL(place.website).hostname; } catch(_e) { /* intentionally ignored */ }
             await addDoc(collection(db, 'firms', firmId, 'knowledgeBase'), {
               fileName: websiteName,
               fileSize: 'Website Crawl',
@@ -537,14 +583,11 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
     });
 
     autocompleteRef.current = ac;
+    // Google Places Autocomplete binds an external widget once for this input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const FIRM_SIZE_OPTIONS = [
-    { value: 'solo', label: '1 — Solo Practitioner', desc: 'Agentic OS included' },
-    { value: '2-5', label: '2–5 Attorneys', desc: 'Add seats as needed' },
-    { value: '6-10', label: '6–10 Attorneys', desc: 'Add seats as needed' },
-    { value: '10+', label: '10+ Attorneys', desc: 'Enterprise allocation' },
-  ];
+
 
   return (
     <>
@@ -559,7 +602,7 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
           )}
         </div>
         <div>
-          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>Managing Partner</div>
+          <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--db-text-primary)' }}>Solo Practitioner</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>{user?.email}</div>
         </div>
       </div>
@@ -580,14 +623,6 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
           <label className="ob-form-label">Email <span className="required">*</span></label>
           <input className="ob-form-input" type="email" name="contactEmail" placeholder="you@firm.com" value={data.email} onChange={e => updateData('email', e.target.value)} autoComplete="off" data-lpignore="true" data-1p-ignore="true" />
         </div>
-        <div className="ob-form-group">
-          <label className="ob-form-label">Firm Size</label>
-          <select className="ob-form-select" value={data.firmSize} onChange={e => updateData('firmSize', e.target.value)}>
-            {FIRM_SIZE_OPTIONS.map(opt => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
       </div>
 
       <div className="ob-form-row">
@@ -598,17 +633,55 @@ function StepFirmProfile({ data, updateData, togglePracticeArea, firmId, user })
             className={`ob-form-input ob-places-input${data.firmAddress ? ' ob-places-filled' : ''}`} 
             type="text" 
             placeholder="Start typing your law firm name..." 
-            defaultValue={data.firmName} 
+            value={data.firmName}
+            onChange={event => updateData('firmName', event.target.value)}
             autoComplete="off" 
-            title="Manual editing locked. Please search and select from the dropdown to verify your firm."
+            title="Edit manually or select a Google Places suggestion."
           />
           <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <MapPin size={10} /> Refetch to auto-rescan footprint
+            <MapPin size={10} /> Manual editing supported; Places lookup is optional
           </div>
         </div>
         <div className="ob-form-group">
-          <label className="ob-form-label">State Bar {data.stateBar ? <Check size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> : <span style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', fontWeight: 400 }}>(auto-detected)</span>}</label>
-          <input className="ob-form-input" type="text" value={data.stateBar || 'Select Firm to Auto Detect Bar Jurisdiction'} readOnly style={{ background: 'rgba(255,255,255,0.02)', cursor: 'default', color: data.stateBar ? 'var(--db-text-primary)' : 'var(--db-text-muted)' }} />
+          <label className="ob-form-label">State Bar <span className="required">*</span> {data.stateBar && <Check size={10} style={{ display: 'inline', verticalAlign: 'middle' }} />}</label>
+          <select
+            className="ob-form-input"
+            value={data.stateBar}
+            onChange={event => {
+              const stateBar = event.target.value;
+              const circuit = FEDERAL_CIRCUITS.find(item => item.states.includes(stateBar))?.value;
+              updateData('stateBar', stateBar);
+              if (circuit) updateData('federalCircuits', [circuit]);
+            }}
+          >
+            <option value="">Select your licensed state</option>
+            {Object.keys(STATE_MAP).sort().map(state => <option key={state} value={state}>{state}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="ob-form-group">
+        <label className="ob-form-label">Federal Circuit Jurisdiction</label>
+        <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)', marginBottom: '8px', lineHeight: '1.4' }}>
+          Select the federal circuits where your firm practices.
+        </div>
+        <div className="ob-checkbox-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+          {FEDERAL_CIRCUITS.map(circuit => (
+            <div
+              key={circuit.value}
+              className={`ob-checkbox-item ${(data.federalCircuits || []).includes(circuit.value) ? 'checked' : ''}`}
+              onClick={() => {
+                const current = data.federalCircuits || [];
+                const next = current.includes(circuit.value)
+                  ? current.filter(v => v !== circuit.value)
+                  : [...current, circuit.value];
+                updateData('federalCircuits', next);
+              }}
+            >
+              <div className="ob-checkbox-box">{(data.federalCircuits || []).includes(circuit.value) && <Check size={12} />}</div>
+              <span className="ob-checkbox-label">{circuit.label}</span>
+            </div>
+          ))}
         </div>
       </div>
 

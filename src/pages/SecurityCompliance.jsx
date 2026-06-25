@@ -1,7 +1,7 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
 import './LegalPage.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
 
 export default function SecurityCompliance() {
   return (
@@ -10,7 +10,7 @@ export default function SecurityCompliance() {
       <SEO
         title="Security & Compliance"
         path="/security-compliance"
-        description="NemoC Law AI security overview. SOC 2 compliance, NVIDIA NemoClaw 5-layer security, ABA ethics compliance, encryption standards, and penetration testing."
+        description="NemoC LAW AI security overview. SOC 2 compliance, NVIDIA NemoClaw 5-layer security, ABA ethics compliance, encryption standards, and penetration testing."
       />
       <main className="legal-page">
         <div className="container">
@@ -19,7 +19,7 @@ export default function SecurityCompliance() {
 
           <section>
             <h2>SOC 2 Type II Compliance</h2>
-            <p>NemoC Law AI is committed to achieving SOC 2 Type II certification. Our security program is built on five trust principles: Security, Availability, Confidentiality, Processing Integrity, and Privacy.</p>
+            <p>NemoC LAW AI is committed to achieving SOC 2 Type II certification. Our security program is built on five trust principles: Security, Availability, Confidentiality, Processing Integrity, and Privacy.</p>
             <p>Current status: <strong>SOC 2 audit in progress</strong>. Expected completion: Q3 2026.</p>
           </section>
 
@@ -35,7 +35,7 @@ export default function SecurityCompliance() {
 
           <section>
             <h2>ABA Ethics Compliance</h2>
-            <p>NemoC Law AI is designed to comply with ABA Model Rules regarding technology competence (Rule 1.1), confidentiality (Rule 1.6), and supervision of AI tools (Rules 5.1–5.3). Our Agentic OS:</p>
+            <p>NemoC LAW AI is designed to comply with ABA Model Rules regarding technology competence (Rule 1.1), confidentiality (Rule 1.6), and supervision of AI tools (Rules 5.1–5.3). Our Agentic OS:</p>
             <ul>
               <li>Never sends client data to public AI models</li>
               <li>Provides human-in-the-loop approval for sensitive operations</li>
@@ -55,7 +55,7 @@ export default function SecurityCompliance() {
 
           <section>
             <h2>Penetration Testing</h2>
-            <p>NemoC Law AI conducts regular third-party penetration testing. Results and remediation reports are available to Enterprise customers upon request.</p>
+            <p>NemoC LAW AI conducts regular third-party penetration testing. Results and remediation reports are available to Enterprise customers upon request.</p>
           </section>
 
           <section>

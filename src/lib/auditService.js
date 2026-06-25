@@ -7,7 +7,7 @@
  */
 
 import {
-  collection, addDoc, getDocs, getDoc, doc, query,
+  collection, addDoc, getDocs, query,
   where, orderBy, limit, startAfter, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';

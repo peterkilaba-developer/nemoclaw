@@ -1,450 +1,213 @@
-// ═══════════════════════════════════════════════════════════════
-//  AGENT HIERARCHY — 4-Tier Architecture
-//  Super Agent → Personal Agents → Sub-Agents
-//  Tiers: Attorney | Of Counsel | Associate | Staff
-// ═══════════════════════════════════════════════════════════════
-
 import {
-  doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
-  collection, query, where, serverTimestamp, writeBatch,
+  collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp,
+  updateDoc, writeBatch,
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, setHumanAgentSeatCount } from './firebase';
 
-// ─────────────────────────────────────────────────────────
-//  ROLE DEFINITIONS — maps employee roles to agent configs
-// ─────────────────────────────────────────────────────────
+export const MAX_FIRM_EMPLOYEE_COUNT = 20;
 
+// Human roles are mapped to a personal agent type and its least-privilege toolset.
 export const EMPLOYEE_ROLES = [
-  // ═══ PRACTICE OF LAW — Legal service delivery ═══
-  // Tier 1 — Attorney (Full Legal Authority)
   { value: 'solo-partner', label: 'Solo Practitioner', agentType: 'partner', tier: 'attorney', division: 'practice', superAgentAccess: true, canEditFirmPolicies: true },
   { value: 'managing-partner', label: 'Managing Partner', agentType: 'partner', tier: 'attorney', division: 'practice', superAgentAccess: true, canEditFirmPolicies: true },
   { value: 'partner', label: 'Equity Partner', agentType: 'partner', tier: 'attorney', division: 'practice', superAgentAccess: true, canEditFirmPolicies: false },
   { value: 'income-partner', label: 'Income Partner', agentType: 'partner', tier: 'attorney', division: 'practice', superAgentAccess: true, canEditFirmPolicies: false },
-  // Tier 2 — Of Counsel (Senior Advisory)
   { value: 'of-counsel', label: 'Of Counsel', agentType: 'of-counsel', tier: 'of-counsel', division: 'practice', superAgentAccess: 'read-only', canEditFirmPolicies: false },
-  // Tier 3 — Associate (Licensed Attorney, Limited Scope)
   { value: 'senior-associate', label: 'Senior Associate', agentType: 'associate', tier: 'associate', division: 'practice', superAgentAccess: false, canEditFirmPolicies: false },
   { value: 'associate', label: 'Associate Attorney', agentType: 'associate', tier: 'associate', division: 'practice', superAgentAccess: false, canEditFirmPolicies: false },
-  // Practice Support Staff
+  { value: 'junior-associate', label: 'Junior Associate', agentType: 'associate', tier: 'associate', division: 'practice', superAgentAccess: false, canEditFirmPolicies: false },
+  { value: 'contract-attorney', label: 'Contract Attorney', agentType: 'associate', tier: 'attorney', division: 'practice', superAgentAccess: false, canEditFirmPolicies: false },
   { value: 'paralegal', label: 'Paralegal', agentType: 'paralegal', tier: 'staff', division: 'practice', superAgentAccess: false },
+  { value: 'litigation-paralegal', label: 'Litigation Paralegal', agentType: 'paralegal', tier: 'staff', division: 'practice', superAgentAccess: false },
+  { value: 'case-manager', label: 'Case Manager', agentType: 'case-manager', tier: 'staff', division: 'practice', superAgentAccess: false },
+  { value: 'legal-assistant', label: 'Legal Assistant', agentType: 'legal-assistant', tier: 'staff', division: 'practice', superAgentAccess: false },
   { value: 'law-clerk', label: 'Law Clerk', agentType: 'law-clerk', tier: 'staff', division: 'practice', superAgentAccess: false },
   { value: 'intern', label: 'Intern / Summer Associate', agentType: 'intern', tier: 'staff', division: 'practice', superAgentAccess: false },
-
-  // ═══ BUSINESS OF LAW — Firm operations & administration ═══
   { value: 'secretary', label: 'Legal Secretary', agentType: 'secretary', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'docketing-clerk', label: 'Docketing Clerk', agentType: 'docketing', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'records-clerk', label: 'Records Clerk', agentType: 'records', tier: 'staff', division: 'business', superAgentAccess: false },
   { value: 'receptionist', label: 'Receptionist', agentType: 'receptionist', tier: 'staff', division: 'business', superAgentAccess: false },
   { value: 'intake', label: 'Intake Coordinator', agentType: 'receptionist', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'client-success', label: 'Client Success Coordinator', agentType: 'receptionist', tier: 'staff', division: 'business', superAgentAccess: false },
   { value: 'billing', label: 'Billing Clerk', agentType: 'billing', tier: 'staff', division: 'business', superAgentAccess: false },
   { value: 'bookkeeper', label: 'Bookkeeper', agentType: 'billing', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'accounting-manager', label: 'Accounting Manager', agentType: 'finance', tier: 'staff', division: 'business', superAgentAccess: false },
   { value: 'office-manager', label: 'Office Manager', agentType: 'operations', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'firm-administrator', label: 'Firm Administrator', agentType: 'operations', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'practice-manager', label: 'Practice Manager', agentType: 'operations', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'marketing-coordinator', label: 'Marketing Coordinator', agentType: 'marketing', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'business-development', label: 'Business Development', agentType: 'marketing', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'hr-admin', label: 'HR / Payroll Admin', agentType: 'operations', tier: 'staff', division: 'business', superAgentAccess: false },
+  { value: 'it-admin', label: 'IT / Systems Admin', agentType: 'operations', tier: 'staff', division: 'business', superAgentAccess: false },
 ];
 
-// Roles that qualify as firm owner (isOwner: true)
-// These are the only roles with canEditFirmPolicies: true
 export const OWNER_ELIGIBLE_ROLES = ['solo-partner', 'managing-partner'];
+export const PARTNER_ROLES = ['solo-partner', 'managing-partner', 'partner', 'income-partner'];
+export const getOwnerRole = firmSize => firmSize === 'solo' ? 'solo-partner' : 'managing-partner';
 
-/**
- * Derive the correct owner role from firm context.
- * Solo firms → 'solo-partner', multi-partner firms → 'managing-partner'
- */
-export function getOwnerRole(firmSize) {
-  return firmSize === 'solo' ? 'solo-partner' : 'managing-partner';
+export const AGENT_SUB_AGENTS = {
+  partner: ['legal-research', 'contract-review', 'drafting', 'case-analytics', 'business-intelligence', 'knowledge-search', 'communication-drafter', 'due-diligence', 'trust-accounting'],
+  'of-counsel': ['legal-research', 'contract-review', 'drafting', 'ediscovery', 'deposition-prep', 'case-analytics', 'knowledge-search', 'communication-drafter', 'due-diligence'],
+  associate: ['legal-research', 'contract-review', 'drafting', 'ediscovery', 'deposition-prep', 'knowledge-search', 'communication-drafter', 'due-diligence', 'court-filing'],
+  paralegal: ['legal-research', 'ediscovery', 'document-formatting', 'deposition-prep', 'knowledge-search', 'court-filing', 'deadline-tracker'],
+  'case-manager': ['client-intake', 'scheduling', 'deadline-tracker', 'knowledge-search', 'communication-drafter', 'case-analytics', 'court-filing'],
+  'legal-assistant': ['scheduling', 'document-formatting', 'knowledge-search', 'communication-drafter', 'deadline-tracker', 'court-filing'],
+  'law-clerk': ['legal-research', 'drafting', 'knowledge-search', 'due-diligence'],
+  intern: ['legal-research', 'knowledge-search'],
+  receptionist: ['client-intake', 'scheduling', 'lead-qualification', 'communication-drafter'],
+  secretary: ['scheduling', 'document-formatting', 'knowledge-search', 'communication-drafter', 'deadline-tracker', 'court-filing'],
+  docketing: ['deadline-tracker', 'court-filing', 'scheduling', 'knowledge-search', 'compliance-monitor'],
+  records: ['knowledge-search', 'document-formatting', 'ediscovery'],
+  billing: ['billing-time', 'knowledge-search', 'communication-drafter', 'trust-accounting'],
+  finance: ['billing-time', 'trust-accounting', 'business-intelligence', 'knowledge-search', 'communication-drafter'],
+  operations: ['compliance-monitor', 'knowledge-search', 'communication-drafter', 'trust-accounting', 'business-intelligence'],
+  marketing: ['lead-qualification', 'client-intake', 'communication-drafter', 'business-intelligence', 'knowledge-search'],
+};
+
+const restricted = {
+  allClientMatters: false, financial: false, firmStrategy: false,
+  caseWorkProduct: 'assigned-only', clientContacts: 'assigned-only',
+  auditLogs: false, agentConfigs: 'own-only',
+};
+
+export const ACCESS_MATRIX = {
+  partner: { allClientMatters: true, financial: true, firmStrategy: true, caseWorkProduct: true, clientContacts: true, auditLogs: 'own-team', agentConfigs: 'own-and-reports' },
+  'of-counsel': { ...restricted, allClientMatters: 'own-plus-research', caseWorkProduct: 'own-matters', clientContacts: 'own-matters', auditLogs: 'read-only' },
+  associate: restricted,
+  paralegal: { ...restricted, caseWorkProduct: 'assigned-limited' },
+  'case-manager': { ...restricted, caseWorkProduct: 'assigned-limited', clientContacts: 'assigned-only' },
+  'legal-assistant': { ...restricted, caseWorkProduct: 'assigned-limited', clientContacts: 'assigned-only' },
+  'law-clerk': { ...restricted, caseWorkProduct: 'research-only', clientContacts: false },
+  intern: { ...restricted, caseWorkProduct: 'sandboxed', clientContacts: false },
+  receptionist: { ...restricted, caseWorkProduct: false, clientContacts: true },
+  secretary: { ...restricted, caseWorkProduct: 'assigned-limited' },
+  docketing: { ...restricted, caseWorkProduct: 'deadlines-only', clientContacts: false },
+  records: { ...restricted, caseWorkProduct: 'document-index-only', clientContacts: false },
+  billing: { ...restricted, financial: true, caseWorkProduct: false, clientContacts: 'billing-only' },
+  finance: { ...restricted, financial: true, firmStrategy: 'financial-only', caseWorkProduct: false, clientContacts: 'billing-only', auditLogs: true },
+  operations: { ...restricted, financial: 'summary-only', caseWorkProduct: false, clientContacts: false, auditLogs: true, agentConfigs: true },
+  marketing: { ...restricted, firmStrategy: 'growth-only', caseWorkProduct: false, clientContacts: 'prospects-only' },
+};
+
+export const SUB_AGENT_CATALOG = [
+  ['legal-research', 'Legal Research'], ['contract-review', 'Contract Review'], ['drafting', 'Drafting'],
+  ['ediscovery', 'eDiscovery'], ['client-intake', 'Client Intake'], ['scheduling', 'Scheduling'],
+  ['lead-qualification', 'Lead Qualification'], ['billing-time', 'Billing & Time'],
+  ['document-formatting', 'Document Formatting'], ['compliance-monitor', 'Compliance Monitor'],
+  ['deposition-prep', 'Deposition Prep'], ['knowledge-search', 'Knowledge Search'],
+  ['communication-drafter', 'Communication Drafter'], ['case-analytics', 'Case Analytics'],
+  ['business-intelligence', 'Business Intelligence'], ['due-diligence', 'Due Diligence'],
+  ['trust-accounting', 'Trust Accounting'], ['court-filing', 'Court Filing'], ['deadline-tracker', 'Deadline Tracking'],
+].map(([id, name]) => ({ id, name }));
+
+function roleConfig(role) {
+  return EMPLOYEE_ROLES.find(item => item.value === role) || EMPLOYEE_ROLES.find(item => item.value === 'associate');
 }
 
-// Which sub-agents are available to each agent type
-export const AGENT_SUB_AGENTS = {
-  partner: [
-    'legal-research', 'contract-review', 'drafting', 'case-analytics',
-    'business-intelligence', 'knowledge-search', 'communication-drafter',
-    'due-diligence', 'trust-accounting',
-  ],
-  'of-counsel': [
-    'legal-research', 'contract-review', 'drafting', 'ediscovery',
-    'deposition-prep', 'case-analytics', 'knowledge-search', 'communication-drafter',
-    'due-diligence',
-  ],
-  associate: [
-    'legal-research', 'contract-review', 'drafting', 'ediscovery',
-    'deposition-prep', 'knowledge-search', 'communication-drafter',
-    'due-diligence', 'court-filing',
-  ],
-  paralegal: [
-    'legal-research', 'ediscovery', 'document-formatting', 'deposition-prep',
-    'knowledge-search', 'court-filing', 'deadline-tracker',
-  ],
-  'law-clerk': [
-    'legal-research', 'drafting', 'knowledge-search', 'due-diligence',
-  ],
-  receptionist: [
-    'client-intake', 'scheduling', 'lead-qualification', 'communication-drafter',
-  ],
-  secretary: [
-    'scheduling', 'document-formatting', 'knowledge-search', 'communication-drafter',
-    'deadline-tracker', 'court-filing',
-  ],
-  billing: [
-    'billing-time', 'knowledge-search', 'communication-drafter', 'trust-accounting',
-  ],
-  operations: [
-    'compliance-monitor', 'knowledge-search', 'communication-drafter', 'trust-accounting',
-  ],
+function employeePayload(data) {
+  return {
+    name: data.name, email: data.email, role: data.role,
+    photoURL: data.photoURL || null,
+    practiceAreas: data.practiceAreas || [],
+    supervisingPartnerId: data.supervisingPartnerId || null,
+  };
+}
 
-  intern: [
-    'legal-research', 'knowledge-search',
-  ],
-};
+function agentPayload(firmId, employeeId, data) {
+  const config = roleConfig(data.role);
+  return {
+    id: employeeId, humanId: employeeId, humanName: data.name, humanEmail: data.email,
+    employeeId, employeeName: data.name, employeeEmail: data.email,
+    employeePhotoURL: data.photoURL || null,
+    agentType: config.agentType,
+    agentName: data.agentName || `${data.name}'s AI Chief of Staff`,
+    humanRole: data.role, firmId,
+    permissions: ACCESS_MATRIX[config.agentType] || {},
+    availableSubAgents: AGENT_SUB_AGENTS[config.agentType] || [],
+    context: { preferences: {}, writingStyle: null, caseload: [] },
+    settings: { showSubAgentVisibility: false },
+    superAgentAccess: config.superAgentAccess || false,
+    canEditFirmPolicies: config.canEditFirmPolicies || false,
+    status: 'active', updatedAt: serverTimestamp(),
+  };
+}
 
-// Access control matrix — what each agent type can see
-export const ACCESS_MATRIX = {
-  partner: {
-    allClientMatters: true,
-    financial: true,
-    firmStrategy: true,
-    caseWorkProduct: true,
-    clientContacts: true,
-    auditLogs: 'own-team',
-    agentConfigs: 'own-and-reports',
-  },
-  'of-counsel': {
-    allClientMatters: 'own-plus-research',
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: 'own-matters',
-    clientContacts: 'own-matters',
-    auditLogs: 'read-only',
-    agentConfigs: 'own-only',
-  },
-  associate: {
-    allClientMatters: false,
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: 'assigned-only',
-    clientContacts: 'assigned-only',
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-  paralegal: {
-    allClientMatters: false,
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: 'assigned-limited',
-    clientContacts: 'assigned-only',
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-  'law-clerk': {
-    allClientMatters: false,
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: 'research-only',
-    clientContacts: false,
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-  receptionist: {
-    allClientMatters: false,
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: false,
-    clientContacts: true,
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-  secretary: {
-    allClientMatters: false,
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: 'assigned-limited',
-    clientContacts: 'assigned-only',
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-  billing: {
-    allClientMatters: false,
-    financial: true,
-    firmStrategy: false,
-    caseWorkProduct: false,
-    clientContacts: 'billing-only',
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-  operations: {
-    allClientMatters: false,
-    financial: 'summary-only',
-    firmStrategy: false,
-    caseWorkProduct: false,
-    clientContacts: false,
-    auditLogs: true,
-    agentConfigs: true,
-  },
-
-  intern: {
-    allClientMatters: false,
-    financial: false,
-    firmStrategy: false,
-    caseWorkProduct: 'sandboxed',
-    clientContacts: false,
-    auditLogs: false,
-    agentConfigs: 'own-only',
-  },
-};
-
-// Sub-agent definitions
-export const SUB_AGENT_CATALOG = [
-  { id: 'legal-research', name: 'Legal Research', desc: 'Case law search, precedent analysis, citation formatting', icon: 'Search' },
-  { id: 'contract-review', name: 'Contract Review', desc: 'Redlining, risk flagging, clause comparison', icon: 'FileText' },
-  { id: 'drafting', name: 'Drafting', desc: 'Motions, briefs, letters, memos', icon: 'PenTool' },
-  { id: 'ediscovery', name: 'eDiscovery', desc: 'Document review, privilege tagging, Bates numbering', icon: 'FolderSearch' },
-  { id: 'client-intake', name: 'Client Intake', desc: 'Conflict check, lead scoring, intake processing', icon: 'UserCheck' },
-  { id: 'scheduling', name: 'Scheduling', desc: 'Calendar management, court dates, reminders', icon: 'Calendar' },
-  { id: 'lead-qualification', name: 'Lead Qualification', desc: 'Score and qualify incoming leads', icon: 'TrendingUp' },
-  { id: 'billing-time', name: 'Billing & Time', desc: 'Time entries, LEDES invoicing, IOLTA reconciliation', icon: 'DollarSign' },
-  { id: 'document-formatting', name: 'Document Formatting', desc: 'Court-compliant formatting, TOA, Bates stamps', icon: 'FileCheck' },
-  { id: 'compliance-monitor', name: 'Compliance Monitor', desc: 'Regulatory tracking, deadline alerts, filings', icon: 'Scale' },
-  { id: 'deposition-prep', name: 'Deposition Prep', desc: 'Outlines, exhibit identification, question drafts', icon: 'Mic' },
-  { id: 'knowledge-search', name: 'Knowledge Search', desc: 'Internal precedent lookup, work product retrieval', icon: 'Database' },
-  { id: 'communication-drafter', name: 'Communication Drafter', desc: 'Email drafts, client letters, engagement letters', icon: 'Mail' },
-  { id: 'case-analytics', name: 'Case Analytics', desc: 'Outcome prediction, judge tendencies, benchmarks', icon: 'TrendingUp' },
-  { id: 'business-intelligence', name: 'Business Intelligence', desc: 'Revenue trends, pipeline analysis, market insights', icon: 'BarChart3' },
-  { id: 'due-diligence', name: 'Due Diligence', desc: 'Data room analysis, red flag reports, and risk assessment', icon: 'ScanSearch' },
-  { id: 'trust-accounting', name: 'Trust Accounting', desc: 'IOLTA reconciliation, trust ledgers, and bar compliance', icon: 'Banknote' },
-  { id: 'court-filing', name: 'Court Filing', desc: 'ECF/PACER preparation, state filings, and service calculation', icon: 'Landmark' },
-  { id: 'deadline-tracker', name: 'Deadline Tracking', desc: 'Statute of limitations, docketing, and timeline rules', icon: 'Clock' },
-];
-
-
-// ─────────────────────────────────────────────────────────
-//  FIRESTORE OPERATIONS — Employees & Agents
-// ─────────────────────────────────────────────────────────
-
-/**
- * Save the firm's employee roster and create agents for each.
- * Called during onboarding Step 3 (Firm Roster).
- */
 export async function saveRosterAndCreateAgents(firmId, employees) {
-  const batch = writeBatch(db);
-
-  // 1. Create Super Agent for the firm
-  const superAgentRef = doc(db, 'firms', firmId, 'superAgent', 'config');
-  const partnerIds = employees
-    .filter(e => ['partner', 'managing-partner', 'solo-partner'].includes(e.role))
-    .map(e => e.id || e.email);
-  const managingPartnerIds = employees
-    .filter(e => ['managing-partner', 'solo-partner'].includes(e.role))
-    .map(e => e.id || e.email);
-
-  batch.set(superAgentRef, {
-    firmId,
-    authorizedPartnerIds: partnerIds,
-    managingPartnerIds, // Only these partners can edit firm policies
-    firmPolicies: {},
-    securityConfig: {},
-    status: 'active',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  // 2. Create each employee + their personal agent
-  for (const emp of employees) {
-    // Use email-based deterministic ID to prevent duplicates if onboarding is re-run
-    // Fallback to name-based deterministic ID if email is missing (for frictionless onboarding)
-    const secureIdInput = emp.email || emp.name || Math.random().toString(36).substring(7);
-    const safeId = secureIdInput.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_');
-    const empRef = doc(db, 'firms', firmId, 'employees', safeId);
-    const roleConfig = EMPLOYEE_ROLES.find(r => r.value === emp.role);
-    const agentType = roleConfig?.agentType || 'associate';
-
-    batch.set(empRef, {
-      name: emp.name,
-      email: emp.email,
-      role: emp.role,
-      practiceAreas: emp.practiceAreas || [],
-      supervisingPartnerId: emp.supervisingPartnerId || null,
-      createdAt: serverTimestamp(),
-    }, { merge: true });
-
-    // Create the personal agent for this employee (Deterministic ID matches employee)
-    const agentRef = doc(db, 'firms', firmId, 'agents', safeId);
-    batch.set(agentRef, {
-      id: safeId,
-      // Internal nomenclature: Human Resource (instead of Employee)
-      humanId: safeId,
-      humanName: emp.name,
-      humanEmail: emp.email,
-      // Legacy compatibility for the screenshot field
-      employeeId: safeId,
-      employeeName: emp.name,
-      employeeEmail: emp.email,
-      agentType,
-      agentName: emp.agentName || `${emp.name}'s AI Chief of Staff`,
-      firmId,
-      permissions: ACCESS_MATRIX[agentType] || {},
-      availableSubAgents: AGENT_SUB_AGENTS[agentType] || [],
-      context: {
-        preferences: {},
-        writingStyle: null,
-        caseload: [],
-      },
-      settings: {
-        showSubAgentVisibility: false, // UI toggle for power users to see sub-agent dispatches
-      },
-      superAgentAccess: roleConfig?.superAgentAccess || false,
-      canEditFirmPolicies: roleConfig?.canEditFirmPolicies || false,
-      status: 'active',
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+  if (employees.length > MAX_FIRM_EMPLOYEE_COUNT) {
+    throw new Error(`Small-firm workspaces support up to ${MAX_FIRM_EMPLOYEE_COUNT} mapped humans.`);
   }
 
+  const batch = writeBatch(db);
+  const partners = employees.filter(item => PARTNER_ROLES.includes(item.role));
+  batch.set(doc(db, 'firms', firmId, 'superAgent', 'config'), {
+    firmId,
+    authorizedPartnerIds: partners.map(item => item.id || item.email),
+    managingPartnerIds: employees.filter(item => OWNER_ELIGIBLE_ROLES.includes(item.role)).map(item => item.id || item.email),
+    status: 'active', updatedAt: serverTimestamp(), createdAt: serverTimestamp(),
+  }, { merge: true });
+
+  employees.forEach(item => {
+    const employeeId = (item.id || item.email || item.name).toLowerCase().replace(/[^a-z0-9]/g, '_');
+    batch.set(doc(db, 'firms', firmId, 'employees', employeeId), { ...employeePayload(item), createdAt: serverTimestamp() }, { merge: true });
+    batch.set(doc(db, 'firms', firmId, 'agents', employeeId), { ...agentPayload(firmId, employeeId, item), createdAt: serverTimestamp() }, { merge: true });
+  });
   await batch.commit();
 }
 
-/**
- * Get all employees for a firm.
- */
 export async function getEmployees(firmId) {
   const snap = await getDocs(collection(db, 'firms', firmId, 'employees'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
-/**
- * Get all agents for a firm.
- */
 export async function getAgents(firmId) {
   const snap = await getDocs(collection(db, 'firms', firmId, 'agents'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(item => ({ id: item.id, ...item.data() }));
 }
 
-/**
- * Get the Super Agent config for a firm.
- */
 export async function getSuperAgent(firmId) {
   const snap = await getDoc(doc(db, 'firms', firmId, 'superAgent', 'config'));
   return snap.exists() ? snap.data() : null;
 }
 
-/**
- * Get a specific agent by employee ID.
- */
 export async function getAgentForEmployee(firmId, employeeId) {
   const snap = await getDoc(doc(db, 'firms', firmId, 'agents', employeeId));
   return snap.exists() ? { id: snap.id, ...snap.data() } : null;
 }
 
-/**
- * Add an employee and create their agent after onboarding.
- */
-export async function addEmployee(firmId, employeeData) {
-  console.log('[DEBUG] agentHierarchy addEmployee executing with:', firmId, employeeData);
-  const empRef = doc(collection(db, 'firms', firmId, 'employees'));
-  const roleConfig = EMPLOYEE_ROLES.find(r => r.value === employeeData.role);
-  const agentType = roleConfig?.agentType || 'associate';
-  console.log('[DEBUG] agentHierarchy agentType derived:', agentType);
-
-  // Auto-upgrade solo firms and track additional human seats for billing
-  const firmRef = doc(db, 'firms', firmId);
-  const firmSnap = await getDoc(firmRef);
-  if (firmSnap.exists()) {
-    const firmData = firmSnap.data();
-    const updatePayload = {};
-    if (firmData.firmSize === 'solo') {
-      updatePayload.firmSize = 'small_team'; // Remove solo status
-    }
-    // Increment billable extra (non-founder) seats
-    updatePayload.extraSeats = (firmData.extraSeats || 0) + 1;
-    updatePayload.updatedAt = serverTimestamp();
-    await updateDoc(firmRef, updatePayload);
+export async function addEmployee(firmId, data) {
+  const currentEmployees = await getEmployees(firmId);
+  if (currentEmployees.length >= MAX_FIRM_EMPLOYEE_COUNT) {
+    throw new Error(`Small-firm workspaces support up to ${MAX_FIRM_EMPLOYEE_COUNT} mapped humans. Contact support for a larger firm deployment.`);
   }
 
-  await setDoc(empRef, {
-    name: employeeData.name,
-    email: employeeData.email,
-    role: employeeData.role,
-    photoURL: employeeData.photoURL || null,
-    practiceAreas: employeeData.practiceAreas || [],
-    supervisingPartnerId: employeeData.supervisingPartnerId || null,
-    createdAt: serverTimestamp(),
-  });
-
-  // Create personal agent
-  const agentRef = doc(db, 'firms', firmId, 'agents', empRef.id);
-  await setDoc(agentRef, {
-    employeeId: empRef.id,
-    employeeName: employeeData.name,
-    employeeEmail: employeeData.email,
-    employeePhotoURL: employeeData.photoURL || null,
-    agentType,
-    agentName: employeeData.agentName || `${employeeData.name}'s AI Chief of Staff`,
-    firmId,
-    permissions: ACCESS_MATRIX[agentType] || {},
-    availableSubAgents: AGENT_SUB_AGENTS[agentType] || [],
-    context: { preferences: {}, writingStyle: null, caseload: [] },
-    settings: { showSubAgentVisibility: false },
-    superAgentAccess: roleConfig?.superAgentAccess || false,
-    canEditFirmPolicies: roleConfig?.canEditFirmPolicies || false,
-    status: 'active',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  return empRef.id;
-}
-
-/**
- * Update an employee's agent name (personalization).
- */
-export async function renameAgent(firmId, agentId, newName) {
-  await updateDoc(doc(db, 'firms', firmId, 'agents', agentId), {
-    agentName: newName,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-/**
- * Update an existing employee and their personal agent.
- */
-export async function updateEmployee(firmId, employeeId, employeeData) {
+  const employeeRef = doc(collection(db, 'firms', firmId, 'employees'));
   const batch = writeBatch(db);
-  const empRef = doc(db, 'firms', firmId, 'employees', employeeId);
-  const agentRef = doc(db, 'firms', firmId, 'agents', employeeId);
-  
-  const roleConfig = EMPLOYEE_ROLES.find(r => r.value === employeeData.role);
-  const agentType = roleConfig?.agentType || 'associate';
+  batch.set(employeeRef, { ...employeePayload(data), createdAt: serverTimestamp() });
+  batch.set(doc(db, 'firms', firmId, 'agents', employeeRef.id), { ...agentPayload(firmId, employeeRef.id, data), createdAt: serverTimestamp() });
+  const nextSeatCount = (await currentExtraSeats(firmId)) + 1;
+  batch.update(doc(db, 'firms', firmId), { extraSeats: nextSeatCount, updatedAt: serverTimestamp() });
+  await batch.commit();
+  await setHumanAgentSeatCount({ firmId, count: nextSeatCount });
+  return employeeRef.id;
+}
 
-  // Update employee profile
-  batch.update(empRef, {
-    name: employeeData.name,
-    email: employeeData.email,
-    role: employeeData.role,
-    photoURL: employeeData.photoURL || null,
-    supervisingPartnerId: employeeData.supervisingPartnerId || null,
-    updatedAt: serverTimestamp(),
-  });
+async function currentExtraSeats(firmId) {
+  const snap = await getDoc(doc(db, 'firms', firmId));
+  return snap.exists() ? Number(snap.data().extraSeats || 0) : 0;
+}
 
-  // Update agent config
-  batch.update(agentRef, {
-    employeeName: employeeData.name,
-    employeeEmail: employeeData.email,
-    employeePhotoURL: employeeData.photoURL || null,
-    agentType,
-    agentName: employeeData.agentName || `${employeeData.name}'s AI Chief of Staff`,
-    permissions: ACCESS_MATRIX[agentType] || {},
-    availableSubAgents: AGENT_SUB_AGENTS[agentType] || [],
-    superAgentAccess: roleConfig?.superAgentAccess || false,
-    canEditFirmPolicies: roleConfig?.canEditFirmPolicies || false,
-    updatedAt: serverTimestamp(),
-  });
-
+export async function updateEmployee(firmId, employeeId, data) {
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'firms', firmId, 'employees', employeeId), { ...employeePayload(data), updatedAt: serverTimestamp() });
+  batch.set(doc(db, 'firms', firmId, 'agents', employeeId), agentPayload(firmId, employeeId, data), { merge: true });
   await batch.commit();
 }
 
-/**
- * Remove an employee and their agent.
- */
 export async function removeEmployee(firmId, employeeId) {
-  const batch = writeBatch(db);
-  batch.delete(doc(db, 'firms', firmId, 'employees', employeeId));
-  batch.delete(doc(db, 'firms', firmId, 'agents', employeeId));
-  await batch.commit();
+  await deleteDoc(doc(db, 'firms', firmId, 'agents', employeeId));
+  await deleteDoc(doc(db, 'firms', firmId, 'employees', employeeId));
+  const seats = await currentExtraSeats(firmId);
+  const nextSeatCount = Math.max(0, seats - 1);
+  await updateDoc(doc(db, 'firms', firmId), { extraSeats: nextSeatCount, updatedAt: serverTimestamp() });
+  await setHumanAgentSeatCount({ firmId, count: nextSeatCount });
 }

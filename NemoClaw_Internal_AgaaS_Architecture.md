@@ -10,8 +10,8 @@ This document outlines the internal Agentic-as-a-Service (AgaaS) framework desig
 
 Internally, NemoC LAW AI operates with **1 Human Resource (KILABA, C.E.O.)** and a fleet of specialized **Agentic Resources (AR)**. 
 
-### The Core: The C.E.A. (NemoC Law)
-NemoC Law is the Chief Executive Agent and central orchestrator of the company. It has top-level context of the company's codebase, revenue, signups, and server health. It delegates tasks to the specialist departments.
+### The Core: The C.E.A. (NemoC LAW AI Law)
+NemoC LAW AI Law is the Chief Executive Agent and central orchestrator of the company. It has top-level context of the company's codebase, revenue, signups, and server health. It delegates tasks to the specialist departments.
 
 ### Department 1: Growth & Sales (GTM Fleet)
 - **SDR Sub-Agent:** Continuously scrapes law firm directories and LinkedIn to build lead lists. Drafts and sends highly personalized cold outreach emails offering the "AgaaS" platform.
@@ -55,7 +55,7 @@ This system requires a centralized view for the Human Resource (You) to monitor 
 
 ```mermaid
 graph TD
-    subgraph NemoC_Internal_HQ [NemoC LAW HQ "God Mode"]
+    subgraph NemoC_Internal_HQ [NemoC LAW AI LAW HQ "God Mode"]
         CEA[Chief Executive Agent<br/>Orchestrator]
         
         subgraph GTM [Growth Fleet]
@@ -81,7 +81,7 @@ graph TD
     end
 
     GTM -->|Emails| LawFirms(External Law Firms)
-    Eng -->|Deploys| Firebase(NemoC Platform)
+    Eng -->|Deploys| Firebase(NemoC LAW AI Platform)
     CS -->|Invoices & Fixes| LawFirms
 ```
 

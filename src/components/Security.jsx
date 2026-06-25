@@ -1,4 +1,4 @@
-import { Lock, Globe, Brain, ShieldCheck, User, Zap, Monitor, ClipboardList, BarChart3, AlertTriangle, Database, Server, Cpu, Globe2, Shield, Eye, FileText, Layout } from 'lucide-react';
+import { Brain, ClipboardList, Eye, FileText, Globe, Lock, Shield, ShieldCheck, Zap } from 'lucide-react';
 import './Security.css';
 
 const layers = [
@@ -25,7 +25,7 @@ export default function Security() {
         <div className="security-header">
           <span className="section-label">Firm-Grade Security Moat</span>
           <h2 className="section-title">
-            Institutional Security for <span className="text-nvidia">Professional Privilege.</span>
+            Enterprise Security for <span className="text-nvidia">Professional Privilege.</span>
           </h2>
           <p className="section-subtitle">
             While others risk client data with public AI tools, your agents run inside an NVIDIA NemoClaw sandbox.{' '}
@@ -55,12 +55,12 @@ export default function Security() {
         {/* Anti-Public AI Comparison — Architectural Cleanup */}
         <div className="public-ai-comparison">
           <h3 className="public-ai-comparison-title">
-            Comparison Matrix: Public AI vs. NemoC Agentic AI
+            Comparison Matrix: Public AI vs. NemoC LAW AI
           </h3>
           <div className="public-ai-table">
             <div className="public-ai-header">
               <span className="pai-col-risk-label">⚠️ Public AI (Traditional/Generative)</span>
-              <span className="pai-col-nemoc-label">✅ NemoC Agentic AI (NemoClaw)</span>
+              <span className="pai-col-nemoc-label">✅ NemoC LAW AI (NemoClaw)</span>
             </div>
             {publicAiRisks.map((row, i) => (
               <div key={i} className="public-ai-row">

@@ -1,16 +1,22 @@
-import { doc, updateDoc, serverTimestamp, addDoc, collection } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
+import { getAuth } from 'firebase/auth';
 
 /* ═══════════════════════════════════════════════
    AI VOICE OUTBOUND CALLING SERVICE
    Uses Bland AI (https://bland.ai) for autonomous phone calls
    ═══════════════════════════════════════════════ */
 
-const BLAND_API = 'https://api.bland.ai/v1';
-const CALL_LOG_COL = 'call_logs';
+const PLACE_CALL_ENDPOINT = '/api/placeBlandCall';
+const CALL_STATUS_ENDPOINT = '/api/getBlandCallStatus';
 
-function getBlandKey() {
-  return import.meta.env.VITE_BLAND_API_KEY || '';
+async function getServerAuthHeaders() {
+  const user = getAuth().currentUser;
+  const token = user ? await user.getIdToken() : '';
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
 }
 
 /**
@@ -24,12 +30,12 @@ export function generateCallScript(prospect) {
   const location = [city, state].filter(Boolean).join(', ');
 
   return {
-    task: `You are Alex, a friendly and professional business development representative for NemoC Law AI — the first Agentic-as-a-Service OS built specifically for solo and small law firms.
+    task: `You are Alex, a friendly and professional business development representative for NemoC LAW AI — the first Agentic-as-a-Service OS built specifically for solo and small law firms.
 
 You are calling ${firmName}${location ? ` in ${location}` : ''}.
 
 YOUR PRIMARY GOALS (in order of priority):
-1. Introduce NemoC Law AI in 60-90 seconds
+1. Introduce NemoC LAW AI in 60-90 seconds
 2. Collect their EMAIL ADDRESS so we can send them more info and get them set up
 3. Get verbal permission to send them a follow-up
 4. If they decline email, ask if it's OK to call back when we go live
@@ -45,7 +51,7 @@ IMPORTANT RULES:
 CONVERSATION FLOW:
 
 1. GREETING (warm, brief):
-   "Hi, this is Alex calling from NemoC Law AI. I'm reaching out because we've built something specifically for law firms like yours — do you have about 60 seconds?"
+   "Hi, this is Alex calling from NemoC LAW AI. I'm reaching out because we've built something specifically for law firms like yours — do you have about 60 seconds?"
 
 2. IF THEY SAY YES — PITCH (pick 3 key points, don't dump all info):
    - "We've built the first Agentic OS purpose-built for solo and small law firms"
@@ -64,13 +70,13 @@ CONVERSATION FLOW:
    If they don't want to give email:
    - "Totally understand. Would it be alright if we give you a call back? The founding pricing window is filling up and I'd hate for you to miss it."
    - If yes: "Great, we'll reach out when it's live. Thanks so much for your time."
-   - If no: "No problem at all. If you ever want to check it out, just search NemoC Law AI. Thanks for your time!"
+   - If no: "No problem at all. If you ever want to check it out, just search NemoC LAW AI. Thanks for your time!"
 
 4. CLOSING:
    "Thanks so much for your time. Keep an eye out for that email — and feel free to reply to it anytime if you have questions. Have a great day!"
 
 VOICEMAIL SCRIPT (if you reach voicemail):
-"Hi, this is Alex from NemoC Law AI. We've built the first AI agent platform specifically for law firms like yours — 10 autonomous agents that handle legal research, contracts, client intake, and more. Founding firms can lock in at $297 a month for life — but spots are limited. Visit nemoc-law-ai.web.app or I can try you again. Have a great day!"
+"Hi, this is Alex from NemoC LAW AI. We've built the first AI agent platform specifically for law firms like yours — 10 autonomous agents that handle legal research, contracts, client intake, and more. Founding firms can lock in at $297 a month for life — but spots are limited. Visit nemoc-law-ai.web.app or I can try you again. Have a great day!"
 
 INFORMATION YOU MUST COLLECT (if possible):
 - Email address (primary goal)
@@ -79,7 +85,7 @@ INFORMATION YOU MUST COLLECT (if possible):
 - Any specific practice areas they mention
 - Any concerns they raise (price, security, AI skepticism)`,
 
-    firstSentence: `Hi, this is Alex calling from NemoC Law AI. I'm reaching out to ${firmName} because we've built something specifically for law firms like yours — do you have about 60 seconds?`,
+    firstSentence: `Hi, this is Alex calling from NemoC LAW AI. I'm reaching out to ${firmName} because we've built something specifically for law firms like yours — do you have about 60 seconds?`,
 
     voice: 'maya',
     maxDuration: 5,
@@ -112,40 +118,18 @@ export function extractEmailFromTranscript(transcript) {
  * Initiate an outbound AI voice call to a prospect via Bland AI.
  */
 export async function makeOutboundCall(prospect) {
-  const apiKey = getBlandKey();
-  if (!apiKey) {
-    throw new Error('Bland AI API key not configured. Add VITE_BLAND_API_KEY to your .env file.');
-  }
-
   if (!prospect.phone) {
     throw new Error('No phone number available for this prospect.');
   }
 
   const script = generateCallScript(prospect);
 
-  // Initiate the call via Bland AI
-  const response = await fetch(`${BLAND_API}/calls`, {
+  const response = await fetch(PLACE_CALL_ENDPOINT, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': apiKey,
-    },
+    headers: await getServerAuthHeaders(),
     body: JSON.stringify({
-      phone_number: prospect.phone,
-      task: script.task,
-      first_sentence: script.firstSentence,
-      voice: script.voice,
-      max_duration: script.maxDuration,
-      wait_for_greeting: script.waitForGreeting,
-      temperature: script.temperature,
-      interruption_threshold: script.interruptionThreshold,
-      model: 'enhanced',
-      answered_by_enabled: true,
-      record: true,
-      metadata: {
-        prospectId: prospect.id,
-        firmName: prospect.firmName,
-      },
+      prospect,
+      script,
     }),
   });
 
@@ -155,18 +139,7 @@ export async function makeOutboundCall(prospect) {
   }
 
   const data = await response.json();
-  const callId = data.call_id;
-
-  // Log to Firestore
-  await addDoc(collection(db, CALL_LOG_COL), {
-    callId,
-    prospectId: prospect.id,
-    firmName: prospect.firmName,
-    phone: prospect.phone,
-    status: 'initiated',
-    channel: 'voice',
-    createdAt: serverTimestamp(),
-  });
+  const callId = data.callId || data.call_id;
 
   // Update prospect status
   if (prospect.id) {
@@ -186,11 +159,10 @@ export async function makeOutboundCall(prospect) {
  * Check the status of an active call.
  */
 export async function getCallStatus(callId) {
-  const apiKey = getBlandKey();
-  if (!apiKey) throw new Error('Bland AI API key not configured');
-
-  const response = await fetch(`${BLAND_API}/calls/${callId}`, {
-    headers: { 'Authorization': apiKey },
+  const response = await fetch(CALL_STATUS_ENDPOINT, {
+    method: 'POST',
+    headers: await getServerAuthHeaders(),
+    body: JSON.stringify({ callId }),
   });
 
   if (!response.ok) throw new Error('Failed to fetch call status');

@@ -1,19 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
-  ShieldCheck, CheckCircle, XCircle, AlertTriangle, Search, FileText, UserCheck, Check, 
-  FolderOpen, Users, Mail, Bot, DollarSign, Clock, TrendingUp, Zap, 
-  ArrowRight, Lock, Timer, Crown, Plus, Minus as MinusIcon, ChevronRight,
-  ShieldAlert, ExternalLink, Download, CreditCard as CardIcon, History, AlertCircle, Info, HelpCircle
+  ShieldCheck, CheckCircle, XCircle, FileText, Check, Bot, DollarSign, Clock, TrendingUp, Zap, Lock, Crown,
+  ShieldAlert, Download, CreditCard as CardIcon, AlertCircle, Info
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
-import { redirectToCheckout, redirectToPortal, PRICING, calculateMonthlyTotal, getFounderDaysRemaining, isInFounderWindow } from '../lib/stripeService';
+import { redirectToCheckout, redirectToPortal, calculateMonthlyTotal, getFounderDaysRemaining, isInFounderWindow } from '../lib/stripeService';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { collection, query, orderBy, getDocs, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, doc, query, orderBy, getDocs, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-
 const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
 
 // Inline Card Update Form Component
@@ -60,7 +57,7 @@ function CardUpdateForm({ onSuccess, onCancel, firmId }) {
       }
       
       onSuccess();
-    } catch (err) {
+    } catch (_err) {
       setError('Failed to update payment method. Please try again.');
     } finally {
       setLoading(false);
@@ -129,25 +126,22 @@ export default function BillingUsage() {
 
 function BillingUsageContent() {
   const location = useLocation();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { firm, refreshFirm, loading: firmLoading } = useFirm();
   const firmId = firm?.id;
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
-  const extraSeats = firm?.extraSeats || 0;
-  const autonomousRoles = firm?.autonomousRoles || 0;
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [showUpdateCardModal, setShowUpdateCardModal] = useState(false);
   const [invoices, setInvoices] = useState([]);
   const [toast, setToast] = useState(null);
   const [loadingInvoices, setLoadingInvoices] = useState(true);
-  const [portalLoading, setPortalLoading] = useState(false);
+  const [_portalLoading, setPortalLoading] = useState(false);
   
   // Client Billing Logic
   const [billableActivities, setBillableActivities] = useState([]);
   const [clientInvoices, setClientInvoices] = useState([]);
-  const [loadingClientData, setLoadingClientData] = useState(true);
+  const [_loadingClientData, setLoadingClientData] = useState(true);
   const [view, setView] = useState('revenue'); // 'revenue' or 'subscription'
 
   // Success/Cancel state from URL
@@ -168,11 +162,13 @@ function BillingUsageContent() {
     async function fetchClientData() {
       try {
         const activitiesSnap = await getDocs(query(collection(db, 'firms', firmId, 'billableActivities'), orderBy('timestamp', 'desc')));
-        setBillableActivities(activitiesSnap.docs.map(d => ({
-          id: d.id,
-          ...d.data(),
-          status: d.data().status || 'detected'
-        })));
+        setBillableActivities(activitiesSnap.docs
+          .map(d => ({
+            id: d.id,
+            ...d.data(),
+            status: d.data().status || 'detected'
+          }))
+          .filter(activity => activity.status !== 'invoiced'));
 
         const invoicesSnap = await getDocs(query(collection(db, 'firms', firmId, 'clientInvoices'), orderBy('issuedAt', 'desc')));
         setClientInvoices(invoicesSnap.docs.map(d => ({
@@ -190,7 +186,7 @@ function BillingUsageContent() {
     fetchClientData();
   }, [firmId]);
 
-  // Load NemoC Subscription Invoices
+  // Load NemoC LAW AI Subscription Invoices
   useEffect(() => {
     if (!firmId) { setLoadingInvoices(false); return; }
 
@@ -223,7 +219,7 @@ function BillingUsageContent() {
   // Handle missing firm gracefully with defaults
   const safeFirm = firm || {
     plan: 'trial',
-    trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     seats: 1,
     firmSize: 'solo'
   };
@@ -232,25 +228,34 @@ function BillingUsageContent() {
   const isUnpaidTrial = isTrialPlan && !safeFirm.stripePaymentMethodId;
   const founderDays = getFounderDaysRemaining(safeFirm?.trialEndsAt);
   const inFounderWindow = isInFounderWindow(safeFirm?.trialEndsAt);
-  const totals = calculateMonthlyTotal(extraSeats, autonomousRoles, inFounderWindow);
+  const extraSeats = Number(safeFirm.extraSeats || 0);
+  const totals = calculateMonthlyTotal(extraSeats, inFounderWindow);
+  const unbilledTotal = billableActivities.reduce((sum, activity) => sum + (Number(activity.value) || 0), 0);
+  const pendingInvoiceCount = clientInvoices.filter(invoice => invoice.status === 'pending').length;
 
   const handleCheckout = async () => {
-    setCheckoutLoading(true);
+    setCheckoutLoading('base');
     setCheckoutError('');
     try {
-      await redirectToCheckout(firmId, 0, 0, true);
+      await redirectToCheckout({
+        firmId,
+        userId: user?.uid,
+        userEmail: user?.email,
+        firmName: firm?.firmName || firm?.name || '',
+        extraSeats,
+      });
     } catch (err) {
       setCheckoutError(err.message || 'Payment gateway unavailable. Please contact support.');
     } finally {
-      setCheckoutLoading(false);
+      setCheckoutLoading(null);
     }
   };
 
-  const handleManageBilling = async () => {
+  const _handleManageBilling = async () => {
     setPortalLoading(true);
     try {
       await redirectToPortal(firmId);
-    } catch (err) {
+    } catch (_err) {
       showToast('error', 'Secure billing portal currently unavailable. AI operations team notified.');
     } finally {
       setPortalLoading(false);
@@ -260,6 +265,59 @@ function BillingUsageContent() {
   const handleApplyActivities = async (activityIds) => {
     setToast({ type: 'info', message: `Generating draft invoice for ${activityIds.length} billable activities...` });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const handleApproveActivity = async (activity) => {
+    if (!firmId || !activity?.id) return;
+
+    try {
+      const activityRef = doc(db, 'firms', firmId, 'billableActivities', activity.id);
+      const invoiceRef = doc(collection(db, 'firms', firmId, 'clientInvoices'));
+      const invoiceNumber = `INV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${invoiceRef.id.slice(0, 6).toUpperCase()}`;
+      const issuedAt = new Date().toISOString();
+
+      const invoice = await runTransaction(db, async (transaction) => {
+        const activitySnap = await transaction.get(activityRef);
+        if (!activitySnap.exists()) throw new Error('Billable activity no longer exists.');
+
+        const currentActivity = activitySnap.data();
+        if (currentActivity.status === 'invoiced') throw new Error('This activity has already been invoiced.');
+
+        let clientName = currentActivity.clientName || '';
+        if (!clientName && currentActivity.matterId) {
+          const matterRef = doc(db, 'firms', firmId, 'matters', currentActivity.matterId);
+          const matterSnap = await transaction.get(matterRef);
+          clientName = matterSnap.exists() ? matterSnap.data().client : '';
+        }
+
+        const invoiceData = {
+          number: invoiceNumber,
+          clientName: clientName || currentActivity.matterName || 'Client',
+          matterId: currentActivity.matterId || null,
+          matterName: currentActivity.matterName || null,
+          amount: Number(currentActivity.value) || 0,
+          status: 'pending',
+          activityIds: [activity.id],
+          issuedAt: serverTimestamp(),
+          createdAt: serverTimestamp(),
+        };
+
+        transaction.set(invoiceRef, invoiceData);
+        transaction.update(activityRef, {
+          status: 'invoiced',
+          invoiceId: invoiceRef.id,
+          invoicedAt: serverTimestamp(),
+        });
+
+        return { id: invoiceRef.id, ...invoiceData, issuedAt };
+      });
+
+      setBillableActivities(current => current.filter(item => item.id !== activity.id));
+      setClientInvoices(current => [invoice, ...current]);
+      showToast('success', `Invoice ${invoice.number} created for $${invoice.amount.toFixed(2)}.`);
+    } catch (err) {
+      showToast('error', err.message || 'Could not create the client invoice.');
+    }
   };
 
   const showToast = (type, message) => {
@@ -320,7 +378,7 @@ function BillingUsageContent() {
       {status === 'success' && (
         <div className="db-alert-success" style={{ marginBottom: '24px' }}>
           <CheckCircle size={18} />
-          Your NemoC subscription has been successfully activated. The Founder Price-Lock is now in effect.
+          Your NemoC LAW AI subscription has been successfully activated. The Founder Price-Lock is now in effect.
         </div>
       )}
 
@@ -329,12 +387,12 @@ function BillingUsageContent() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '32px' }}>
           <div className="db-stat-card">
             <div className="db-stat-label">Total Unbilled Time</div>
-            <div className="db-stat-value">{safeFirm.isConfigured ? '$14,240.00' : '$0.00'}</div>
+            <div className="db-stat-value">${unbilledTotal.toFixed(2)}</div>
             <div className="db-stat-meta" style={{ color: 'var(--db-nvidia-green)' }}>Agent-detected in last 30 days</div>
           </div>
           <div className="db-stat-card">
             <div className="db-stat-label">Pending Invoices</div>
-            <div className="db-stat-value">{safeFirm.isConfigured ? '12' : '0'}</div>
+            <div className="db-stat-value">{pendingInvoiceCount}</div>
             <div className="db-stat-meta">Awaiting partner approval</div>
           </div>
           <div className="db-stat-card">
@@ -357,13 +415,15 @@ function BillingUsageContent() {
               {isTrialPlan ? 'Founding Alpha' : 'Born Agentic'}
             </div>
             <div className="db-stat-meta">
-              {isTrialPlan ? `${founderDays} days of price-lock remaining` : 'Annual Price-Lock active'}
+              {isTrialPlan ? `${founderDays} days left in free trial` : 'Annual Price-Lock active'}
             </div>
           </div>
           <div className="db-stat-card">
             <div className="db-stat-label">Monthly Overhead</div>
-            <div className="db-stat-value">$297.00</div>
-            <div className="db-stat-meta">Next billing: {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString()}</div>
+            <div className="db-stat-value">${totals.total.toFixed(2)}</div>
+            <div className="db-stat-meta">
+              {extraSeats ? `Agentic OS + ${extraSeats} role agent${extraSeats === 1 ? '' : 's'}` : 'Agentic OS partner agent included'} · Next billing: {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString()}
+            </div>
           </div>
           <div className="db-stat-card">
             <div className="db-stat-label">Security Protocol</div>
@@ -428,7 +488,7 @@ function BillingUsageContent() {
                           <td style={{ fontSize: '0.75rem' }}>{act.duration || '0.2h'}</td>
                           <td style={{ fontSize: '0.75rem', fontWeight: 700 }}>${act.value?.toFixed(2) || '0.00'}</td>
                           <td>
-                            <button className="db-btn-icon-sm" title="Approve and Invoice">
+                            <button className="db-btn-icon-sm" title="Approve and Invoice" onClick={() => handleApproveActivity(act)}>
                               <Check size={14} />
                             </button>
                           </td>
@@ -462,7 +522,7 @@ function BillingUsageContent() {
                      <div key={inv.id} className="db-feed-item">
                        <div className="db-feed-content">
                          <div className="db-feed-title">{inv.clientName}</div>
-                         <div className="db-feed-desc">Inv #{inv.number} · {inv.issuedAt ? new Date(inv.issuedAt).toLocaleDateString() : 'Draft'}</div>
+                         <div className="db-feed-desc">Inv #{inv.number} · {inv.issuedAt?.toDate?.()?.toLocaleDateString() || (inv.issuedAt ? new Date(inv.issuedAt).toLocaleDateString() : 'Draft')}</div>
                        </div>
                        <div style={{ textAlign: 'right' }}>
                          <div style={{ fontSize: '0.75rem', fontWeight: 700 }}>${inv.amount.toFixed(2)}</div>
@@ -519,18 +579,26 @@ function BillingUsageContent() {
                 <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(118, 185, 0, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
                   <Crown size={32} color="var(--db-nvidia-green)" />
                 </div>
-                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--db-text-primary)' }}>Activate Agentic OS Core</h3>
-                <p style={{ fontSize: '0.875rem', color: 'var(--db-text-secondary)', maxWidth: '420px', margin: '12px auto 32px', lineHeight: 1.6 }}>
-                  Your firm is currently operating on an unbilled trial. Activate your subscription now to process payments, bill clients, and permanently lock in the Founding Alpha $297/mo rate before the window closes.
+                <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--db-text-primary)' }}>
+                  30-Day Free Trial Active
+                </h3>
+                <p style={{ fontSize: '0.875rem', color: 'var(--db-text-secondary)', maxWidth: '420px', margin: '12px auto 8px', lineHeight: 1.6 }}>
+                  <strong style={{ color: 'var(--db-nvidia-green)' }}>{founderDays} days remaining.</strong>{' '}
+                  Add a card to lock in your rate — no charge until day 31. Cancel anytime in one click.
                 </p>
-                <button 
-                  className="db-btn-primary" 
-                  onClick={handleCheckout} 
-                  disabled={checkoutLoading}
-                  style={{ fontSize: '0.9375rem', padding: '12px 32px', margin: '0 auto' }}
-                >
-                  {checkoutLoading ? 'Redirecting to Stripe...' : 'Activate $297/mo Price-Lock'}
-                </button>
+                <p style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)', maxWidth: '400px', margin: '0 auto 24px', lineHeight: 1.5 }}>
+                  Founder rate locked for life for the first 100 firms in your state. The first partner agent is included.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxWidth: '340px', margin: '0 auto' }}>
+                  <button
+                    className="db-btn-primary"
+                    onClick={handleCheckout}
+                    disabled={!!checkoutLoading}
+                    style={{ fontSize: '0.9375rem', padding: '12px 32px' }}
+                  >
+                    {checkoutLoading === 'base' ? 'Redirecting...' : `Start Agentic OS — $297/mo${extraSeats ? ` + ${extraSeats} role agent${extraSeats === 1 ? '' : 's'}` : ''}`}
+                  </button>
+                </div>
                 {checkoutError && (
                   <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '16px' }}>{checkoutError}</div>
                 )}
@@ -557,7 +625,7 @@ function BillingUsageContent() {
                     <div className="db-billing-line">
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                         <div className="db-billing-icon" style={{ padding: '4px' }}>
-                          <img src="/logos/claw-128-transparent.png" alt="NemoC" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
+                          <img src="/logos/claw-128-transparent.png" alt="NemoC LAW AI" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
                         </div>
                         <div>
                           <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Agentic OS Core</div>
@@ -567,26 +635,23 @@ function BillingUsageContent() {
                       <div style={{ fontWeight: 700 }}>$297.00</div>
                     </div>
 
-                    <div className="db-billing-line" style={{ opacity: extraSeats > 0 ? 1 : 0.5 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div className="db-billing-icon"><Users size={16} /></div>
-                        <div>
-                          <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Additional Human Seats</div>
-                          <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{extraSeats} extra staff invited</div>
+                    {extraSeats > 0 && (
+                      <div className="db-billing-line">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <div className="db-billing-icon">
+                            <Bot size={16} />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Human Role + Agent</div>
+                            <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>
+                              {extraSeats} additional mapped human role{extraSeats === 1 ? '' : 's'} with dedicated personal agents
+                            </div>
+                          </div>
                         </div>
+                        <div style={{ fontWeight: 700 }}>${totals.seats.toFixed(2)}</div>
                       </div>
-                      <div style={{ fontWeight: 700 }}>${totals.seats.toFixed(2)}</div>
-                    </div>
-                    <div className="db-billing-line" style={{ opacity: autonomousRoles > 0 ? 1 : 0.5 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div className="db-billing-icon"><Bot size={16} /></div>
-                        <div>
-                          <div style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Standalone Autonomous Agents</div>
-                          <div style={{ fontSize: '0.6875rem', color: 'var(--db-text-muted)' }}>{autonomousRoles} Autonomously Agentic licenses active</div>
-                        </div>
-                      </div>
-                      <div style={{ fontWeight: 700 }}>${totals.autonomous.toFixed(2)}</div>
-                    </div>
+                    )}
+
                   </div>
                 </div>
 
@@ -598,9 +663,8 @@ function BillingUsageContent() {
                      <div>
                        <h4 style={{ fontSize: '0.9375rem', fontWeight: 800 }}>Founder's Price-Lock Active</h4>
                        <p style={{ fontSize: '0.75rem', color: 'var(--db-text-secondary)', marginTop: '4px', lineHeight: 1.5 }}>
-                         You have successfully secured the $297/mo rate for your firm's lifetime. 
-                         This covers your foundational AI Chief of Staff (Managing Partner Agent) mapped to your primary role. 
-                         To unlock distinct Business-of-Law autonomous agents (Billing, Receptionist, Operations), you must add subsequent human seats or purchase standalone agentic licenses.
+                         Your rate is locked for life. Your AI workforce handles drafting, research, intake, billing, deadlines, and more — all inside your NVIDIA NemoClaw security sandbox.
+                          Add human role + agent mappings from Team Management as your firm grows.
                        </p>
                      </div>
                   </div>
@@ -706,7 +770,7 @@ function BillingUsageContent() {
                   {loadingInvoices ? (
                     <div style={{ fontSize: '0.75rem', color: 'var(--db-text-muted)' }}>Fetching logs...</div>
                   ) : invoices.length > 0 ? (
-                    invoices.map((inv, i) => (
+                    (invoices || []).map((inv, i) => (
                       <div key={inv.id || i} className="db-feed-item">
                         <div className="db-feed-content">
                           <div className="db-feed-title">{inv.date} — {inv.description || 'Agentic OS Subscription'}</div>

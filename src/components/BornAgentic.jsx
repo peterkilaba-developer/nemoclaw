@@ -1,10 +1,10 @@
-import { Search, FileText, UserCheck, Wrench, ArrowLeft, Crown, Bot, Zap, Database, Server, Cpu, Globe, Infinity, Layout, ShieldCheck, TrendingUp } from 'lucide-react';
 import './BornAgentic.css';
+import { Bot, Database, Infinity as InfinityIcon, Layout, ShieldCheck, Wrench } from 'lucide-react';
 
 const comparisons = [
   { label: 'Architecture', legacy: 'AI squeezed into 10-year-old codebases', nemoc: 'AI IS the codebase — built on OpenClaw' },
   { label: 'Firm Management', legacy: 'Manage 3+ apps: Clio, MyCase, Outlook', nemoc: 'Agentic PMI replaces legacy SaaS entirely' },
-  { label: 'Client Comms', legacy: 'Unsecure emails or clunky 3rd party portals', nemoc: 'Zero-Trust E2E Encrypted Client Portals built-in' },
+  { label: 'Client Comms', legacy: 'Unsecure emails or clunky 3rd party portals', nemoc: 'Access-controlled client portals built in' },
   { label: 'Capability', legacy: '"Copilot" — suggests, you still do the work', nemoc: 'Autonomous — agents execute end-to-end' },
   { label: 'Security', legacy: 'Cloud security added retrospectively', nemoc: 'NVIDIA NemoClaw sandbox from foundation' },
   { label: 'Learning', legacy: 'Same generic output every time', nemoc: 'Agents learn your style, templates — improve daily' },
@@ -67,7 +67,7 @@ export default function BornAgentic() {
             <span>VS</span>
           </div>
 
-          {/* NemoC Platform */}
+          {/* NemoC LAW AI Platform */}
           <div className="born-col born-col-nemoc">
             <div className="born-col-header born-nemoc-header">
               <span className="born-col-year">Modern Stack — 2026 Ready</span>
@@ -87,11 +87,11 @@ export default function BornAgentic() {
                 <div className="born-pillar-icon"><Bot size={16} /></div>
                 <div className="born-pillar-content">
                   <div className="born-pillar-title">Agentic AI Orchestration</div>
-                  <div className="born-pillar-desc">Orchestrates your entire 10-person AI legal team.</div>
+                  <div className="born-pillar-desc">Orchestrates your entire AI workforce — 19 specialist agents on demand.</div>
                 </div>
               </div>
               <div className="born-pillar">
-                <div className="born-pillar-icon"><Infinity size={16} /></div>
+                <div className="born-pillar-icon"><InfinityIcon size={16} /></div>
                 <div className="born-pillar-content">
                   <div className="born-pillar-title">Infinity Context Layer</div>
                   <div className="born-pillar-desc">Natively built for 2M+ token reasoning across entire cases.</div>
@@ -111,7 +111,7 @@ export default function BornAgentic() {
               <tr>
                 <th>Feature Comparison</th>
                 <th className="born-th-legacy">Legacy + AI Bolted On</th>
-                <th className="born-th-nemoc">NemoC Law AI</th>
+                <th className="born-th-nemoc">NemoC LAW AI</th>
               </tr>
             </thead>
             <tbody>
@@ -128,7 +128,7 @@ export default function BornAgentic() {
 
         <div className="born-quote-box glass-card">
           <blockquote className="born-quote">
-            "They built software and added <span className="strikethrough-red">Generative</span> AI. We built <span className="text-nvidia">Agentic AI</span> and wrapped an entire law firm workforce around it."
+            "They built software and added <span className="strikethrough-red">Generative</span> AI. We built <span className="text-nvidia">Agentic AI</span> Operating System and secured an entire law firm inside it."
           </blockquote>
         </div>
       </div>

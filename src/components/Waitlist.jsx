@@ -1,14 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, AlertCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { db } from '../lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useLocation } from '../hooks/useLocation';
 import './Waitlist.css';
+import { AlertCircle, Lock } from 'lucide-react';
 
 export default function Waitlist() {
   const navigate = useNavigate();
-  const { loginWithGoogle, loginWithApple } = useAuth();
+  const { loginWithGoogle } = useAuth();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [intlEmail, setIntlEmail] = useState('');
+  const [intlSuccess, setIntlSuccess] = useState(false);
 
   const handleGoogle = async () => {
     setError('');
@@ -25,20 +31,30 @@ export default function Waitlist() {
     }
   };
 
-  const handleApple = async () => {
-    setError('');
+  const handleIntlSubmit = async (e) => {
+    e.preventDefault();
+    if (!intlEmail || !intlEmail.includes('@')) {
+      setError('Please enter a valid email address.');
+      return;
+    }
     setLoading(true);
+    setError('');
     try {
-      await loginWithApple();
-      navigate('/dashboard');
+      await addDoc(collection(db, 'international_waitlist'), {
+        email: intlEmail,
+        country: location.country,
+        createdAt: serverTimestamp(),
+      });
+      setIntlSuccess(true);
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setError('Apple sign-in failed. Please try again.');
-      }
+      console.error(err);
+      setError('Failed to submit. Please try again later.');
     } finally {
       setLoading(false);
     }
   };
+
+
 
   return (
     <section className="section waitlist-section" id="waitlist">
@@ -47,12 +63,16 @@ export default function Waitlist() {
           {/* Glow removed for restrained design */}
           
           <div className="waitlist-header">
-            <span className="section-label text-nvidia">Get Started</span>
+            <span className="section-label text-nvidia">Solo Attorneys — Get Started</span>
             <h2 className="section-title">
-              Deploy Your <span className="text-nvidia">AI</span> Workforce
+              Start Your <span className="text-nvidia">30-Day Free Trial</span>
             </h2>
             <p className="section-subtitle">
-              Sign up and lock in founder pricing before the first 100 firms per state are filled.
+              {location.isUS || location.loading
+                ? `Lock in founder pricing before the first 100 firms in ${location.state} are filled. No charge until day 31.`
+                : `We are currently rolling out state-by-state in the US before expanding to ${location.country}.`}
+              <br />
+              <br />
               Your <span className="text-nvidia">price stays the same forever</span> — even as we add new agents and capabilities.
             </p>
           </div>
@@ -68,76 +88,84 @@ export default function Waitlist() {
               </div>
             )}
             
-            <div style={{ display: 'flex', gap: '16px', flexDirection: 'row' }}>
-              {/* Google Sign-in */}
-              <button
-                type="button"
-                onClick={handleGoogle}
-                disabled={loading}
-                style={{
-                  flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                padding: '14px',
-                background: '#fff',
-                color: '#000',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.background = '#f9fafb'; } }}
-              onMouseLeave={(e) => { if (!loading) { e.currentTarget.style.background = '#fff'; } }}
-            >
-              <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
-                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
-                <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
-                <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z" fill="#FBBC05"/>
-                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
-              </svg>
-              Continue with Google
-            </button>
-
-            {/* Apple Sign-in */}
-            <button
-              type="button"
-              onClick={handleApple}
-              disabled={loading}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '12px',
-                padding: '14px',
-                background: '#000',
-                color: '#fff',
-                border: '1px solid #333',
-                borderRadius: '8px',
-                fontSize: '1rem',
-                fontWeight: '600',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.background = '#111'; } }}
-              onMouseLeave={(e) => { if (!loading) { e.currentTarget.style.background = '#000'; } }}
-            >
-              <svg width="20" height="20" viewBox="0 0 18 18" fill="currentColor">
-                <path d="M13.71 5.04c-.08.06-1.5.87-1.5 2.66 0 2.08 1.82 2.81 1.87 2.83-.01.05-.29 1-.96 1.98-.59.87-1.2 1.73-2.15 1.73s-1.18-.55-2.27-.55c-1.06 0-1.43.57-2.31.57s-1.47-.8-2.15-1.78C3.36 11.16 2.7 9.2 2.7 7.35c0-2.97 1.93-4.54 3.83-4.54.99 0 1.82.65 2.44.65.6 0 1.53-.69 2.65-.69.43 0 1.96.04 2.97 1.47l.12.11zM11.24.81c.44-.52.75-1.25.75-1.98 0-.1-.01-.2-.02-.28-.72.03-1.57.48-2.08 1.07-.4.45-.78 1.18-.78 1.92 0 .11.02.22.03.26.05.01.13.02.21.02.65 0 1.45-.44 1.89-1.01z"/>
-              </svg>
-              Continue with Apple
-            </button>
-            </div>
+            
+            {location.isUS || location.loading ? (
+              <div style={{ display: 'flex', gap: '16px', flexDirection: 'row' }}>
+                {/* Google Sign-in */}
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={loading}
+                  style={{
+                    flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  padding: '14px',
+                  background: '#fff',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => { if (!loading) { e.currentTarget.style.background = '#f9fafb'; } }}
+                onMouseLeave={(e) => { if (!loading) { e.currentTarget.style.background = '#fff'; } }}
+              >
+                <svg width="20" height="20" viewBox="0 0 18 18" fill="none">
+                  <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
+                  <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
+                  <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332Z" fill="#FBBC05"/>
+                  <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
+                </svg>
+                Continue with Google
+              </button>
+              </div>
+            ) : (
+              <div>
+                {intlSuccess ? (
+                  <div style={{ background: 'rgba(118, 185, 0, 0.1)', border: '1px solid #76b900', color: '#76b900', padding: '16px', borderRadius: '8px', textAlign: 'center', fontWeight: '600' }}>
+                    You're on the list! We will notify you when NemoC LAW AI launches in {location.country}.
+                  </div>
+                ) : (
+                  <form onSubmit={handleIntlSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <input 
+                      type="email" 
+                      placeholder="Enter your email address" 
+                      value={intlEmail}
+                      onChange={(e) => setIntlEmail(e.target.value)}
+                      required
+                      style={{ padding: '16px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.2)', color: '#fff', fontSize: '1rem', outline: 'none' }}
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      style={{ 
+                        padding: '16px', 
+                        borderRadius: '8px', 
+                        border: 'none', 
+                        background: '#76b900', 
+                        color: '#000', 
+                        fontWeight: '700', 
+                        fontSize: '1rem', 
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        opacity: loading ? 0.8 : 1
+                      }}
+                    >
+                      {loading ? 'Submitting...' : `Notify me when available in ${location.country}`}
+                    </button>
+                  </form>
+                )}
+              </div>
+            )}
             
             <p className="waitlist-note" style={{ marginTop: '20px' }}>
               <Lock size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
-              Your data is secured by NVIDIA NemoClaw.
+              30-day free trial · Card required · No charge until day 31 · Secured by NVIDIA NemoClaw
             </p>
           </div>
         </div>

@@ -4,7 +4,6 @@ import { Elements, CardElement, useStripe, useElements } from '@stripe/react-str
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { ShieldCheck, Zap, Loader2, X } from 'lucide-react';
-
 const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
 
 function InlineStripeForm({ clientSecret, firmId, onSuccess, onError }) {

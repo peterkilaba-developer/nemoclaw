@@ -1,21 +1,27 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import {
-  Crown, Bot, MessageSquare, Send, Zap, ArrowRight, Loader2, Eye, EyeOff,
+import { useNavigate, useLocation } from 'react-router-dom';
+import { MessageSquare, Send, Zap, Loader2,
   Search, FileText, PenTool, FolderSearch, Calendar, DollarSign, UserCheck,
-  Scale, Mic, Database, Mail, TrendingUp, BarChart3, Cpu, RefreshCw, Lock,
-  Briefcase, Clock, UserPlus, CreditCard, ShieldAlert, ShieldCheck
+  Scale, Mic, Database, Mail, TrendingUp, BarChart3, Cpu, Lock,
+  Briefcase, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFirm } from '../contexts/FirmContext';
 import { AGENT_SUB_AGENTS, SUB_AGENT_CATALOG } from '../lib/agentHierarchy';
 import { sendAgentMessage, getConversationHistory } from '../lib/agentAPI';
-import { collection, query, getDocs, orderBy, doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, doc, updateDoc, serverTimestamp, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
-
+import React from 'react';
+import ParalegalCanvas from '../components/canvas/ParalegalCanvas';
+import BillingCanvas from '../components/canvas/BillingCanvas';
+import AssociateCanvas from '../components/canvas/AssociateCanvas';
+import IntakeCanvas from '../components/canvas/IntakeCanvas';
+import PartnerCanvas from '../components/canvas/PartnerCanvas';
+import { getPracticeAreaConfig } from '../lib/practiceAreaConfig';
 const stripePromise = loadStripe((import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '').trim());
+const FULL_MATTER_ACCESS_ROLES = new Set(['partner', 'managing-partner', 'solo-partner', 'income-partner']);
 
 const SUB_AGENT_ICONS = {
   'legal-research': Search, 'contract-review': FileText, 'drafting': PenTool,
@@ -28,23 +34,41 @@ const SUB_AGENT_ICONS = {
 };
 
 
-import React from 'react';
+
+
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false };
   }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error('AI Chief of Staff error:', error, info);
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '40px', color: 'red', fontFamily: 'monospace' }}>
-          <h2>MyAgent Crash</h2>
-          <p>{this.state.error.toString()}</p>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error.stack}</pre>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '400px', padding: '40px' }}>
+          <div style={{ maxWidth: '440px', textAlign: 'center' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <ShieldCheck size={22} style={{ color: '#ef4444' }} />
+            </div>
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: '0 0 8px', color: 'var(--db-text-primary)' }}>
+              Workspace Error
+            </h3>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--db-text-secondary)', lineHeight: 1.6, margin: '0 0 20px' }}>
+              Your AI Chief of Staff encountered an unexpected error. Your data is safe.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ background: '#76b900', color: '#071000', border: 'none', borderRadius: '8px', padding: '10px 20px', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem' }}
+            >
+              Reload Workspace
+            </button>
+          </div>
         </div>
       );
     }
@@ -54,23 +78,37 @@ class ErrorBoundary extends React.Component {
 
 export default function MyAgent() {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const searchParams = new URLSearchParams(window.location.search);
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
   const simRole = searchParams.get('sim_role');
-  const { firm, personalAgents, superAgent, firmId } = useFirm();
+  const { user } = useAuth();
+  const { firm, personalAgents, _superAgent, firmId } = useFirm();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const promptParam = params.get('prompt');
+    if (promptParam) {
+      setChatInput(promptParam);
+      setActiveView('chat');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [location.search, navigate]);
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
-  const [showSubAgents, setShowSubAgents] = useState(false);
+  const [showSubAgents, _setShowSubAgents] = useState(false);
+  const [activeView, setActiveView] = useState('chat');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const [matters, setMatters] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [billableActivities, setBillableActivities] = useState([]);
   const [activeMatterId, setActiveMatterId] = useState(null);
   const hasRestoredChat = useRef(false);
   const firstName = user?.displayName?.split(' ')[0] || 'there';
 
   // Find this user's agent
-  const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a.employeeEmail === user?.email);
+  const myAgent = (Array.isArray(personalAgents) ? personalAgents : []).find(a => a?.employeeEmail === user?.email);
   const agentType = simRole || myAgent?.agentType || 'partner';
   const humanizedType = agentType.replace(/[-_]/g, ' ').split(' ').filter(Boolean).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
   const rawAgentName = myAgent?.agentName || 'AI Chief of Staff';
@@ -85,39 +123,70 @@ export default function MyAgent() {
     return catalog || { id, name: id, desc: '', icon: 'Zap' };
   });
 
-  // Restore persisted chat from localStorage — with sanitization to prevent render crashes
+  // Restore persisted chat — Firestore-primary (durable across devices) with localStorage cache fallback
   useEffect(() => {
     const storageKey = `nemoc_chat_${firmId || 'demo'}_${agentId || 'default'}`;
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Sanitize: each message must have id, role (string), content (string)
-          const sanitized = parsed.filter(m =>
-            m && typeof m === 'object' &&
-            typeof m.role === 'string' &&
-            typeof m.content === 'string' &&
-            m.content.length > 0
-          ).map(m => ({
-            ...m,
-            id: m.id || `restored-${Math.random().toString(36).slice(2)}`,
-            timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-            subAgentsUsed: Array.isArray(m.subAgentsUsed) ? m.subAgentsUsed : [],
-          }));
-          if (sanitized.length > 0) {
-            setMessages(sanitized);
-          } else {
-            // All messages were malformed — clear the corrupt entry
-            localStorage.removeItem(storageKey);
+
+    async function restoreChat() {
+      // 1. If we have a real agentId, try Firestore first (durable, cross-device)
+      if (firmId && agentId) {
+        try {
+          const history = await getConversationHistory(firmId, agentId, 100);
+          if (Array.isArray(history) && history.length > 0) {
+            const hydrated = history
+              .filter(m => m.role === 'user' || m.role === 'assistant')
+              .map(m => ({
+                id: m.id || `fs-${Math.random().toString(36).slice(2)}`,
+                role: m.role,
+                content: m.content || '',
+                timestamp: m.timestamp?.toDate?.() || new Date(),
+                subAgentsUsed: Array.isArray(m.subAgentsUsed) ? m.subAgentsUsed : [],
+              }))
+              .filter(m => m.content.length > 0);
+            if (hydrated.length > 0) {
+              setMessages(hydrated);
+              hasRestoredChat.current = true;
+              // Sync to localStorage as a cache for instant future loads
+              try { localStorage.setItem(storageKey, JSON.stringify(hydrated.slice(-100))); } catch (_) { /* ignore */ }
+              return;
+            }
           }
+        } catch (_e) {
+          // Firestore unavailable — fall through to localStorage
         }
       }
-    } catch (e) {
-      // JSON parse failed — clear corrupt entry
-      try { localStorage.removeItem(storageKey); } catch (_) { /* ignore */ }
+
+      // 2. localStorage fallback (offline / onboarding / no agentId yet)
+      try {
+        const saved = localStorage.getItem(storageKey);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const sanitized = parsed.filter(m =>
+              m && typeof m === 'object' &&
+              typeof m.role === 'string' &&
+              typeof m.content === 'string' &&
+              m.content.length > 0
+            ).map(m => ({
+              ...m,
+              id: m.id || `ls-${Math.random().toString(36).slice(2)}`,
+              timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+              subAgentsUsed: Array.isArray(m.subAgentsUsed) ? m.subAgentsUsed : [],
+            }));
+            if (sanitized.length > 0) {
+              setMessages(sanitized);
+            } else {
+              try { localStorage.removeItem(storageKey); } catch (_) { /* ignore */ }
+            }
+          }
+        }
+      } catch (_e) {
+        try { localStorage.removeItem(storageKey); } catch (_) { /* ignore */ }
+      }
+      hasRestoredChat.current = true;
     }
-    hasRestoredChat.current = true;
+
+    restoreChat();
   }, [firmId, agentId]);
 
   // Auto-scroll to bottom on new messages
@@ -132,7 +201,7 @@ export default function MyAgent() {
       try {
         const storageKey = `nemoc_chat_${firmId || 'demo'}_${agentId || 'default'}`;
         localStorage.setItem(storageKey, JSON.stringify(messages.slice(-100)));
-      } catch (e) { /* ignore quota errors */ }
+      } catch (_e) { /* ignore quota errors */ }
     }
   }, [messages, firmId, agentId]);
 
@@ -141,9 +210,19 @@ export default function MyAgent() {
     if (firmId) {
       (async () => {
         try {
-          const q = query(collection(db, 'firms', firmId, 'matters'), orderBy('updatedAt', 'desc'));
+          const mattersRef = collection(db, 'firms', firmId, 'matters');
+          const hasFullMatterAccess = FULL_MATTER_ACCESS_ROLES.has(agentType);
+          if (!hasFullMatterAccess && !user?.email) {
+            setMatters([]);
+            return;
+          }
+          const q = hasFullMatterAccess
+            ? query(mattersRef, orderBy('updatedAt', 'desc'))
+            : query(mattersRef, where('assignedTo', 'array-contains', user.email));
           const snap = await getDocs(q);
-          const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const list = (snap?.docs || [])
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(m => m.status === 'Active');
           setMatters(list);
           // Auto-select first matter as context if none selected
           if (list.length > 0 && !activeMatterId) {
@@ -154,7 +233,23 @@ export default function MyAgent() {
         }
       })();
     }
+  }, [activeMatterId, agentType, firmId, user?.email]);
+
+  // Load specialized datasets for Canvases
+  useEffect(() => {
+    if (firmId) {
+      // Leads for Intake
+      getDocs(query(collection(db, 'firms', firmId, 'leads'), orderBy('createdAt', 'desc')))
+        .then(snap => setLeads((snap?.docs || []).map(doc => ({ id: doc.id, ...doc.data() }))))
+        .catch(console.error);
+        
+      // Billables for Finance / Partner
+      getDocs(query(collection(db, 'firms', firmId, 'billableActivities'), orderBy('createdAt', 'desc')))
+        .then(snap => setBillableActivities((snap?.docs || []).map(doc => ({ id: doc.id, ...doc.data() }))))
+        .catch(console.error);
+    }
   }, [firmId]);
+
 
   // Load conversation history on mount
   useEffect(() => {
@@ -163,7 +258,7 @@ export default function MyAgent() {
         try {
           const history = await getConversationHistory(firmId, agentId, 50);
           if (history.length > 0) {
-            setMessages(history.map(m => ({
+            setMessages((history || []).map(m => ({
               id: m.id,
               role: m.role,
               content: m.content,
@@ -195,7 +290,7 @@ export default function MyAgent() {
     setIsTyping(true);
 
     try {
-      const history = messages.slice(-20).map(m => ({
+      const history = (messages || []).slice(-20).map(m => ({
         role: m.role,
         content: m.content,
       }));
@@ -229,99 +324,25 @@ export default function MyAgent() {
     }
   };
 
-  // Role-Specific Configuration (Quick actions, Welcome text, Guardrails)
-  const ROLE_CONFIG = {
-    partner: {
-      quickActions: [
-        { label: 'Research case law', prompt: 'Research recent case law on breach of fiduciary duty in Delaware' },
-        { label: 'Review contract', prompt: 'Review the attached contract and flag any high-risk clauses' },
-        { label: 'Analyze pipeline', prompt: 'What is our current revenue pipeline for Q3?' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to research case law, review contracts, or analyze firm telemetry.',
-      showMatters: true
-    },
-    'of-counsel': {
-      quickActions: [
-        { label: 'Research case law', prompt: 'Research recent case law on breach of fiduciary duty in Delaware' },
-        { label: 'Draft motion', prompt: 'Draft a motion to compel discovery responses' },
-        { label: 'Prepare depo', prompt: 'Prepare a deposition outline for a breach of contract case' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to research case law, draft documents, review contracts, or handle any legal task.',
-      showMatters: true
-    },
-    associate: {
-      quickActions: [
-        { label: 'Research case law', prompt: 'Research recent case law on breach of fiduciary duty in Delaware' },
-        { label: 'Draft motion', prompt: 'Draft a motion to compel discovery responses' },
-        { label: 'Review contract', prompt: 'Review the attached contract and flag any high-risk clauses' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to research case law, draft documents, review contracts, or handle any legal task.',
-      showMatters: true
-    },
-    paralegal: {
-      quickActions: [
-        { label: 'Format document', prompt: 'Format this document for the 9th Circuit Court of Appeals.' },
-        { label: 'E-Discovery index', prompt: 'Can you summarize these discovery documents and tag them?' },
-        { label: 'Research statute', prompt: 'Find the latest statute regarding corporate bylaws in NY.' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to format documents, perform eDiscovery indexing, or prepare exhibits.',
-      showMatters: true
-    },
-    receptionist: {
-      quickActions: [
-        { label: 'Schedule consultation', prompt: 'Schedule a 30-minute consultation with a new prospective client for next Tuesday.' },
-        { label: 'Run conflict check', prompt: 'Run a conflict check for a new prospective client cross-referencing past matters.' },
-        { label: 'Draft intake memo', prompt: 'Draft a new intake memo for a personal injury claim.' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to schedule consultations, run conflict checks, or process new client intakes.',
-      showMatters: false
-    },
-    billing: {
-      quickActions: [
-        { label: 'Audit time entries', prompt: 'Audit yesterday\'s time entries for non-compliant billing block formatting.' },
-        { label: 'Generate invoice', prompt: 'Generate a LEDES formatted invoice for the most recent active matter.' },
-        { label: 'Check unbilled', prompt: 'Show me all matters with unbilled WIP over $5,000.' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to audit time entries, generate invoices, or check trust account balances.',
-      showMatters: false
-    },
-    operations: {
-      quickActions: [
-        { label: 'Check compliance', prompt: 'Check if we have any upcoming CLE compliance deadlines this month.' },
-        { label: 'Draft offer letter', prompt: 'Draft a standard offer letter for a new Associate Attorney.' },
-        { label: 'Review vendor contract', prompt: 'Review this software vendor contract for auto-renewal clauses.' },
-      ],
-      alert: null,
-      greeting: 'What would you like to work on? You can ask me to check firm compliance, draft HR documents, or review vendor contracts.',
-      showMatters: false
-    },
-    onboarding: {
-      quickActions: [
-        { label: 'What problems do you solve?', prompt: 'What specific problems does NemoC Law AI solve for a managing partner?' },
-        { label: 'How is this different from ChatGPT?', prompt: 'How is NemoC Law AI different from just using ChatGPT or Copilot for legal work?' },
-        { label: 'Is my client data safe?', prompt: 'How do you guarantee my client data stays confidential and compliant with bar association rules?' },
-        { label: 'Show me the ROI', prompt: 'What is the return on investment for a small law firm using NemoC Law AI?' },
-      ],
-      alert: null,
-      greeting: 'Ask me anything about how NemoC Law AI can help your practice, or tap one of the questions below.',
-      showMatters: true
-    }
-  };
+  // Practice-area-contextual quick actions for solo attorney
+  const practiceAreas = firm?.practiceAreas || [];
+  const paConfig = getPracticeAreaConfig(practiceAreas);
 
   const isOnboarding = !firm?.isConfigured;
-  const currentRoleConfig = isOnboarding ? ROLE_CONFIG['onboarding'] : (ROLE_CONFIG[agentType] || ROLE_CONFIG['partner']);
-  const quickActions = currentRoleConfig.quickActions;
-  const currentAlert = currentRoleConfig.alert;
-  const currentGreeting = currentRoleConfig.greeting;
-  const AlertIcon = currentAlert?.icon || null;
 
-  const activeMatter = matters.find(m => m.id === activeMatterId);
+  const quickActions = isOnboarding ? [
+    { label: 'What problems do you solve?', prompt: 'What specific problems does NemoC LAW AI solve for a solo attorney?' },
+    { label: 'How is this different from ChatGPT?', prompt: 'How is NemoC LAW AI different from just using ChatGPT or Copilot for legal work?' },
+    { label: 'Is my client data safe?', prompt: 'How do you guarantee my client data stays confidential and compliant with bar association rules?' },
+    { label: 'What is the ROI?', prompt: 'What is the return on investment for a solo attorney using NemoC LAW AI?' },
+  ] : paConfig.quickActions;
+
+  const currentGreeting = isOnboarding
+    ? 'Ask me anything about how NemoC LAW AI can transform your solo practice.'
+    : paConfig.welcomeSuffix;
+
+  const _activeMatter = matters.find(m => m.id === activeMatterId);
+  const canvasMatter = _activeMatter || matters[0] || null;
 
   const handleSelectMatter = (mId) => {
     setActiveMatterId(mId);
@@ -334,7 +355,7 @@ export default function MyAgent() {
   const [showAgentDetails, setShowAgentDetails] = useState(false);
   
   // Refresh firm data after frictionless launch
-  const refreshFirmData = async () => {
+  const _refreshFirmData = async () => {
     // This will trigger a re-render because FirmContext should ideally be updated, 
     // or we can just do a window.location.reload() for a clean state.
     window.location.reload(); 
@@ -349,7 +370,7 @@ export default function MyAgent() {
   return (
     <ErrorBoundary>
     <div className="db-viewport-workspace">
-      <div className="db-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--db-border)' }}>
+      <div className="db-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid var(--db-border)' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <img src="/logos/claw-128-transparent.png" alt="Nemo" style={{ height: '24px', width: 'auto' }} />
@@ -397,31 +418,38 @@ export default function MyAgent() {
 
       <div className="db-two-col" style={{ flex: 1, minHeight: 0 }}>
         {/* Chat interface */}
-        <div className="db-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-          <div className="db-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        
+        <div className="db-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, overflow: 'hidden', padding: activeView === 'canvas' ? 0 : 24 }}>
+          <div className="db-card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: activeView === 'canvas' ? 0 : '20px', paddingBottom: activeView === 'canvas' ? 0 : 0, borderBottom: activeView === 'canvas' ? 'none' : 'none' }}>
+            {activeView === 'canvas' ? null : (
             <div>
-              <div className="db-card-title">
-                <MessageSquare size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />
-                Active Session
-              </div>
+              <div className="db-card-title"><MessageSquare size={16} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '6px' }} />Active Session</div>
               <div className="db-card-subtitle">Natural language commands will auto-dispatch specialist sub-agents.</div>
             </div>
-            <button
-              className="db-btn db-btn-secondary db-btn-sm"
-              onClick={() => setShowSubAgents(!showSubAgents)}
-              title={showSubAgents ? 'Hide sub-agent dispatches' : 'Show sub-agent dispatches'}
-              style={{ gap: '4px', fontSize: '0.6875rem' }}
-            >
-              {showSubAgents ? <EyeOff size={12} /> : <Eye size={12} />}
-              {showSubAgents ? 'Hide' : 'Show'} Dispatches
-            </button>
+            )}
+            
+            <div style={{ display: 'flex', gap: '8px', marginLeft: activeView === 'canvas' ? 'auto' : 0, marginBottom: activeView === 'canvas' ? 'auto' : 0, padding: activeView === 'canvas' ? '12px 16px' : 0, borderBottom: activeView === 'canvas' ? '1px solid var(--db-border)' : 'none', width: activeView === 'canvas' ? '100%' : 'auto', background: activeView === 'canvas' ? 'var(--db-surface)' : 'transparent', zIndex: 10 }}>
+              <button onClick={() => setActiveView('chat')} className={`db-btn ${activeView === 'chat' ? 'db-btn-primary' : 'db-btn-secondary'}`} style={{ borderRadius: '20px', padding: '6px 16px', fontSize: '0.8125rem' }}><MessageSquare size={14} style={{ marginRight: '6px' }} /> Discuss with AI</button>
+              <button onClick={() => setActiveView('canvas')} className={`db-btn ${activeView === 'canvas' ? 'db-btn-primary' : 'db-btn-secondary'}`} style={{ borderRadius: '20px', padding: '6px 16px', fontSize: '0.8125rem' }}><Cpu size={14} style={{ marginRight: '6px' }} /> Workspace Canvas</button>
+            </div>
           </div>
 
+
           {/* Messages area */}
-          <div style={{
-            flex: 1, padding: '16px', display: 'flex', flexDirection: 'column',
-            gap: '14px', overflowY: 'auto'
-          }}>
+          
+          {activeView === 'canvas' ? (
+            <div style={{ height: '100%', minHeight: 0, overflow: 'hidden', padding: 0 }}>
+              {/* Solo attorney always gets the full Partner canvas — they hold every role */}
+              {simRole === 'paralegal' ? <ParalegalCanvas firmId={firmId} user={user} activeMatter={canvasMatter} /> :
+               simRole === 'billing' ? <BillingCanvas firmId={firmId} user={user} billableActivities={billableActivities} /> :
+               simRole === 'associate' ? <AssociateCanvas firmId={firmId} user={user} activeMatter={canvasMatter} /> :
+               simRole === 'intake' ? <IntakeCanvas firmId={firmId} user={user} leads={leads} /> :
+               <PartnerCanvas firmId={firmId} user={user} billableActivities={billableActivities} matters={matters} />}
+            </div>
+          ) : (
+            <>
+              <div style={{ flex: 1, minHeight: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+
             {/* Welcome message */}
             {messages.length === 0 && (
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -445,27 +473,9 @@ export default function MyAgent() {
                   )}
                   {hasSuperAccess && !isOnboarding && ' As a partner, you also have Super Agent access for firm-wide intelligence.'}
                   <br /><br />
-                  {currentAlert && (
-                    <div style={{ background: currentAlert.bg, border: `1px solid ${currentAlert.border}`, borderRadius: '8px', padding: '12px', marginBottom: '16px', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                      <AlertIcon size={16} color={currentAlert.color} style={{ marginTop: '2px' }} />
-                      <div style={{ fontSize: '0.75rem', color: 'var(--db-text-primary)' }}>
-                        <span dangerouslySetInnerHTML={{ __html: currentAlert.msg }} />
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                          <button 
-                            className="db-btn db-btn-primary db-btn-sm" 
-                            style={{ padding: '2px 8px', fontSize: '0.65rem', background: currentAlert.color }}
-                            onClick={() => currentAlert.type === 'setup' ? navigate('/onboarding') : null}
-                          >
-                            {currentAlert.action}
-                          </button>
-                          {!isOnboarding && <button className="db-btn db-btn-secondary db-btn-sm" style={{ padding: '2px 8px', fontSize: '0.65rem' }}>Dismiss</button>}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                   {currentGreeting}
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-                    {quickActions.map(qa => (
+                    {(quickActions || []).map(qa => (
                       <button
                         key={qa.label}
                         className="db-btn db-btn-secondary db-btn-sm"
@@ -481,7 +491,7 @@ export default function MyAgent() {
             )}
 
             {/* Chat messages */}
-            {messages.map((msg, msgIndex) => {
+            {(messages || []).map((msg, msgIndex) => {
               // Parse follow-up questions from assistant messages
               let displayContent = msg.content;
               let followUps = [];
@@ -490,7 +500,7 @@ export default function MyAgent() {
                 displayContent = parts[0].trim();
                 try {
                   followUps = JSON.parse(parts[1].trim());
-                } catch (e) { /* ignore parse errors */ }
+                } catch (_e) { /* ignore parse errors */ }
               }
               const isLastAssistant = msg.role === 'assistant' && msgIndex === messages.length - 1;
 
@@ -527,18 +537,18 @@ export default function MyAgent() {
                 };
 
                 const handleBoldAndStars = (parts) => {
-                  return parts.map((part, pidx) => {
+                  return (parts || []).map((part, pidx) => {
                     if (typeof part !== 'string') return part;
                     // Split by **
                     const bParts = part.split(/\*\*(.*?)\*\*/g);
-                    return bParts.map((bp, bidx) => {
+                    return (bParts || []).map((bp, bidx) => {
                       if (bidx % 2 === 1) { 
                         return <strong key={`b-${pidx}-${bidx}`} style={{ color: 'var(--db-text-primary)' }}>{bp}</strong>;
                       }
                       
                       // Split by *
                       const iParts = bp.split(/\*(.*?)\*/g);
-                      return iParts.map((ip, iidx) => {
+                      return (iParts || []).map((ip, iidx) => {
                         if (iidx % 2 === 1) {
                           return <em key={`i-${pidx}-${bidx}-${iidx}`} style={{ fontStyle: 'italic' }}>{ip}</em>;
                         }
@@ -546,7 +556,7 @@ export default function MyAgent() {
                         // Handle generic markdown links [Text](url)
                         const linkParts = ip.split(/\[(.*?)\]\((.*?)\)/g);
                         if (linkParts.length > 1) {
-                           return linkParts.map((lp, lidx) => {
+                           return (linkParts || []).map((lp, lidx) => {
                              if (lidx % 3 === 1) { // label
                                const url = linkParts[Math.floor(lidx/3)*3 + 2];
                                return <a href={url} target="_blank" rel="noopener noreferrer" key={`l-${pidx}-${bidx}-${iidx}-${lidx}`} style={{ color: 'var(--db-nvidia-green)', textDecoration: 'underline' }}>{lp}</a>;
@@ -610,7 +620,7 @@ export default function MyAgent() {
                         }}>
                           <Cpu size={10} style={{ color: 'var(--db-nvidia-green)', marginTop: '2px' }} />
                           <span style={{ fontSize: '0.625rem', color: 'var(--db-text-muted)' }}>Dispatched: </span>
-                          {msg.subAgentsUsed.map(sa => (
+                          {(msg.subAgentsUsed || []).map(sa => (
                             <span key={sa.id} style={{
                               fontSize: '0.5625rem', background: 'rgba(118,185,0,0.1)',
                               color: 'var(--db-nvidia-green)', padding: '1px 6px',
@@ -635,7 +645,7 @@ export default function MyAgent() {
                 {/* Dynamic follow-up quick actions */}
                 {isLastAssistant && followUps.length > 0 && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '8px', marginLeft: '40px' }}>
-                    {followUps.map((q, i) => (
+                    {(followUps || []).map((q, i) => (
                       <button
                         key={i}
                         className="db-btn db-btn-secondary db-btn-sm"
@@ -681,10 +691,9 @@ export default function MyAgent() {
           </div>
 
           {/* Chat input */}
-          <div style={{
-            padding: '12px 16px', borderTop: '1px solid var(--db-border)',
-            position: 'relative'
-          }}>
+          </>
+          )}
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--db-border)', position: 'relative', display: activeView === 'chat' ? 'block' : 'none' }}>
             {(!isUnlocked) && (
               <div style={{
                 position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
@@ -741,7 +750,7 @@ export default function MyAgent() {
         </div>
 
         {/* Context Panel — Onboarding + Matter Context always visible */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+        <div className="my-agent-context-panel" style={{ display: 'flex', flexDirection: 'column', gap: '16px', minHeight: 0, overflowY: 'auto' }}>
           {/* Subscription / Setup — inline in context panel */}
           {(isOnboarding || firm?.status === 'trial') && (
             <ContextSubscriptionPanel firm={firm} firmId={firmId} user={user} isOnboarding={isOnboarding} navigate={navigate} />
@@ -764,7 +773,7 @@ export default function MyAgent() {
                       {isOnboarding ? 'Matters will appear here after setup.' : 'No active matters found.'}
                     </div>
                   </div>
-                ) : matters.map(m => (
+                ) : (matters || []).map(m => (
                   <div 
                     key={m.id} 
                     onClick={() => handleSelectMatter(m.id)}
@@ -793,7 +802,7 @@ export default function MyAgent() {
             <div className="db-card" style={{ padding: '16px' }}>
               <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--db-text-primary)', marginBottom: '8px' }}>Deployed Sub-Agents</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                {subAgents.map(sa => (
+                {(subAgents || []).map(sa => (
                   <span key={sa.id} style={{ fontSize: '0.625rem', background: 'var(--db-bg)', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--db-border)' }}>{sa.name}</span>
                 ))}
               </div>
@@ -833,7 +842,7 @@ export default function MyAgent() {
 function ContextSubscriptionPanel({ firm, firmId, user, isOnboarding, navigate }) {
   const [clientSecret, setClientSecret] = useState(null);
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [_loading, _setLoading] = useState(false);
   const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
@@ -858,7 +867,7 @@ function ContextSubscriptionPanel({ firm, firmId, user, isOnboarding, navigate }
       }
     };
     fetchIntent();
-  }, [firmId, clientSecret]);
+  }, [clientSecret, firm?.firmName, firm?.members?.length, firmId, user?.email, user?.uid]);
 
   if (dismissed) {
     return (

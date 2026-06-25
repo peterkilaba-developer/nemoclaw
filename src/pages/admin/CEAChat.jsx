@@ -1,3 +1,16 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  Crown, MessageSquare, Send, Zap, Loader2, Eye, EyeOff,
+  Cpu, RefreshCw, Target, Rocket,
+  BarChart3, Users, DollarSign, Shield, Radio, Trash2
+} from 'lucide-react';
+import { sendInternalAgentMessage } from '../../lib/internalAgentAPI';
+import { collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { getProspects } from '../../lib/prospectService';
+import { getEnrichmentStatus } from '../../lib/enrichmentService';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 /**
  * C.E.A. Chat — Executive Command Interface
  *
@@ -12,18 +25,6 @@
  *   - Sub-agent dispatch visibility
  *   - Executive-grade UI styling
  */
-
-import { useState, useEffect, useRef, useCallback } from 'react';
-import {
-  Crown, Bot, MessageSquare, Send, Zap, Loader2, Eye, EyeOff,
-  Cpu, RefreshCw, Activity, TrendingUp, Target, Rocket,
-  BarChart3, Users, DollarSign, Shield, Radio, Sparkles, Trash2
-} from 'lucide-react';
-import { sendInternalAgentMessage } from '../../lib/internalAgentAPI';
-import { collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 
 const CHAT_COLLECTION = '_internalCEAChat';
 
@@ -40,8 +41,6 @@ const QUICK_ACTIONS = [
 // ── Gather live Agentic OS context ──
 async function gatherLiveContext() {
   try {
-    const { getProspects } = await import('../../lib/prospectService');
-    const { getEnrichmentStatus } = await import('../../lib/enrichmentService');
     const prospects = await getProspects();
     const enrichStatus = getEnrichmentStatus();
 
@@ -58,15 +57,15 @@ async function gatherLiveContext() {
       timestamp: new Date().toISOString(),
       prospects: { total: prospects.length, ...statusCounts, withEmail, withPhone, withWebsite },
       enrichment: enrichStatus,
-      pricing: { base: '$297/mo', seat: '$149/mo', autonomous: '$2,497/mo', trial: '7 days' },
+      pricing: { base: '$297/mo', seat: '$149/mo', autonomous: '$2,497/mo', trial: '30 days' },
       tools: {
         hunterIO: enrichStatus.hunter.configured ? 'ACTIVE' : 'OFF',
         apolloIO: enrichStatus.apollo.configured ? 'ACTIVE' : 'OFF',
-        sendgrid: 'NOT DEPLOYED',
-        blandAI: import.meta.env.VITE_BLAND_API_KEY ? 'ACTIVE' : 'OFF',
+        sendgrid: 'ACTIVE - Firestore mail queue + SendGrid Cloud Functions deployed',
+        blandAI: 'BACKEND-MANAGED',
       },
     };
-  } catch (e) {
+  } catch (_e) {
     return { error: 'Failed to load live context', timestamp: new Date().toISOString() };
   }
 }
@@ -198,7 +197,7 @@ export default function CEAChat() {
     }
   };
 
-  const timeAgo = (date) => {
+  const _timeAgo = (date) => {
     if (!date) return '';
     const seconds = Math.floor((new Date() - date) / 1000);
     if (seconds < 60) return 'just now';
@@ -208,7 +207,7 @@ export default function CEAChat() {
   };
 
   return (
-    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+    <div style={{ maxWidth: '1200px', margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)', minHeight: 0 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -267,7 +266,7 @@ export default function CEAChat() {
         {/* Chat panel */}
         <div style={{
           background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: '12px', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          borderRadius: '12px', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden',
         }}>
           {/* Chat header */}
           <div style={{
@@ -295,7 +294,7 @@ export default function CEAChat() {
           </div>
 
           {/* Messages area */}
-          <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, minHeight: 0, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
             {/* Welcome message */}
             {messages.length === 0 && (
               <div style={{ display: 'flex', gap: '10px' }}>
@@ -454,7 +453,7 @@ export default function CEAChat() {
         </div>
 
         {/* Command Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0, overflowY: 'auto' }}>
           {/* Quick Commands */}
           <div style={{
             background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)',

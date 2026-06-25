@@ -34,8 +34,8 @@
 }
 
 .pricing-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  justify-content: center;
   gap: 24px;
   margin-bottom: 40px;
   align-items: start;
@@ -47,6 +47,8 @@
   flex-direction: column;
   position: relative;
   overflow: hidden;
+  width: 100%;
+  max-width: 440px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
@@ -285,7 +287,7 @@
 
 .pricing-comp-header {
   display: grid;
-  grid-template-columns: 2.2fr 1fr 1fr 1fr;
+  grid-template-columns: 2.5fr 1fr 1fr;
   gap: 12px;
   padding: 12px 16px;
   font-size: 0.6875rem;
@@ -298,7 +300,7 @@
 
 .pricing-comp-row {
   display: grid;
-  grid-template-columns: 2.2fr 1fr 1fr 1fr;
+  grid-template-columns: 2.5fr 1fr 1fr;
   gap: 12px;
   padding: 14px 16px;
   font-size: 0.8125rem;
@@ -335,10 +337,8 @@
 
 @media (max-width: 900px) {
   .pricing-grid {
-    grid-template-columns: 1fr;
-    max-width: 440px;
-    margin-left: auto;
-    margin-right: auto;
+    flex-direction: column;
+    align-items: center;
   }
 
   .pricing-comparison {
@@ -347,7 +347,7 @@
 
   .pricing-comp-header,
   .pricing-comp-row {
-    grid-template-columns: 1.5fr 1fr 1fr 1fr;
+    grid-template-columns: 1.8fr 1fr 1fr;
     font-size: 0.6875rem;
     padding: 12px 8px;
   }

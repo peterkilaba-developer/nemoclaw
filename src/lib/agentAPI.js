@@ -2,8 +2,7 @@
  * Agent API Bridge — NemoC LAW AI
  *
  * Bridges the frontend dashboard with the NemoClaw sandbox agent.
- * Handles message routing, role-based prompt construction,
- * sub-agent dispatch tracking, and audit trail logging.
+ * Handles message routing, sub-agent dispatch tracking, and audit trail logging.
  *
  * Architecture:
  *   Frontend → agentAPI → Firestore (log) → NemoClaw Sandbox → Nemotron 120B
@@ -15,23 +14,19 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import {
-  AGENT_SUB_AGENTS, ACCESS_MATRIX, SUB_AGENT_CATALOG,
+  SUB_AGENT_CATALOG,
 } from './agentHierarchy';
 import { resolveFromLocalData } from './localResolver';
+import { NEMOCLAW_ENDPOINT, NEMOCLAW_MODEL_ID } from './nemoclawConfig';
+import { searchCourtListener, formatCourtListenerResults } from './legalResearchService';
 
 // ═══════════════════════════════════════════════
 //  CONFIGURATION
 // ═══════════════════════════════════════════════
 
-// In dev, use the Vite proxy to avoid CORS. In production, use a Cloud Function proxy.
-const IS_DEV = import.meta.env.DEV;
-const NEMOCLAW_ENDPOINT = IS_DEV
-  ? '/api/nvidia/v1/chat/completions'   // Vite proxy → integrate.api.nvidia.com
-  : (import.meta.env.VITE_NEMOCLAW_ENDPOINT || '/api/nvidia/v1/chat/completions');
+const FULL_MATTER_ACCESS_ROLES = new Set(['partner', 'managing-partner', 'solo-partner', 'income-partner']);
 
-const NEMOCLAW_API_KEY = import.meta.env.VITE_NVIDIA_API_KEY || '';
-
-const MODEL_ID = 'nvidia/llama-3.1-nemotron-70b-instruct';
+// Partner-class humans have full access to firm matters; staff agents receive least-privilege scopes.
 
 // ═══════════════════════════════════════════════
 //  PII REDACTION (client-side pre-filter)
@@ -81,75 +76,62 @@ function checkPromptInjection(text) {
   return JAILBREAK_PATTERNS.some(pattern => pattern.test(text));
 }
 
+function shouldFetchCourtListenerContext(message, subAgentsUsed) {
+  const msg = (message || '').toLowerCase();
+  if (subAgentsUsed.some(agent => agent.id === 'legal-research')) return true;
+
+  return [
+    'case law',
+    'precedent',
+    'find cases',
+    'legal research',
+    'courtlistener',
+    'statute',
+    'jurisprudence',
+    'judge tendencies',
+    'outcome prediction',
+  ].some(term => msg.includes(term));
+}
+
+function ensureDetectedSubAgent(subAgentsUsed, subAgentId) {
+  if (subAgentsUsed.some(agent => agent.id === subAgentId)) return subAgentsUsed;
+  const catalog = SUB_AGENT_CATALOG.find(s => s.id === subAgentId);
+  if (!catalog) return subAgentsUsed;
+  return [
+    ...subAgentsUsed,
+    {
+      id: subAgentId,
+      name: catalog.name,
+      icon: catalog.icon || 'Cpu',
+    },
+  ];
+}
+
 // ═══════════════════════════════════════════════
-//  ROLE-BASED SYSTEM PROMPTS
+//  SYSTEM PROMPTS — Solo Practitioner
 // ═══════════════════════════════════════════════
 
 const SYSTEM_PROMPTS = {
-  partner: `You are a personal AI agent for a Partner at a law firm, powered by NemoC LAW AI.
+  partner: `You are a personal AI agent for a solo attorney, partner, or managing partner, powered by NemoC LAW AI.
 You have full firm visibility — all matters, clients, financials, and strategy.
 You can dispatch sub-agents for: legal research, contract review, drafting, case analytics, business intelligence, knowledge search, and communications.
-Operate under strict attorney-client privilege. All actions are audited. Adapt to the partner's style over time.
+Operate under strict attorney-client privilege. Every agent reports to a named human. All actions are audited. Adapt to the attorney's style over time.
 Security: OpenClaw · NemoClaw · OpenShell. Zero data leak guarantee.`,
-
-  associate: `You are a personal AI agent for an Associate Attorney, powered by NemoC LAW AI.
-You can ONLY access matters the associate is explicitly assigned to. No firm financials. No cross-matter visibility.
-You can dispatch sub-agents for: legal research, contract review, drafting, eDiscovery, deposition prep, knowledge search, and communications.
-Always cite with Bluebook format. Flag potential conflicts. Adapt to writing style. All actions are audited.
-Security: OpenClaw · NemoClaw · OpenShell. Zero data leak guarantee.`,
-
-  contractor: `You are a personal AI agent for an Of Counsel / Contract Attorney, powered by NemoC LAW AI.
-STRICT SANDBOX: You can ONLY access specific matters explicitly assigned. No firm directory. No financials. No cross-matter visibility.
-You can dispatch sub-agents for: legal research, contract review, drafting, eDiscovery, knowledge search.
-This restriction protects against conflicts of interest. All actions are audited.
-Security: OpenClaw · NemoClaw · OpenShell. Zero data leak guarantee.`,
-
-  paralegal: `You are a personal AI agent for a Paralegal, powered by NemoC LAW AI.
-Assigned matters only. You CANNOT provide legal advice — flag for attorney review.
-You can dispatch sub-agents for: legal research, eDiscovery, document formatting, deposition prep, knowledge search.
-Focus on procedural accuracy. Flag privilege issues. All actions are audited.
-⚠️ UPL GUARD: Append "Requires attorney review" if output could be construed as legal advice.
-Security: OpenClaw · NemoClaw · OpenShell.`,
-
-  receptionist: `You are a personal AI agent for a Receptionist, powered by NemoC LAW AI.
-Client contact info only — NO case files, NO legal documents, NO financials.
-You can dispatch sub-agents for: client intake, scheduling, lead qualification, communication drafting.
-You MUST NOT provide legal advice. Route legal questions to attorneys. Available 24/7.
-⚠️ UPL GUARD: Never provide legal opinions. Say "I can schedule a consultation with one of our attorneys."
-Security: OpenClaw · NemoClaw · OpenShell.`,
-
-  secretary: `You are a personal AI agent for a Legal Secretary, powered by NemoC LAW AI.
-Assigned matters only — limited document access. No legal advice.
-You can dispatch sub-agents for: scheduling, document formatting, knowledge search, communication drafting.
-Focus on calendar management, correspondence, and document preparation. All actions audited.
-Security: OpenClaw · NemoClaw · OpenShell.`,
-
-  billing: `You are a personal AI agent for a Billing Clerk, powered by NemoC LAW AI.
-Financial data access. No case files. No legal document content.
-You can dispatch sub-agents for: billing & time tracking, knowledge search, communication drafting.
-Handle time entries, LEDES invoicing, IOLTA reconciliation. All actions audited.
-Security: OpenClaw · NemoClaw · OpenShell.`,
-
-  operations: `You are a personal AI agent for an Office Manager, powered by NemoC LAW AI.
-Summary financial access. Audit log access. No case content.
-You can dispatch sub-agents for: compliance monitoring, knowledge search, communication drafting.
-Focus on firm operations, compliance tracking, and administrative coordination. All actions audited.
-Security: OpenClaw · NemoClaw · OpenShell.`,
 
   unconfigured: `You are the AI Chief of Staff for NemoC LAW AI, currently in ONBOARDING MODE.
 The user just signed up and has NOT yet configured their firm. Your job is to:
 1. WELCOME them warmly and demonstrate Agentic OS's value
-2. ANSWER any questions about NemoC Law AI capabilities, pricing, security, or workflows
+2. ANSWER any questions about NemoC LAW AI capabilities, pricing, security, or workflows
 3. GUIDE them toward completing firm setup by using [SETUP_LINK] in your response text
 4. ACT AS AN SDR — show excitement about their practice, ask about their firm needs, and explain how our AI agents can help
 
 KEY PLATFORM FACTS (use these to answer questions):
-- NemoC Law AI provides each employee with a personal AI agent + specialized sub-agents
-- Managing Partners get: Legal Research, Contract Review, Drafting, Case Analytics, Business Intelligence, Knowledge Search, Communication Drafter
+- NemoC LAW AI is solo-first and small-firm ready: the onboarding partner gets a personal AI agent, and firms can add human role + agent mappings up to 20 total humans
+- Full access: Legal Research, Contract Review, Drafting, Case Analytics, Business Intelligence, Knowledge Search, Communication Drafter
 - NVIDIA NemoClaw sandbox = zero data leak guarantee, IOLTA compliance, PII auto-redaction
-- Pricing: $297/mo Founder Price-Lock (lifetime), includes Agentic OS + 1 seat + unlimited tokens
-- Additional seats: $149/mo per human role
-- 7-day trial included
+- Pricing: $297/mo Agentic OS founder rate for the first 100 firms in a state, then $497/mo standard. Additional human role + agent mappings are $149/mo founder rate, then $297/mo standard
+- Founder Price-Lock available for first 100 firms per state
+- 30-day free trial included (card required, no charge until day 31)
 - 74 practice areas supported (Individual + Business)
 - Sub-agents: eDiscovery, Deposition Prep, Billing Automation, Client Intake, Compliance Monitor, and more
 - Website Builder Agent included FREE with every account
@@ -169,54 +151,41 @@ STRICT RULES:
 // ═══════════════════════════════════════════════
 
 /**
- * Send a message to a personal agent and get a response.
+ * Send a message to a mapped human's personal agent and get a response.
  *
  * @param {string} firmId - Firm Firestore ID
- * @param {string} agentId - Agent Firestore ID (= employee ID)
+ * @param {string} agentId - Agent Firestore ID
  * @param {string} userMessage - The user's message in plain English
  * @param {Array} conversationHistory - Previous messages [{role, content}]
  * @returns {Object} { response, subAgentsUsed, auditId }
  */
 export async function sendAgentMessage(firmId, agentId, userMessage, conversationHistory = [], matterContext = null) {
-  // Demo/dev mode — if no firmId or agentId, use simulated responses
-  const isDemoMode = !firmId || !agentId;
+  const isOnboardingMode = !firmId || !agentId;
 
   let agent;
 
-  if (isDemoMode) {
-    // Use a default partner agent config for demo
+  if (isOnboardingMode) {
     agent = {
-      agentType: 'partner',
-      agentName: 'AI Chief of Staff',
-      employeeEmail: 'demo@nemoc-law.ai',
-      employeeName: 'Demo User',
-      availableSubAgents: AGENT_SUB_AGENTS['partner'] || [],
+      agentType: 'unconfigured',
+      agentName: 'Onboarding Assistant',
+      employeeEmail: '',
+      employeeName: '',
+      availableSubAgents: [],
     };
   } else {
-    // 1. Load agent config from Firestore
     try {
       const agentSnap = await getDoc(doc(db, 'firms', firmId, 'agents', agentId));
       if (!agentSnap.exists()) {
-        // Fallback to demo mode if agent doc doesn't exist
-        agent = {
-          agentType: 'partner',
-          agentName: 'AI Chief of Staff',
-          employeeEmail: '',
-          employeeName: '',
-          availableSubAgents: AGENT_SUB_AGENTS['partner'] || [],
-        };
-      } else {
-        agent = agentSnap.data();
-        await updateDoc(doc(db, 'firms', firmId, 'agents', agentId), { lastActive: serverTimestamp() });
+        throw new Error(`Agent profile not found for ${agentId}.`);
       }
+      agent = agentSnap.data();
+      await updateDoc(doc(db, 'firms', firmId, 'agents', agentId), { lastActive: serverTimestamp() });
     } catch (err) {
-      console.warn('Could not load agent config, using demo mode:', err.message);
-      agent = {
-        agentType: 'partner',
-        agentName: 'AI Chief of Staff',
-        employeeEmail: '',
-        employeeName: '',
-        availableSubAgents: AGENT_SUB_AGENTS['partner'] || [],
+      console.error('Could not load verified agent config:', err.message);
+      return {
+        response: 'I cannot process this request because the verified agent profile is missing or unavailable. Ask a firm administrator to recreate or repair this agent before using legal workflows.',
+        subAgentsUsed: [],
+        auditId: null,
       };
     }
   }
@@ -224,6 +193,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
   // 1.5. Determine configuration state, firm specialty, identity, and fetch active matters
   let isFirmConfigured = false;
   let activeMattersList = [];
+  let authorizedMatterIds = new Set();
   let firmIdentity = null;
   let firmPracticeAreas = [];
   if (firmId) {
@@ -231,7 +201,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
       const firmSnap = await getDoc(doc(db, 'firms', firmId));
       if (firmSnap.exists()) {
         const firmData = firmSnap.data();
-        isFirmConfigured = firmData.isConfigured || true; // ensure preview works
+        isFirmConfigured = Boolean(firmData.isConfigured || firmData.onboardingComplete || firmData.firmName);
         firmPracticeAreas = firmData.practiceAreas || [];
         firmIdentity = {
           name: firmData.firmName || 'Unnamed Firm',
@@ -242,15 +212,32 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
         };
       }
 
-      const mattersSnap = await getDocs(query(collection(db, 'firms', firmId, 'matters'), where('status', '==', 'Active')));
-      activeMattersList = mattersSnap.docs.map(d => d.data());
+      const hasFullMatterAccess = FULL_MATTER_ACCESS_ROLES.has(agent.agentType);
+      const assignedEmail = agent.employeeEmail || '';
+      const mattersRef = collection(db, 'firms', firmId, 'matters');
+      const mattersSnap = hasFullMatterAccess
+        ? await getDocs(query(mattersRef, where('status', '==', 'Active')))
+        : assignedEmail
+          ? await getDocs(query(mattersRef, where('assignedTo', 'array-contains', assignedEmail)))
+          : { docs: [] };
+      const accessibleMatters = mattersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      authorizedMatterIds = new Set(accessibleMatters.map(matter => matter.id));
+      activeMattersList = accessibleMatters.filter(matter => matter.status === 'Active');
     } catch (e) {
       console.warn('Could not check firm config or matters:', e.message);
     }
   }
 
-  // 2. Get role-appropriate system prompt
-  let systemPrompt = !isFirmConfigured ? SYSTEM_PROMPTS.unconfigured : (SYSTEM_PROMPTS[agent.agentType] || SYSTEM_PROMPTS.associate);
+  if (matterContext && !FULL_MATTER_ACCESS_ROLES.has(agent.agentType) && !authorizedMatterIds.has(matterContext.id)) {
+    return {
+      response: 'Access denied by the ethical wall. This matter is not assigned to your verified firm role.',
+      subAgentsUsed: [],
+      auditId: 'ETHICAL_WALL_BLOCK',
+    };
+  }
+
+  // 2. Get appropriate system prompt
+  let systemPrompt = !isFirmConfigured ? SYSTEM_PROMPTS.unconfigured : (SYSTEM_PROMPTS[agent.agentType] || SYSTEM_PROMPTS.partner);
 
   // Append Strict Anti-Hallucination rules & Legal Safeguards
   systemPrompt += `\n\n--- CRITICAL SYSTEM SAFEGUARDS (HALLUCINATION BARRIER) ---\n1. ABSOLUTE GROUNDING: You must NEVER hallucinate, invent, or extrapolate legal matters, case citations, client names, financial metrics, or firm capabilities.\n2. ALL available firm matters are provided in the context below. If a matter is not listed, IT DOES NOT EXIST.\n3. If the user asks about their matters and the list is empty, state clearly: "You currently have no active matters in the system."\n4. If you lack explicit factual context to answer an operational or legal question, you MUST immediately state: "I do not have sufficient firm data or verified legal context to answer this request." DO NOT GUESS.\n5. You are operating via the NVIDIA NemoClaw architecture inside an immutable container. Professional exactness is your highest priority.\n6. LATENCY OPTIMIZATION: Deliver extremely concise, highly condensed answers. Eliminate all conversational filler and introductory padding. Get straight to the legal or operational analysis.`;
@@ -272,7 +259,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 
   // Append Pre-loaded Specialty Knowledgebase (Firm Practice Areas)
   if (firmPracticeAreas.length > 0) {
-    systemPrompt += `\n\n--- PRE-LOADED SPECIALTY KNOWLEDGEBASE ---\nThis Agent has been statically pre-loaded with comprehensive case law, statutory precedence, and procedural frameworks for: ${firmPracticeAreas.join(', ')}.\nAll analytical outputs, contract reviews, and legal research must natively reflect expertise in this specialized field unless explicitly instructed otherwise by the user.`;
+    systemPrompt += `\n\n--- FIRM PRACTICE AREAS ---\nThe firm has configured these practice areas: ${firmPracticeAreas.join(', ')}.\nUse them only as firm context. Do not claim jurisdiction-specific expertise, case law, statutes, or procedural rules unless those sources are provided in the current request or connected firm data.`;
   }
 
   // Append Primary Internal Knowledge Base (Firm Identity & Web Scrape)
@@ -280,21 +267,8 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     systemPrompt += `\n\n--- FIRM IDENTITY & KNOWLEDGE BASE ---\nFirm Name: ${firmIdentity.name}\nWebsite: ${firmIdentity.website}\nPhone: ${firmIdentity.phone}\nAddress: ${firmIdentity.address}\nPrimary Jurisdiction (Bar): ${firmIdentity.stateBar}\n\nYou represent this firm. If a user asks for firm contact info or website details, draw directly from this primary knowledge base.`;
   }
 
-  // Append Ethical Wall Enforcement Context
-  systemPrompt += `\n\n--- ETHICAL WALL ENFORCEMENT ---\nUser Role: ${agent.agentType?.toUpperCase()}`;
-  if (['partner', 'managing-partner', 'solo-partner'].includes(agent.agentType)) {
-    systemPrompt += `\nAccess Level: FULL FIRM VISIBILITY. You can access all client matters, financial records, and firm strategy data.`;
-  } else if (['associate', 'paralegal', 'secretary'].includes(agent.agentType)) {
-    systemPrompt += `\nAccess Level: ASSIGNED MATTERS ONLY. Do not process queries for matters the user is not explicitly assigned to. Firm financial data is strictly blocked.`;
-  } else if (agent.agentType === 'contractor') {
-    systemPrompt += `\nAccess Level: STRICT SANDBOX. You can only access specifically assigned matters. Deny any request for cross-matter information or firm directory to protect against conflicts of interest.`;
-  } else if (agent.agentType === 'billing') {
-    systemPrompt += `\nAccess Level: FINANCIAL ONLY. You may process billing, invoicing, and time entries, but do not access case strategy or client work product.`;
-  } else if (agent.agentType === 'operations') {
-    systemPrompt += `\nAccess Level: SUMMARY/AUDIT ONLY. No access to client privileged case content or files.`;
-  } else if (agent.agentType === 'receptionist') {
-    systemPrompt += `\nAccess Level: INTAKE ONLY. Client contact info only. No access to case files or financial data.`;
-  }
+  // Append Access Level context
+  systemPrompt += `\n\n--- ACCESS LEVEL ---\nUser Role: SOLO PRACTITIONER\nAccess Level: FULL FIRM VISIBILITY. You can access all client matters, financial records, and firm strategy data.`;
 
   // Register the available sub-agents as formal tools
   const availableSubAgents = agent.availableSubAgents || [];
@@ -312,7 +286,7 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
   if (checkPromptInjection(userMessage)) {
     console.warn('[NEMOCLAW SECURITY] Active adversarial prompt injection blocked.');
     try {
-      if (!isDemoMode) {
+      if (!isOnboardingMode) {
         await addDoc(collection(db, 'firms', firmId, 'auditLog'), {
           type: 'SECURITY_EVENT',
           severity: 'CRITICAL',
@@ -321,8 +295,8 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
           timestamp: serverTimestamp()
         });
       }
-    } catch(e) {}
-    
+    } catch(_e) { /* intentionally ignored */ }
+
     return {
       response: "🛡️ **SECURITY VIOLATION DETECTED**: This request violates the Firm's structural operating protocols and has been unilaterally blocked by the NemoClaw architectural sandbox. A critical security audit has been logged.",
       subAgentsUsed: [],
@@ -337,26 +311,38 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
   if (!isFirmConfigured) {
     const localAnswer = resolveFromLocalData(safeMessage);
     if (localAnswer) {
-      // Log and return without calling inference
-      if (!isDemoMode) {
+      if (!isOnboardingMode) {
         try {
           await addDoc(collection(db, 'firms', firmId, 'agents', agentId || '_onboarding', 'messages'), { role: 'user', content: safeMessage, timestamp: serverTimestamp() });
           await addDoc(collection(db, 'firms', firmId, 'agents', agentId || '_onboarding', 'messages'), { role: 'assistant', content: localAnswer, subAgentsUsed: [], timestamp: serverTimestamp() });
-        } catch (e) { /* ignore */ }
+        } catch (_e) { /* ignore */ }
       }
       return { response: localAnswer, subAgentsUsed: [], auditId: null };
     }
   }
 
-  // 4. Build the message array
+  // 4. Detect sub-agent behavior and gather grounded legal research context before inference.
+  let subAgentsUsed = detectSubAgentUsage(safeMessage, agent.availableSubAgents || []);
+  if (shouldFetchCourtListenerContext(safeMessage, subAgentsUsed)) {
+    try {
+      const legalResearch = await searchCourtListener(safeMessage, { type: 'o', pageSize: 5 });
+      const formattedResearch = formatCourtListenerResults(legalResearch);
+      if (formattedResearch) {
+        subAgentsUsed = ensureDetectedSubAgent(subAgentsUsed, 'legal-research');
+        systemPrompt += `\n\n--- COURTLISTENER LEGAL RESEARCH CONTEXT ---\nThese are backend-fetched CourtListener results for the current request. Use them only as starting authorities and tell the user that legal authorities must be verified before filing or client advice.\n${formattedResearch}`;
+      }
+    } catch (err) {
+      console.warn('CourtListener context fetch failed:', err.message);
+      systemPrompt += `\n\n--- LEGAL RESEARCH CONTEXT STATUS ---\nCourtListener search was attempted but unavailable. Do not fabricate citations. If legal authority is needed, say verified legal research is required.`;
+    }
+  }
+
+  // 4.5 Build the message array
   const messages = [
     { role: 'system', content: systemPrompt },
     ...conversationHistory.slice(-20),
     { role: 'user', content: safeMessage },
   ];
-
-  // 4.5 Detect sub-agent behavior BEFORE inference to determine routing profile
-  let subAgentsUsed = detectSubAgentUsage(safeMessage, agent.availableSubAgents || []);
 
   // 5. Call the inference endpoint
   let response;
@@ -369,14 +355,9 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     response = `I apologize, but I'm experiencing a temporary issue connecting to the inference service. Please try again in a moment.\n\nError: ${err.message}`;
   }
 
-  // 6. Apply UPL guard for non-attorney roles
-  if (['receptionist', 'secretary', 'billing', 'operations', 'paralegal'].includes(agent.agentType)) {
-    response = applyUPLGuard(response);
-  }
-
-  // 7. Log to audit trail (skip in demo mode)
+  // 7. Log to audit trail when attached to a verified firm/agent.
   let auditId = null;
-  if (!isDemoMode) {
+  if (!isOnboardingMode) {
     try {
       auditId = await logToAuditTrail(firmId, agentId, {
         userMessage: safeMessage,
@@ -392,8 +373,8 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
     }
   }
 
-  // 8. Save conversation to agent's message history (skip in demo mode)
-  if (!isDemoMode) {
+  // 8. Save conversation to agent's message history when attached to a verified firm/agent.
+  if (!isOnboardingMode) {
     try {
       await addDoc(collection(db, 'firms', firmId, 'agents', agentId, 'messages'), {
         role: 'user',
@@ -421,10 +402,9 @@ export async function sendAgentMessage(firmId, agentId, userMessage, conversatio
 // Map the sub-agent array to an architectural routing profile
 const getRoutingProfile = (subAgentsDetector) => {
   if (!subAgentsDetector || subAgentsDetector.length === 0) return 'default';
-  
-  // Route based on the first detected sub-agent's ID
+
   const primaryIntent = subAgentsDetector[0].id;
-  
+
   if (['legal-research', 'case-analytics', 'due-diligence'].includes(primaryIntent)) return 'ediscovery';
   if (['contract-review', 'drafting', 'communication-drafter'].includes(primaryIntent)) return 'contract-review';
   if (['client-intake', 'scheduling', 'knowledge-search'].includes(primaryIntent)) return 'scheduling';
@@ -434,29 +414,23 @@ const getRoutingProfile = (subAgentsDetector) => {
 /**
  * CORE INFERENCE GENERATOR (NEMOCLAW v4.0 POLY-MODEL SECURED)
  */
-async function callInference(messages, agent, subAgentsUsed) {
-  // 1. Detect sub-agent behavior and set the routing header based on intent
+async function callInference(messages, _agent, subAgentsUsed) {
   const routeProfile = getRoutingProfile(subAgentsUsed);
 
-  // Build headers — in dev mode the Vite proxy adds the auth header
-  const headers = { 
+  const headers = {
     'Content-Type': 'application/json',
-    'X-Routing-Profile': routeProfile 
+    'X-Routing-Profile': routeProfile
   };
-  if (!IS_DEV) {
-    headers['Authorization'] = `Bearer ${NEMOCLAW_API_KEY}`;
-  }
-
   const res = await fetch(NEMOCLAW_ENDPOINT, {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: MODEL_ID,
+      model: NEMOCLAW_MODEL_ID,
       messages,
-      max_tokens: 1024,   // Reduced from 4096 to drastically cut generation latency
-      temperature: 0.05,  // Strict low temperature to prevent hallucination in legal context
-      top_p: 0.8,         // Tighter probability bounds
-      frequency_penalty: 0.2, // Penalize generic conversational padding
+      max_tokens: 1024,
+      temperature: 0.05,
+      top_p: 0.8,
+      frequency_penalty: 0.2,
       presence_penalty: 0.0,
       stream: false,
     }),
@@ -468,20 +442,13 @@ async function callInference(messages, agent, subAgentsUsed) {
   }
 
   const data = await res.json();
-  return { content: data.choices?.[0]?.message?.content || 'No response generated.' };
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error('Inference gateway returned no assistant content.');
+  }
+  return { content };
 }
 
-/**
- * Simulated response for dev/demo when no API key is set.
- */
-function simulateResponse(messages, agent) {
-  const agentName = agent.agentName || 'Your AI Agent';
-  const role = agent.agentType || 'associate';
-
-  return { 
-    content: `[DEV MODE] I am your ${role} agent (${agentName}). No real inference API key is configured. In a production environment, I would process your request using NVIDIA Nemotron 120B. Please configure VITE_NVIDIA_API_KEY to enable real intelligence.` 
-  };
-}
 
 // ═══════════════════════════════════════════════
 //  SUB-AGENT DETECTION
@@ -526,26 +493,6 @@ function detectSubAgentUsage(message, availableSubAgents) {
   }
 
   return detected;
-}
-
-// ═══════════════════════════════════════════════
-//  UPL GUARD
-// ═══════════════════════════════════════════════
-
-const UPL_PATTERNS = [
-  /you should (sue|file|litigate|pursue)/i,
-  /legal (advice|recommendation|opinion)/i,
-  /I (advise|recommend|suggest) you/i,
-  /your (legal )?rights (are|include)/i,
-  /you (have|may have) a (strong |valid )?(claim|case|lawsuit)/i,
-];
-
-function applyUPLGuard(response) {
-  const hasUPL = UPL_PATTERNS.some(p => p.test(response));
-  if (hasUPL) {
-    return response + '\n\n⚠️ **Disclaimer**: This output may contain content that should be reviewed by a licensed attorney before acting upon. This AI agent is not providing legal advice.';
-  }
-  return response;
 }
 
 // ═══════════════════════════════════════════════

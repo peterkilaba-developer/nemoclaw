@@ -1,4 +1,5 @@
-import SEO, { structuredDataTemplates } from '../components/SEO';
+import { structuredDataTemplates } from '../components/SEO';
+import SEO from '../components/SEO';
 import Navbar from '../components/Navbar';
 import Hero from '../components/Hero';
 import ParadigmShift from '../components/ParadigmShift';
@@ -13,7 +14,7 @@ export default function LandingPage() {
   return (
     <>
       <SEO
-        description="Your firm's private AI workforce. 10 AI agents that 10x your team or fill roles you haven't hired yet. Secured by NVIDIA NemoClaw. Zero data leak guarantee. Founder pricing from $297/mo — locked for life."
+        description="The Agentic OS for solo attorneys. 19 AI specialists handle drafting, research, intake, billing, and scheduling — while you practice law. Secured by NVIDIA NemoClaw. Zero data leak guarantee. $297/mo locked for life."
         structuredData={[
           structuredDataTemplates.organization(),
           structuredDataTemplates.softwareApplication(),

@@ -20,12 +20,124 @@
     ],
     "rewrites": [
       {
+        "source": "/webhook/stripe",
+        "function": "stripeWebhook"
+      },
+      {
         "source": "/api/nvidia/**",
         "function": "nvidiaInference"
       },
       {
-        "source": "/webhook/stripe",
-        "function": "stripeWebhook"
+        "source": "/api/scrapeWebsite",
+        "function": "scrapeWebsite"
+      },
+      {
+        "source": "/api/courtListenerSearch",
+        "function": "courtListenerSearch"
+      },
+      {
+        "source": "/api/getIntegrationStatus",
+        "function": "getIntegrationStatus"
+      },
+      {
+        "source": "/api/postSlackNotification",
+        "function": "postSlackNotification"
+      },
+      {
+        "source": "/api/syncGoogleCalendarDeadline",
+        "function": "syncGoogleCalendarDeadline"
+      },
+      {
+        "source": "/api/syncClioMatter",
+        "function": "syncClioMatter"
+      },
+      {
+        "source": "/api/runEDiscoveryReview",
+        "function": "runEDiscoveryReview"
+      },
+      {
+        "source": "/api/runTrustReconciliation",
+        "function": "runTrustReconciliation"
+      },
+      {
+        "source": "/api/prepareCourtFiling",
+        "function": "prepareCourtFiling"
+      },
+      {
+        "source": "/api/runCaseAnalytics",
+        "function": "runCaseAnalytics"
+      },
+      {
+        "source": "/api/recordHumanApproval",
+        "function": "recordHumanApproval"
+      },
+      {
+        "source": "/api/exportFirmAuditLog",
+        "function": "exportFirmAuditLog"
+      },
+      {
+        "source": "/api/exportFirmData",
+        "function": "exportFirmData"
+      },
+      {
+        "source": "/api/requestFirmDataDeletion",
+        "function": "requestFirmDataDeletion"
+      },
+      {
+        "source": "/api/forceSdrAgentCron",
+        "function": "forceSdrAgentCron"
+      },
+      {
+        "source": "/api/forceAgaasOrchestrator",
+        "function": "forceAgaasOrchestrator"
+      },
+      {
+        "source": "/api/forceForgeHealing",
+        "function": "forceForgeHealing"
+      },
+      {
+        "source": "/api/getAdminSnapshot",
+        "function": "getAdminSnapshot"
+      },
+      {
+        "source": "/api/enrichProspectEmail",
+        "function": "enrichProspectEmail"
+      },
+      {
+        "source": "/api/runConflictCheck",
+        "function": "runConflictCheck"
+      },
+      {
+        "source": "/api/getSignatureRequest",
+        "function": "getSignatureRequest"
+      },
+      {
+        "source": "/api/signSignatureRequest",
+        "function": "signSignatureRequest"
+      },
+      {
+        "source": "/api/placeBlandCall",
+        "function": "placeBlandCall"
+      },
+      {
+        "source": "/api/getBlandCallStatus",
+        "function": "getBlandCallStatus"
+      },
+      {
+        "source": "/api/postToX",
+        "function": "xMarketingPublish"
+      },
+      {
+        "source": "/api/linkedin/callback",
+        "function": "linkedinCallback"
+      },
+      {
+        "source": "/api/linkedin/auth",
+        "function": "linkedinAuthUrl"
+      },
+      {
+        "source": "/api/postToLinkedIn",
+        "function": "postToLinkedIn"
       },
       {
         "source": "**",
@@ -51,6 +163,37 @@
           {
             "key": "Permissions-Policy",
             "value": "camera=(), microphone=(), geolocation=()"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/dashboard/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/signature/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
           }
         ]
       },

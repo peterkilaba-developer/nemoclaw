@@ -1,10 +1,4 @@
-import { useState } from 'react';
-import {
-  Search, FileText, UserCheck, Briefcase, Phone, DollarSign, BarChart3,
-  ArrowRight, ArrowDown, Users, Zap, TrendingUp, Crown, Bot, PenTool,
-  FolderSearch, Scale, Mic, Clock, Mail, Calendar, Database, ScanSearch,
-  Shield, ChevronDown, ChevronUp, Layers, Settings, UserX, MessageSquare, Eye, BookOpen, UserPlus
-} from 'lucide-react';
+import { ArrowRight, BarChart3, BookOpen, Briefcase, Calendar, Crown, Database, DollarSign, Eye, FileText, FolderSearch, Layers, Mail, MessageSquare, Mic, PenTool, Phone, Scale, Search, Settings, Shield, TrendingUp, UserCheck, UserPlus, Users, UserX, Zap } from 'lucide-react';
 import './Agents.css';
 
 // ═══════════════════════════════════════════════════════════════
@@ -159,16 +153,17 @@ const SUB_AGENTS = [
 
 export default function Agents() {
   return (
-    <section className="section agents-section" id="workforce">
+    <section className="section agents-section" id="hitl-os">
       <div className="container">
         <div className="agents-header">
-          <span className="section-label">Single Point of Contact</span>
+          <span className="section-label">Your Solo-to-Small-Firm AI Workforce</span>
           <h2 className="section-title">
-            One <span className="text-nvidia">Agent</span>. <span className="gradient-text">Endless Capability.</span>
+            You. Plus <span className="gradient-text">19 <span className="text-nvidia">AI</span> Specialists.</span>
           </h2>
           <p className="section-subtitle">
-            You don't need to manage a complex network of bots. Every person at your firm gets a single Personal <span className="text-nvidia">Agent</span>. 
-            You talk to your <span className="text-nvidia">Agent</span> in plain English, and it autonomously orchestrates all specialized tasks behind the scenes.
+            You're a solo attorney, not a staffing agency. You get one Personal <span className="text-nvidia">AI</span> Chief of Staff that commands your entire workforce —
+            Add human role + agent mappings as you grow into a small firm: attorneys, paralegals, intake, billing, docketing, records, marketing, and operations.
+            19 specialist <span className="text-nvidia">agents</span> handle the work behind each role.
           </p>
         </div>
 
@@ -176,7 +171,7 @@ export default function Agents() {
           
           <div style={{ marginBottom: '12px' }}>
             <h4 style={{ fontSize: '0.875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '16px', textAlign: 'center' }}>
-              Legal Practice Roles
+              Your Legal AI Specialists
             </h4>
             <div className="agents-grid">
               {AGENTS.filter(a => ['Leadership', 'Legal', 'Support'].includes(a.category)).map((agent, i) => {
@@ -212,7 +207,7 @@ export default function Agents() {
 
           <div>
             <h4 style={{ fontSize: '0.875rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: '16px', textAlign: 'center' }}>
-              Administrative & Operations Roles
+              Your Operations AI Specialists
             </h4>
             <div className="agents-grid">
               {AGENTS.filter(a => ['Operations', 'Admin', 'Finance'].includes(a.category)).map((agent, i) => {
@@ -255,7 +250,7 @@ export default function Agents() {
               Built for the <span className="gradient-text">Real Business of Law</span>
             </h3>
             <p className="section-subtitle" style={{ maxWidth: '700px', margin: '0 auto' }}>
-              We architected the system to respect your firm's hierarchy, enforce ethical walls, and drive partner adoption.
+              Designed for solo attorneys who need full control, zero overhead, and airtight ethics — without a managing partner committee.
             </p>
           </div>
           
@@ -268,8 +263,8 @@ export default function Agents() {
             
             <div className="firm-control-card">
               <div className="firm-control-icon"><Settings size={20} /></div>
-              <h4>Managing Partner Controls</h4>
-              <p>Secure your firm's operating procedures. Only the designated Managing Partner can modify global <span className="text-nvidia">agent</span> policies, ensuring every employee's <span className="text-nvidia">agent</span> adheres to the exact same standard.</p>
+              <h4>Your Global Controls</h4>
+              <p>You set the policies. Every <span className="text-nvidia">agent</span> in your workforce operates within your exact standards — jurisdictional rules, tone, formatting, ethical boundaries — all enforced automatically.</p>
             </div>
             
             <div className="firm-control-card">
@@ -281,7 +276,7 @@ export default function Agents() {
             <div className="firm-control-card">
               <div className="firm-control-icon"><MessageSquare size={20} /></div>
               <h4><span className="text-nvidia">Agent</span> Personalization</h4>
-              <p>Increase adoption by letting your team name their personal <span className="text-nvidia">Agents</span> (e.g., "Harvey"). Over time, the <span className="text-nvidia">AI</span> learns each individual's unique writing styles and drafting preferences.</p>
+              <p>Name your Personal <span className="text-nvidia">Agent</span> whatever you want (e.g., "Harvey"). Over time, it learns your unique writing style, preferred templates, and drafting voice — so every output sounds like you.</p>
             </div>
             
             <div className="firm-control-card">
@@ -295,7 +290,7 @@ export default function Agents() {
         {/* Footer */}
         <div className="agents-footer" style={{ marginTop: '24px' }}>
           <p className="agents-lock-note">
-            All firms get <strong>every new sub-<span className="text-nvidia">agent</span> capability automatically</strong> at their locked-in price.
+            You get <strong>every new sub-<span className="text-nvidia">agent</span> capability automatically</strong> at your locked-in price.
           </p>
           <div className="agents-security-badge" style={{ marginTop: '12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             <Shield size={12} className="text-nvidia" style={{ verticalAlign: 'middle', marginRight: '6px' }} />

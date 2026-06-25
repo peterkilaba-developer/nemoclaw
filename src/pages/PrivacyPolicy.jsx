@@ -1,7 +1,7 @@
-import Navbar from '../components/Navbar';
-import Footer from '../components/Footer';
-import SEO from '../components/SEO';
 import './LegalPage.css';
+import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
+import Footer from '../components/Footer';
 
 export default function PrivacyPolicy() {
   return (
@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
       <SEO
         title="Privacy Policy"
         path="/privacy"
-        description="NemoC Law AI's Privacy Policy. Learn how we protect your data with our Zero Data Leak Guarantee, NVIDIA NemoClaw sandbox isolation, and AES-256 encryption."
+        description="NemoC LAW AI's Privacy Policy. Learn how we protect your data with our Zero Data Leak Guarantee, NVIDIA NemoClaw sandbox isolation, and AES-256 encryption."
       />
       <main className="legal-page">
         <div className="container">
@@ -19,7 +19,7 @@ export default function PrivacyPolicy() {
 
           <section>
             <h2>1. Introduction</h2>
-            <p>NemoC Law AI ("Company," "we," "us," or "our") is committed to protecting the privacy and security of your personal information. This Privacy Policy describes how we collect, use, and share information in connection with your use of our Agentic Operating System (AgaaS).</p>
+            <p>NemoC LAW AI ("Company," "we," "us," or "our") is committed to protecting the privacy and security of your personal information. This Privacy Policy describes how we collect, use, and share information in connection with your use of our Agentic Operating System (AgaaS).</p>
           </section>
 
           <section>

@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from './AuthContext';
-import { getFirm, getAgentConfig, getSecurityConfig, getKnowledgeBase } from '../lib/firestore';
-import { getEmployees, getAgents, getSuperAgent, addEmployee, updateEmployee } from '../lib/agentHierarchy';
-import { collection, query, where, limit, getDocs, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirm, getAgentConfig, getSecurityConfig, getKnowledgeBase, getWebsiteRedesignConfig } from '../lib/firestore';
+import { addEmployee, getAgents, getEmployees, getSuperAgent, removeEmployee, updateEmployee } from '../lib/agentHierarchy';
+import { collection, query, where, limit, getDocs, doc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export const FirmContext = createContext(null);
@@ -19,26 +19,25 @@ export function FirmProvider({ children }) {
   const [agents, setAgents] = useState({ activeAgents: [] });
   const [security, setSecurity] = useState({ policies: {}, approvedServices: {} });
   const [knowledgeBase, setKnowledgeBase] = useState({ files: [] });
-  // NEW — Agent hierarchy state
-  const [employees, setEmployees] = useState([]);
+  const [websiteRedesign, setWebsiteRedesign] = useState(null);
   const [personalAgents, setPersonalAgents] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [superAgent, setSuperAgent] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const healingRef = useRef(false);
 
   useEffect(() => {
+    if (user?.isPartial) return;
+
     if (!user?.firmId) {
       if (healingRef.current) return;
-      // 2a. Self-healing: Look for a firm where user is the owner if link is missing
       const findMyFirm = async () => {
         try {
           healingRef.current = true;
           const firmsRef = collection(db, 'firms');
           const ownerQ = query(firmsRef, where('ownerId', '==', user.uid), limit(1));
-          const memberQ = query(firmsRef, where('members', 'array-contains', user.uid), limit(1));
-          const [ownerSnap, memberSnap] = await Promise.all([getDocs(ownerQ), getDocs(memberQ)]);
-          const snap = !ownerSnap.empty ? ownerSnap : memberSnap;
+          const snap = await getDocs(ownerQ);
           
           if (!snap.empty) {
             const foundFirmId = snap.docs[0].id;
@@ -48,29 +47,9 @@ export function FirmProvider({ children }) {
             setFirm({ id: foundFirmId, ...firmData });
             setLoading(false);
           } else {
-            // 2b. Final Fallback: Auto-provision a default sandbox firm unconditionally.
-            // This ensures all testing buttons and dashboards work even if onboarding was skipped.
-            console.log('Self-healing: Auto-provisioning firm for user:', user.uid);
-            const firmRef = doc(collection(db, 'firms'));
-            const newFirmId = firmRef.id;
-            const newFirmData = {
-              ownerId: user.uid,
-              members: [user.uid],
-              name: `${user.displayName || 'My'} Law Firm`,
-              status: 'trial',
-              plan: 'trial',
-              trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-              isConfigured: false,
-              createdAt: serverTimestamp(),
-            };
-            await setDoc(firmRef, newFirmData);
-            await setDoc(doc(db, 'users', user.uid), { firmId: newFirmId, onboardingComplete: true }, { merge: true });
-            
-            // Wait for propagation before returning
-            setTimeout(() => {
-              setFirm({ id: newFirmId, ...newFirmData });
-              setLoading(false);
-            }, 500);
+            console.warn('Firm healing: no verified firm membership found for current user.');
+            setFirm(null);
+            setLoading(false);
           }
         } catch (err) {
           console.warn('Firm healing error:', err);
@@ -88,13 +67,14 @@ export function FirmProvider({ children }) {
 
     async function loadFirmData() {
       try {
-        const [firmData, agentData, secData, kbData, empData, agData, saData] = await Promise.all([
+        const [firmData, agentData, secData, kbData, webData, agData, empData, saData] = await Promise.all([
           getFirm(user.firmId),
           getAgentConfig(user.firmId),
           getSecurityConfig(user.firmId),
           getKnowledgeBase(user.firmId),
-          getEmployees(user.firmId).catch(() => []),
+          getWebsiteRedesignConfig(user.firmId).catch(() => null),
           getAgents(user.firmId).catch(() => []),
+          getEmployees(user.firmId).catch(() => []),
           getSuperAgent(user.firmId).catch(() => null),
         ]);
 
@@ -103,8 +83,9 @@ export function FirmProvider({ children }) {
           setAgents(agentData);
           setSecurity(secData);
           setKnowledgeBase(kbData);
-          setEmployees(empData);
+          setWebsiteRedesign(webData);
           setPersonalAgents(agData);
+          setEmployees(empData);
           setSuperAgent(saData);
         }
       } catch (err) {
@@ -116,53 +97,55 @@ export function FirmProvider({ children }) {
 
     loadFirmData();
     return () => { cancelled = true; };
-  }, [user?.firmId]);
+  }, [user?.firmId, user?.uid, user?.displayName, user?.isPartial]);
 
-  const refreshFirm = async () => {
+  const refreshFirm = useCallback(async () => {
     if (!user?.firmId) return;
     setLoading(true);
-    const [firmData, agentData, secData, kbData, empData, agData, saData] = await Promise.all([
+    const [firmData, agentData, secData, kbData, webData, agData, empData, saData] = await Promise.all([
       getFirm(user.firmId),
       getAgentConfig(user.firmId),
       getSecurityConfig(user.firmId),
       getKnowledgeBase(user.firmId),
-      getEmployees(user.firmId).catch(() => []),
+      getWebsiteRedesignConfig(user.firmId).catch(() => null),
       getAgents(user.firmId).catch(() => []),
+      getEmployees(user.firmId).catch(() => []),
       getSuperAgent(user.firmId).catch(() => null),
     ]);
     setFirm(firmData);
     setAgents(agentData);
     setSecurity(secData);
     setKnowledgeBase(kbData);
-    setEmployees(empData);
+    setWebsiteRedesign(webData);
     setPersonalAgents(agData);
+    setEmployees(empData);
     setSuperAgent(saData);
     setLoading(false);
-  };
+  }, [user?.firmId]);
 
-  const addTeamMember = async (employeeData) => {
-    const targetFirmId = user?.firmId || firm?.id;
-    if (!targetFirmId) {
-      console.warn('Cannot add team member: no firmId available');
-      return;
-    }
-    await addEmployee(targetFirmId, employeeData);
+  const targetFirmId = user?.firmId || firm?.id;
+  const addTeamMember = async data => {
+    if (!targetFirmId) throw new Error('No firm is available.');
+    await addEmployee(targetFirmId, data);
     await refreshFirm();
   };
-
-  const updateTeamMember = async (employeeId, employeeData) => {
-    const targetFirmId = user?.firmId || firm?.id;
-    if (!targetFirmId) return;
-    await updateEmployee(targetFirmId, employeeId, employeeData);
+  const updateTeamMember = async (employeeId, data) => {
+    if (!targetFirmId) throw new Error('No firm is available.');
+    await updateEmployee(targetFirmId, employeeId, data);
+    await refreshFirm();
+  };
+  const removeTeamMember = async employeeId => {
+    if (!targetFirmId) throw new Error('No firm is available.');
+    await removeEmployee(targetFirmId, employeeId);
     await refreshFirm();
   };
 
   return (
     <FirmContext.Provider value={{
-      firm, agents, security, knowledgeBase,
-      employees, personalAgents, superAgent,
-      firmId: user?.firmId || null,
-      loading, refreshFirm, addTeamMember, updateTeamMember,
+      firm, agents, security, knowledgeBase, websiteRedesign,
+      personalAgents, employees, superAgent,
+      firmId: user?.firmId || firm?.id || null,
+      loading, refreshFirm, addTeamMember, updateTeamMember, removeTeamMember,
     }}>
       {children}
     </FirmContext.Provider>
